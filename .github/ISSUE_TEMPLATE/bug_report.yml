@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a problem with kotlin-mcp
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! Before filing,
+        please search existing issues to avoid duplicates.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected instead.
+      placeholder: The tool returned ... but I expected ...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Minimal snippet, tool call, or client wiring that triggers the issue.
+      placeholder: |
+        1. Call kotlin_check_snippet with the snippet below
+        2. Observe the reported diagnostics
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: How are you running the server?
+      description: Which artifact from the README are you using?
+      options:
+        - Built binary (gradle installDist)
+        - Uber JAR (gradle uberJar)
+        - Gradle run (gradle run)
+        - GraalVM native image
+        - Other / not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: kotlin-mcp version
+      description: Version from build.gradle.kts or the release tag.
+      placeholder: 1.0.0
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: JDK version and OS.
+      placeholder: JDK 25, macOS / Ubuntu 24.04
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: JSON-RPC frames or error output. Redact any secrets.
+      render: shell

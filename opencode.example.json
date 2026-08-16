@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "kotlin-mcp": {
+      "type": "local",
+      "command": ["./build/install/kotlin-mcp/bin/kotlin-mcp"],
+      "eager": true,
+      "enabled": true
+    }
+  }
+}

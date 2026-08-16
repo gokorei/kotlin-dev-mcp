@@ -1,0 +1,59 @@
+name: Release Uber-JAR
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-uberjar:
+    name: Build Uber-JAR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Uber-JAR
+        run: ./gradlew uberJar --no-daemon
+
+      - name: Upload Uber-JAR Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kotlin-mcp-all.jar
+          path: build/libs/kotlin-mcp-1.0.0-all.jar
+
+  release:
+    name: Create GitHub Release
+    needs: [build-uberjar]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-artifacts/kotlin-mcp-all.jar/kotlin-mcp-1.0.0-all.jar
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

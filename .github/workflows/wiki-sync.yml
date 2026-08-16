@@ -1,0 +1,47 @@
+name: Auto-Sync Wiki Documentation
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'docs/wiki/**'
+  workflow_dispatch:
+
+jobs:
+  sync-wiki:
+    name: Sync docs/wiki to GitHub Wiki
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Wiki Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: wiki-repo
+        continue-on-error: true
+
+      - name: Sync Markdown Pages & Push to Wiki
+        run: |
+          if [ -d "wiki-repo" ]; then
+            cp -R docs/wiki/* wiki-repo/
+            cd wiki-repo
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .
+            if git status --porcelain | grep -q .; then
+              git commit -m "docs: auto-update wiki pages from codebase"
+              git push
+              echo "Wiki successfully updated."
+            else
+              echo "No wiki changes detected."
+            fi
+          else
+            echo "Wiki repository not initialized yet. Please create at least one page manually on GitHub first to initialize the .wiki repository."
+          fi

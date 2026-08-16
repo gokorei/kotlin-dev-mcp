@@ -1,0 +1,33 @@
+# Gradle build output
+.gradle/
+build/
+
+# Kotlin / IDE
+.kotlin/
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.vscode/
+
+# OS / System
+.DS_Store
+Thumbs.db
+
+# Temp scratch files
+scratch/
+
+# Local editor/assistant config (per-developer; commit opencode.example.json instead)
+opencode.json
+
+# Logs, compiled bytecode, and bundled binaries
+*.log
+*.class
+*.jar
+!lib/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local secrets and env
+*.env
+*.local

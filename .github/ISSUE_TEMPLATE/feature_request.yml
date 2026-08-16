@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest a new tool, resource, or prompt for kotlin-mcp
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! A good request explains the problem
+        you are trying to solve, not just the tool you want.
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Problem / motivation
+      description: What can you not do today with kotlin-mcp?
+      placeholder: When working on X, I have to switch to a separate tool because ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the new tool, resource, prompt, or behaviour.
+      placeholder: |
+        A kotlin_... tool that ...
+        - Inputs:
+        - Outputs:
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds or alternative designs you considered.
