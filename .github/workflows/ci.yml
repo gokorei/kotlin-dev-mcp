@@ -24,5 +24,17 @@ jobs:
       - name: Make Gradle Wrapper Executable
         run: chmod +x gradlew
 
+      # Persist the Gradle build cache so unchanged task outputs (compiled
+      # classes, tooling classpaths, generated stdlib index) are restored
+      # instead of rebuilt from scratch on every push. Tasks are keyed by
+      # their real inputs, so changed sources simply miss and recompile.
+      - name: Restore Gradle Build Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches/build-cache-1
+          key: gradle-build-cache-${{ hashFiles('build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml') }}
+          restore-keys: |
+            gradle-build-cache-
+
       - name: Build and Test
         run: ./gradlew test uberJar
