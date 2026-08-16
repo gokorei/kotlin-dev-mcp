@@ -29,10 +29,11 @@ jobs:
 
       - name: Sync Markdown Pages & Push to Wiki
         run: |
-          # Guard on a real git checkout: when the wiki repo has not been
-          # initialized yet, actions/checkout fails (continue-on-error) but
-          # leaves an empty wiki-repo/ directory, so test for .git explicitly.
-          if [ -d "wiki-repo/.git" ]; then
+          # Only proceed on a real, successfully-cloned wiki. actions/checkout
+          # runs `git init` BEFORE fetching, so wiki-repo/.git exists even when
+          # the wiki repo is not initialized yet (fetch 404s, continue-on-error).
+          # Detect a real clone by the presence of remote-tracking refs.
+          if [ -n "$(git -C wiki-repo for-each-ref --format='%(refname:short)' refs/remotes/origin 2>/dev/null)" ]; then
             cp -R docs/wiki/* wiki-repo/
             cd wiki-repo
             git config user.name "github-actions[bot]"
@@ -40,7 +41,7 @@ jobs:
             git add .
             if git status --porcelain | grep -q .; then
               git commit -m "docs: auto-update wiki pages from codebase"
-              git push
+              git push origin master
               echo "Wiki successfully updated."
             else
               echo "No wiki changes detected."
