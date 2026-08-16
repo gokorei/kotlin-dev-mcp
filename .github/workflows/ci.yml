@@ -12,13 +12,13 @@ jobs:
 
     steps:
       - name: Checkout Codebase
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Set up Java 21 JDK
-        uses: actions/setup-java@v4
+      - name: Set up Java 25 JDK
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '25'
           cache: 'gradle'
 
       - name: Make Gradle Wrapper Executable
