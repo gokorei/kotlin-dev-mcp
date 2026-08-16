@@ -196,8 +196,10 @@ class DefaultLintService(
             add(javaBin)
             // One-shot CLI JVM: keep startup fast by using only C1 compilation
             // (no C2 profile-guided warmup, which these short-lived processes
-            // never pay back).
+            // never pay back) and cap heap so concurrent forks/subprocesses
+            // never exhaust the host.
             add("-XX:TieredStopAtLevel=1")
+            add("-Xmx1g")
             add("-cp")
             add(classpathEntries.joinToString(File.pathSeparator))
             add(mainClass)
