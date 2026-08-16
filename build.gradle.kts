@@ -138,11 +138,11 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 
 tasks.test {
     useJUnitPlatform()
-    // Run test classes across 3 forked JVMs (~1.5x the 2-core CI runner). Before
-    // the hang fixes this was flaky; the transport race and lint-in-process
-    // deadlocks are gone, and each method is bounded at 5m so a stuck fork fails
-    // the build instead of blocking the suite.
-    maxParallelForks = 3
+    // Serial forks: the 2-core CI runner thrashes under concurrent test JVMs
+    // (each fork loads the Kotlin compiler and spawns detekt/ktlint/snippet
+    // subprocesses), measurably slowing the suite. Each method is bounded at
+    // 5m so a stuck fork still fails the build instead of blocking forever.
+    maxParallelForks = 1
     // Hard bound for the whole suite so a stuck test JVM fails the build
     // instead of running forever (per-method cap comes from
     // src/test/resources/junit-platform.properties).
