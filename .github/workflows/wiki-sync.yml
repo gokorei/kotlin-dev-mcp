@@ -29,7 +29,10 @@ jobs:
 
       - name: Sync Markdown Pages & Push to Wiki
         run: |
-          if [ -d "wiki-repo" ]; then
+          # Guard on a real git checkout: when the wiki repo has not been
+          # initialized yet, actions/checkout fails (continue-on-error) but
+          # leaves an empty wiki-repo/ directory, so test for .git explicitly.
+          if [ -d "wiki-repo/.git" ]; then
             cp -R docs/wiki/* wiki-repo/
             cd wiki-repo
             git config user.name "github-actions[bot]"
@@ -43,5 +46,5 @@ jobs:
               echo "No wiki changes detected."
             fi
           else
-            echo "Wiki repository not initialized yet. Please create at least one page manually on GitHub first to initialize the .wiki repository."
+            echo "Wiki repository not initialized yet. Create the first page at https://github.com/${{ github.repository }}/wiki to initialize it."
           fi
