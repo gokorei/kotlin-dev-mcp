@@ -1,5 +1,6 @@
 import java.io.File
 import java.net.URI
+import java.time.Duration
 import java.time.Instant
 import org.gradle.api.DefaultTask
 
@@ -138,6 +139,15 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 tasks.test {
     useJUnitPlatform()
     maxParallelForks = 1
+    // Hard bound for the whole suite so a stuck test JVM fails the build
+    // instead of running forever (per-method cap comes from
+    // src/test/resources/junit-platform.properties).
+    timeout = Duration.ofMinutes(20)
+    testLogging {
+        events(org.gradle.api.tasks.testing.logging.TestLogEvent.STARTED)
+        events(org.gradle.api.tasks.testing.logging.TestLogEvent.FAILED)
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
     jvmArgs(
         "--enable-native-access=ALL-UNNAMED",
         "--sun-misc-unsafe-memory-access=allow"

@@ -11,7 +11,6 @@ import io.modelcontextprotocol.kotlin.sdk.types.JSONRPCMessage
 import io.modelcontextprotocol.kotlin.sdk.types.ListToolsRequest
 import io.modelcontextprotocol.kotlin.sdk.types.ServerCapabilities
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -23,21 +22,12 @@ import org.junit.jupiter.api.Test
 private class InProcessTransport(
     private val peerProvider: () -> InProcessTransport
 ) : Transport {
-    private val inbound = Channel<JSONRPCMessage>(Channel.UNLIMITED)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val handlerReady = CompletableDeferred<Unit>()
+
+    @Volatile
     private var messageHandler: (suspend (JSONRPCMessage) -> Unit)? = null
     private var closeCallback: () -> Unit = {}
-
-    init {
-        scope.launch {
-            for (msg in inbound) {
-                val handler = messageHandler
-                if (handler != null) {
-                    handler(msg)
-                }
-            }
-        }
-    }
 
     override suspend fun start() {}
 
@@ -46,11 +36,10 @@ private class InProcessTransport(
     }
 
     override suspend fun close() {
-        inbound.close()
         scope.cancel()
         closeCallback()
+        handlerReady.complete(Unit)
     }
-
 
     override fun onClose(block: () -> Unit) {
         closeCallback = block
@@ -60,10 +49,20 @@ private class InProcessTransport(
 
     override fun onMessage(block: suspend (JSONRPCMessage) -> Unit) {
         messageHandler = block
+        handlerReady.complete(Unit)
     }
 
-    fun deliver(message: JSONRPCMessage) {
-        inbound.trySend(message)
+    /**
+     * Delivers a message to the peer's registered onMessage handler. The MCP
+     * handshake races: `client.connect()` can emit `initialize` before the
+     * server session coroutine has subscribed via onMessage. A channel +
+     * null-handler guard would silently consume and drop that early message,
+     * leaving the SDK client awaiting its response forever. Waiting on a
+     * CompletableDeferred until the peer handler is subscribed closes that race.
+     */
+    private suspend fun deliver(message: JSONRPCMessage) {
+        handlerReady.await()
+        messageHandler?.invoke(message)
     }
 }
 
@@ -100,7 +99,7 @@ class KotlinMcpIntegrationTest {
             clientInfo = Implementation(name = "test-client", version = "1.0.0"),
             options = ClientOptions()
         )
-        runBlocking { client.connect(clientTransport) }
+        runBlocking { withTimeout(30_000) { client.connect(clientTransport) } }
         return Triple(client, sessionJob, clientTransport)
     }
 
@@ -327,7 +326,7 @@ class KotlinMcpIntegrationTest {
             )
             assertFalse(result.isError == true, "expected success, got: ${result.content}")
             val text = result.content.joinToString { it.toString() }
-            assertTrue(text.contains("ktlint"), "expected ktlint output in: $text")
+            assertTrue(text.contains("Ktlint Format Result", ignoreCase = true), "expected ktlint output in: $text")
         } finally {
             cleanup(client, sessionJob, clientTransport)
         }

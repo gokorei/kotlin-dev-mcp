@@ -1,7 +1,6 @@
 package com.gokorei.kotlinmcp.linting
 
 import com.gokorei.kotlinmcp.models.KotlinMcpResult
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -94,36 +93,7 @@ class DefaultLintService(
     private val resourceOverrides: Map<String, String?> = emptyMap()
 ) : LintService {
 
-    private val mode: String = System.getenv("LINT_SERVICE_MODE") ?: "EMBEDDED"
-
-    private val defaultDetektClassLoader: ChildFirstClassLoader? by lazy {
-        createClassLoader(detektClasspath(), emptyList(), "io.gitlab.arturbosch.detekt.cli.Main")
-    }
-
-    private val defaultKtlintClassLoader: ChildFirstClassLoader? by lazy {
-        createClassLoader(ktlintClasspath(), emptyList(), "com.pinterest.ktlint.Main")
-    }
-
-    private fun createClassLoader(
-        baseClasspath: String?,
-        customCompilerClasspath: List<String>,
-        entryClass: String
-    ): ChildFirstClassLoader? {
-        val extraUrls = customCompilerClasspath
-            .filter { it.isNotBlank() }
-            .map { File(it).toURI().toURL() }
-
-        val baseUrls = (baseClasspath ?: "").split(File.pathSeparatorChar)
-            .filter { it.isNotBlank() }
-            .map { File(it).toURI().toURL() }
-
-        val allUrls = (extraUrls + baseUrls).distinct().toTypedArray()
-        if (allUrls.isEmpty()) return null
-
-        return ChildFirstClassLoader(allUrls, DefaultLintService::class.java.classLoader).also { cl ->
-            runCatching { Class.forName(entryClass, true, cl) }
-        }
-    }
+    private val mode: String = System.getenv("LINT_SERVICE_MODE") ?: "SUBPROCESS"
 
     init {
         System.setProperty("detekt.kotlin.version.disable", "true")
@@ -137,8 +107,12 @@ class DefaultLintService(
     }
 
     override fun prewarm() {
-        defaultDetektClassLoader
-        defaultKtlintClassLoader
+        // detekt/ktlint are executed in dedicated subprocess JVMs (each loads its
+        // own embedded compiler), so there is nothing to load inside this JVM.
+        // Resolving the dumped classpath resources here surfaces packaging
+        // problems early.
+        detektClasspath()
+        ktlintClasspath()
     }
 
     override fun runDetekt(
@@ -147,20 +121,16 @@ class DefaultLintService(
         config: Map<String, Any>,
         compilerClasspath: List<String>
     ): KotlinMcpResult {
-        val cl = if (compilerClasspath.isNotEmpty()) {
-            createClassLoader(detektClasspath(), compilerClasspath, "io.gitlab.arturbosch.detekt.cli.Main") ?: defaultDetektClassLoader
-        } else {
-            defaultDetektClassLoader
-        }
-
-        if (cl == null && detektClasspath() == null) {
+        val baseClasspath = detektClasspath()
+        if (baseClasspath == null) {
             return KotlinMcpResult.Error(
                 message = "detekt tooling classpath missing. Run the Gradle `dumpToolingClasspaths` task (wired into processResources) or pass 'compilerClasspath' before using this tool.",
                 code = "DETEKT_CLASSPATH_MISSING",
                 requireAnotherCall = true
             )
         }
-        return when (val run = runDetektCli(code, workspacePath, config, cl)) {
+        val classpathEntries = listOf(baseClasspath) + compilerClasspath.filter { it.isNotBlank() }
+        return when (val run = runDetektSubprocess(code, workspacePath, config, classpathEntries)) {
             is DetektRun.Failed -> KotlinMcpResult.Error(message = run.message, code = run.code, requireAnotherCall = true)
             is DetektRun.Findings -> {
                 val findings = run.list
@@ -200,13 +170,88 @@ class DefaultLintService(
                 ?.use { it.readText().trim() }
         }
 
-    private fun runDetektCli(
+    private data class ToolRun(val exitCode: Int, val tailOutput: String)
+
+    /**
+     * Executes an external CLI tool (detekt/ktlint) in its own JVM. Running
+     * them in-process via a child-first classloader deadlocked the MCP transport
+     * because their embedded compilers fight the server's kotlin-compiler
+     * over the System streams and class-loading lock during a Stdio tool call.
+     * A separate process keeps the server's own threads and System.out intact.
+     */
+    private fun runJavaTool(
+        mainClass: String,
+        classpathEntries: List<String>,
+        args: List<String>,
+        dir: Path?,
+        timeoutSeconds: Long
+    ): ToolRun {
+        val javaBin = runCatching {
+            val javaHome = System.getProperty("java.home") ?: error("java.home not set")
+            val candidate = File(javaHome, "bin/java")
+            if (candidate.exists()) candidate.absolutePath else "java"
+        }.getOrDefault("java")
+
+        val cmd = buildList {
+            add(javaBin)
+            add("-cp")
+            add(classpathEntries.joinToString(File.pathSeparator))
+            add(mainClass)
+            addAll(args)
+        }
+        val pb = ProcessBuilder(cmd)
+        pb.redirectErrorStream(true)
+        if (dir != null) {
+            pb.directory(dir.toFile())
+        }
+
+        val process = try {
+            pb.start()
+        } catch (e: Throwable) {
+            return ToolRun(-1, "could not start subprocess: ${e.message}")
+        }
+
+        val tail = StringBuilder()
+        val drainer = Thread {
+            try {
+                process.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        if (tail.length < 4096) {
+                            val keep = line.length.coerceAtMost(4096 - tail.length)
+                            tail.append(line.substring(0, keep)).append('\n')
+                        }
+                    }
+                }
+            } catch (_: Throwable) {
+            }
+        }
+        drainer.isDaemon = true
+        drainer.start()
+
+        return try {
+            val finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
+            if (!finished) {
+                process.destroyForcibly()
+                process.waitFor(5, TimeUnit.SECONDS)
+                ToolRun(-1, "timed out after ${timeoutSeconds}s")
+            } else {
+                ToolRun(process.exitValue(), tail.toString())
+            }
+        } catch (e: Throwable) {
+            process.destroyForcibly()
+            ToolRun(-1, "subprocess error: ${e.message}")
+        } finally {
+            drainer.interrupt()
+        }
+    }
+
+    private fun runDetektSubprocess(
         code: String,
         workspacePath: String?,
         config: Map<String, Any>,
-        cl: ClassLoader?
+        classpathEntries: List<String>
     ): DetektRun {
-        if (cl == null) return DetektRun.Failed("DETEKT_CLASSPATH_MISSING", "detekt tooling classpath is missing.")
 
         val tempDir = try {
             Files.createTempDirectory("detekt-run")
@@ -246,54 +291,15 @@ class DefaultLintService(
             args.add("--report")
             args.add("xml:$reportXml")
 
-            val oldCl = Thread.currentThread().contextClassLoader
-            val output = ByteArrayOutputStream()
-            val oldOut = System.out
-            val oldErr = System.err
-
-            val exitCode = try {
-                Thread.currentThread().contextClassLoader = cl
-                System.setOut(java.io.PrintStream(output))
-                System.setErr(java.io.PrintStream(output))
-
-                val outStream = java.io.PrintStream(output)
-                val cliArgsClass = Class.forName("io.gitlab.arturbosch.detekt.cli.CliArgs", true, cl)
-                val jcommanderClass = Class.forName("io.gitlab.arturbosch.detekt.cli.JCommanderKt", true, cl)
-                val parseArgumentsMethod = jcommanderClass.getMethod("parseArguments", Array<String>::class.java)
-                val cliArgs = parseArgumentsMethod.invoke(null, args.toTypedArray())
-
-                val runnerClass = Class.forName("io.gitlab.arturbosch.detekt.cli.runners.Runner", true, cl)
-                val runnerConstructor = runnerClass.getConstructor(cliArgsClass, Appendable::class.java, Appendable::class.java)
-                val runner = runnerConstructor.newInstance(cliArgs, outStream, outStream)
-
-                val executeMethod = runnerClass.getMethod("execute")
-                try {
-                    val resultObj = executeMethod.invoke(runner)
-                    if (resultObj != null) {
-                        val getExitCode = resultObj.javaClass.getMethod("getExitCode")
-                        (getExitCode.invoke(resultObj) as Enum<*>).ordinal
-                    } else {
-                        0
-                    }
-                } catch (e: java.lang.reflect.InvocationTargetException) {
-                    val cause = e.cause
-                    if (cause != null && (cause.javaClass.simpleName.contains("Failure") || cause.javaClass.simpleName.contains("Failed") || reportFile.exists())) {
-                        2
-                    } else throw e
-                }
-            } catch (e: java.lang.reflect.InvocationTargetException) {
-                val cause = e.cause
-                if (reportFile.exists() || (cause != null && (cause.javaClass.simpleName.contains("Failure") || cause.javaClass.simpleName.contains("Failed")))) {
-                    2
-                } else {
-                    return DetektRun.Failed("DETEKT_EXECUTION_ERROR", "Detekt failed: ${cause?.message ?: e.message}")
-                }
-            } catch (e: Throwable) {
-                return DetektRun.Failed("DETEKT_EXECUTION_ERROR", "Detekt invocation error: ${e.message}")
-            } finally {
-                Thread.currentThread().contextClassLoader = oldCl
-                System.setOut(oldOut)
-                System.setErr(oldErr)
+            val run = runJavaTool(
+                mainClass = "io.gitlab.arturbosch.detekt.cli.Main",
+                classpathEntries = classpathEntries,
+                args = args,
+                dir = tempDir,
+                timeoutSeconds = 180L
+            )
+            if (run.exitCode < 0) {
+                return DetektRun.Failed("DETEKT_EXECUTION_ERROR", "detekt invocation failed: ${run.tailOutput.take(300)}")
             }
 
             val findings = if (reportFile.exists()) {
@@ -313,19 +319,15 @@ class DefaultLintService(
         apply: Boolean,
         compilerClasspath: List<String>
     ): KotlinMcpResult {
-        val cl = if (compilerClasspath.isNotEmpty()) {
-            createClassLoader(ktlintClasspath(), compilerClasspath, "com.pinterest.ktlint.Main") ?: defaultKtlintClassLoader
-        } else {
-            defaultKtlintClassLoader
-        }
-
-        if (cl == null && ktlintClasspath() == null) {
+        val baseClasspath = ktlintClasspath()
+        if (baseClasspath == null) {
             return KotlinMcpResult.Error(
                 message = "ktlint tooling classpath missing. Run the Gradle `dumpToolingClasspaths` task (wired into processResources) or pass 'compilerClasspath' before using this tool.",
                 code = "KTLINT_CLASSPATH_MISSING",
                 requireAnotherCall = true
             )
         }
+        val classpathEntries = listOf(baseClasspath) + compilerClasspath.filter { it.isNotBlank() }
 
         val tempDir = try {
             Files.createTempDirectory("ktlint-run")
@@ -338,31 +340,24 @@ class DefaultLintService(
             Files.writeString(snippetFile, code)
 
             val args = mutableListOf<String>()
-            if (apply) {
-                args.add("-F")
-            }
-            args.add(snippetFile.toAbsolutePath().toString())
+if (apply) {
+                    args.add("-F")
+                }
+                args.add(snippetFile.toAbsolutePath().toString())
 
-            val oldCl = Thread.currentThread().contextClassLoader
-            val output = ByteArrayOutputStream()
-            val oldOut = System.out
-            val oldErr = System.err
-
-            try {
-                Thread.currentThread().contextClassLoader = cl
-                System.setOut(java.io.PrintStream(output))
-                System.setErr(java.io.PrintStream(output))
-
-                val mainClass = Class.forName("com.pinterest.ktlint.Main", true, cl)
-                val mainMethod = mainClass.getMethod("main", Array<String>::class.java)
-                mainMethod.invoke(null, args.toTypedArray())
-            } catch (e: Throwable) {
-                // Ktlint may invoke System.exit or throw when formatting issues exist
-            } finally {
-                Thread.currentThread().contextClassLoader = oldCl
-                System.setOut(oldOut)
-                System.setErr(oldErr)
-            }
+                val run = runJavaTool(
+                    mainClass = "com.pinterest.ktlint.Main",
+                    classpathEntries = classpathEntries,
+                    args = args,
+                    dir = tempDir,
+                    timeoutSeconds = 120L
+                )
+                if (run.exitCode < 0) {
+                    return KotlinMcpResult.Error(
+                        message = "ktlint invocation failed: ${run.tailOutput.take(300)}",
+                        code = "KTLINT_EXECUTION_ERROR"
+                    )
+                }
 
             val formattedCode = try {
                 Files.readString(snippetFile)

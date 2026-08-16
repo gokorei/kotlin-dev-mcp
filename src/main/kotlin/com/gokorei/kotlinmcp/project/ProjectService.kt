@@ -675,6 +675,9 @@ class DefaultProjectService(
         readTimeoutMs: Int = 6000,
         maxRetries: Int = 3
     ): List<VulnerabilityFinding>? {
+        if (System.getProperty("kmcp.disable_network_audits") == "true" || System.getenv("KMCP_DISABLE_NETWORK_AUDITS") == "true") {
+            return null
+        }
         val queries = deps.map { dep ->
             buildString {
                 append("{\"package\":{\"ecosystem\":\"Maven\",\"name\":\"${dep.group}:${dep.name}\"},\"version\":\"${dep.version}\"}")
@@ -1044,7 +1047,7 @@ private fun mavenVersionCompare(a: String, b: String): Int {
     val at = tokens(a)
     val bt = tokens(b)
     // Qualifier ordering: release/final > rc > beta > alpha > snapshot.
-    fun qualifierRank(t: Any): Int = when (t.toString().lowercase()) {
+    fun qualifierRank(t: Any?): Int = when (t.toString().lowercase()) {
         "final", "release", "ga", "sp" -> 4
         "rc", "m" -> 3
         "beta", "b" -> 2
@@ -1053,15 +1056,23 @@ private fun mavenVersionCompare(a: String, b: String): Int {
         else -> 2
     }
 
+    // A missing trailing token is treated as the numeric 0 (so `1.26.0` equals
+    // `1.26`) and as a release-neutral qualifier (so `1.26.0.Final` equals
+    // `1.26.0`, and pre-release qualifiers like `1.0-rc1` sort below `1.0`).
     val n = maxOf(at.size, bt.size)
     for (i in 0 until n) {
-        val x = at.getOrNull(i) ?: 0
-        val y = bt.getOrNull(i) ?: 0
+        val xo = at.getOrNull(i)
+        val yo = bt.getOrNull(i)
         val cmp = when {
-            x is Int && y is Int -> x.compareTo(y)
-            x is Int -> 1
-            y is Int -> -1
-            else -> qualifierRank(x).compareTo(qualifierRank(y))
+            xo == null && yo == null -> 0
+            xo is Int && yo == null -> xo.compareTo(0)
+            yo is Int && xo == null -> 0.compareTo(yo)
+            xo is String && yo == null -> qualifierRank(xo).compareTo(4)
+            yo is String && xo == null -> 4.compareTo(qualifierRank(yo))
+            xo is Int && yo is Int -> xo.compareTo(yo)
+            xo is Int -> 1
+            yo is Int -> -1
+            else -> qualifierRank(xo).compareTo(qualifierRank(yo))
         }
         if (cmp != 0) return cmp
     }
