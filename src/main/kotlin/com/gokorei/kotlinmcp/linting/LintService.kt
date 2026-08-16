@@ -194,6 +194,10 @@ class DefaultLintService(
 
         val cmd = buildList {
             add(javaBin)
+            // One-shot CLI JVM: keep startup fast by using only C1 compilation
+            // (no C2 profile-guided warmup, which these short-lived processes
+            // never pay back).
+            add("-XX:TieredStopAtLevel=1")
             add("-cp")
             add(classpathEntries.joinToString(File.pathSeparator))
             add(mainClass)

@@ -24,11 +24,5 @@ jobs:
       - name: Make Gradle Wrapper Executable
         run: chmod +x gradlew
 
-      - name: Build and Dump Tooling Classpaths
-        run: ./gradlew dumpToolingClasspaths syncKotlinDocs processStdlibIndex
-
-      - name: Run Test Suite
-        run: ./gradlew test --stacktrace
-
-      - name: Build Distribution Jar
-        run: ./gradlew uberJar --no-daemon
+      - name: Build and Test
+        run: ./gradlew test uberJar
