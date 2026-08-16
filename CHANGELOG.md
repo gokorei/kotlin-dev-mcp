@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Tests no longer perform real network requests.
 - Machine-specific JDK path removed from `gradle.properties` so the build is portable across machines and CI.
+- Eliminated intermittent test-suite hangs: the doc/snippet/lint components race on request submission, the in-process transport dropped messages arriving before the peer subscribed its handler, and some service calls awaited responses with no timeout. Requests are now idempotent, the transport delivery is race-free, and negotiation/publish calls are bounded by timeouts.
+- detekt and ktlint now run in isolated subprocess JVMs on their dumped tooling classpaths instead of in-process on shared embedded compiler versions, preventing cross-compiler crashes and making the embedded K2 classloading hermetic.
+- Maven artifact version comparison hardened against malformed versions (missing tokens, pre-release markers) used by the library analysis tool.
+- Network audits performed by the project inspection tool are optional (opt-in via `kmcp.disable_network_audits`), so no external calls happen outside CI-scoped runs.
+- CI stabilized: single Gradle invocation for test + fat-JAR, per-method test timeouts, and a persistent Gradle build cache that cuts uncached "Build and Test" step time from ~90s to ~30s.
 
 ### Security
 - Stdio transport safety: all logging routed to stderr (`kotlin-logging-jvm` + `slf4j-simple`), keeping stdout clean for JSON-RPC frames.
