@@ -16,7 +16,13 @@ buildscript {
 plugins {
     kotlin("jvm") version "2.3.20"
     kotlin("plugin.serialization") version "2.3.20"
+    id("org.jetbrains.dokka") version "2.2.0"
+    id("org.jetbrains.kotlinx.binary-compatibility-validator") version "0.18.1"
     application
+}
+
+kotlin {
+    explicitApiWarning()
 }
 
 group = "com.gokorei"
@@ -199,6 +205,22 @@ val uberJar = tasks.register<Jar>("uberJar") {
 
 tasks.assemble {
     dependsOn(uberJar)
+}
+
+val dokkaDocs = tasks.register("dokkaDocs") {
+    group = "documentation"
+    description = "Generates Dokka API documentation publication."
+    dependsOn("dokkaGenerate")
+}
+
+val generateMcpDocs = tasks.register<JavaExec>("generateMcpDocs") {
+    group = "documentation"
+    description = "Generates the Markdown MCP tool reference directly from in-code tool definitions."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.gokorei.kotlinmcp.doc.McpDocGeneratorKt")
+    val docFile = layout.projectDirectory.file("docs/wiki/Tool-Reference.md")
+    args = listOf(docFile.asFile.absolutePath)
+    outputs.file(docFile)
 }
 
 
