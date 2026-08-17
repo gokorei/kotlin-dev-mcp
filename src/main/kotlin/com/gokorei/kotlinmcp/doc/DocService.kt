@@ -392,6 +392,75 @@ class DefaultDocService(private val persistencePath: String? = null) : DocServic
         "@Test" to """
             # `@Test` (kotlin.test / org.junit)
             Marks a function as a test case. On JVM this maps to JUnit's `@Test`.
+        """.trimIndent(),
+        "kotlin.Nothing" to """
+            # `class Nothing` (kotlin)
+            The bottom type in Kotlin. `Nothing` is a subtype of EVERY type, so a
+            value of type `Nothing` can be used anywhere. Combined with a covariant
+            (`out T`) generic, an `object Empty : Tree<Nothing>` becomes assignable to
+            `Tree<Int>`. Use it (never `Any?`) for the empty/base case of algebraic data types.
+        """.trimIndent(),
+        "tailrec" to """
+            # `tailrec` (modifier)
+            Asks the compiler to replace a self-recursive call with a loop, preventing stack
+            overflow. HARD constraint: the recursive call must be the ONE AND ONLY tail position
+            call — otherwise the compiler warns "a function is marked as tail-recursive but no
+            tail calls are found" and the keyword is silently ignored. Tail-recursive functions
+            cannot be `open`/`override` on JVM.
+        """.trimIndent(),
+        "require" to """
+            # `inline fun require(value: Boolean, lazyMessage: () -> Any = {...})`
+            Validates a PRECONDITION / input argument; throws `IllegalArgumentException` when
+            `value` is false. Prefer over hand-rolled `if (x < 0) throw IllegalArgumentException()`.
+            The message lambda is only evaluated on failure.
+        """.trimIndent(),
+        "check" to """
+            # `inline fun check(value: Boolean, lazyMessage: () -> Any = {...})`
+            Validates a POSTCONDITION / internal invariant or object state; throws
+            `IllegalStateException` when `value` is false. Use for "this object is in a bad state",
+            NOT for bad caller input (that is `require`). Message lambda evaluated only on failure.
+        """.trimIndent(),
+        "requireNotNull" to """
+            # `inline fun <T : Any> requireNotNull(value: T?, lazyMessage: () -> Any = {...}): T`
+            Returns `value` after asserting it is non-null; throws `IllegalArgumentException`
+            otherwise. Same input-contract role as `require`, for nullables.
+        """.trimIndent(),
+        "checkNotNull" to """
+            # `inline fun <T : Any> checkNotNull(value: T?, lazyMessage: () -> Any = {...}): T`
+            Returns `value` after asserting it is non-null; throws `IllegalStateException`
+            otherwise. Same state-contract role as `check`, for nullables.
+        """.trimIndent(),
+        "supervisorScope" to """
+            # `suspend fun <R> supervisorScope(block: suspend CoroutineScope.() -> R): R`
+            Creates a scope whose failure of one child does NOT cancel siblings or the scope.
+            Default structured concurrency cancels siblings on any child failure; wrap work that
+            must be failure-isolated in `supervisorScope`. Does NOT change cancellation of the
+            scope itself by its parent.
+        """.trimIndent(),
+        "select" to """
+            # `select { }` (kotlinx.coroutines.selects)
+            Suspends until one of several clauses completes, then resumes once. BIASED: when
+            several clauses are ready simultaneously, the EARLIEST-listed clause wins — the choice
+            is NOT random. `selectUnbiased { }` randomizes the winner among ready clauses.
+        """.trimIndent(),
+        "selectUnbiased" to """
+            # `selectUnbiased { }` (kotlinx.coroutines.selects)
+            Like `select { }` but chooses uniformly at random among simultaneously-ready clauses
+            instead of always preferring the earliest listed one. Use when fairness is required.
+        """.trimIndent(),
+        "@BeforeAll" to """
+            # `@BeforeAll` / `@AfterAll` (org.junit.jupiter)
+            Run once before/after ALL tests in a class. These require STATIC methods in Java;
+            Kotlin has no `static`, so a plain instance `@BeforeAll fun setup()` is SILENTLY
+            IGNORED (no compile error). Fix: annotate the test class `@TestInstance(TestInstance
+            .Lifecycle.PER_CLASS)` (instance methods then run), or put the functions in a
+            `companion object` with `@JvmStatic`. `@BeforeEach`/`@AfterEach` are unaffected.
+        """.trimIndent(),
+        "awaitAll" to """
+            # `suspend fun <T> Iterable<Deferred<T>>.awaitAll(): List<T>`
+            Awaits every Deferred, collecting results in order. Prefer `listOf(a, b, c).awaitAll()`
+            over sequential `val a = x.async().await(); val b = y.async().await()` — the latter
+            SERIALIZES the two coroutines (launch all first, then await all).
         """.trimIndent()
     ))
 
@@ -621,6 +690,180 @@ class DefaultDocService(private val persistencePath: String? = null) : DocServic
             # MockK (io.mockk)
             Mocking library for Kotlin. `mockk<T>()` + `every { }` to stub, `verify { }` to
             assert, and `unmockkAll()` in `@AfterEach` to prevent `mockkObject`/`mockkStatic` leaks.
+        """.trimIndent(),
+        "design patterns" to """
+            # GoF Patterns → Idiomatic Kotlin
+            Most classic GoF patterns resolve to Kotlin built-ins; prefer the idiom and reach for
+            the GoF form only when the idiom lacks needed behavior (documented state in Strategy,
+            user-pluggable handler chains in Chain of Responsibility, extreme Builder flexibility).
+
+            ## Creational
+            - Singleton → `object` (lazy, thread-safe, `init` block)
+            - Static Factory Method → `companion object` factories (`of`, `from`, `valueOf`) + optional `private constructor`
+            - Builder → default + named arguments (avoid the Java-style builder chain)
+            - Prototype → `data class` `copy()`
+            - Factory/Abstract Factory → `when` over a sealed interface family (smart cast on `is`)
+
+            ## Structural
+            - Decorator → interface delegation `class Logging(r: Repo) : Repo by r` (override only the decorated member)
+            - Adapter → extension functions (`fun USPlug.toEUPlug()`), not adapter classes
+            - Facade → extension function that orchestrates the class family
+            - Proxy → `by lazy` (default synchronized; `LazyThreadSafetyMode.PUBLICATION`/`.NONE` for cheaper variants)
+            - Bridge → flatten with constructor-composed strategy fields
+            - Composite → same-interface nesting + `vararg` secondary constructor
+
+            ## Behavioral
+            - Strategy → function reference in a `var` (swap `= Weapons::peashooter` at runtime); interface only if the strategy carries state
+            - Command → `typealias Command = () -> Unit` + function-generator closures; undo via `Pair<Command, Command>`
+            - Chain of Responsibility → `typealias Handler = (Request) -> Response` + function composition `auth(validation(finalResponse()))`
+            - State → sealed classes + exhaustive `when` with `is`; state-holds-logic or context-holds-logic styles
+            - Template Method → higher-order function with lambda params; optional hook = nullable default `bossHook: (() -> Unit)?` + `bossHook?.let { it() }`
+            - Observer → `mutableMapOf<() -> Unit, () -> Unit>` keyed on the subscriber function itself; publish immutable `data class Message`
+            - Visitor → sealed class + `when`/`is` replaces accept() double-dispatch
+            - Iterator → `operator fun iterator(): Iterator<T>` makes any class for-eachable
+
+            ## State & Data (Ch9)
+            - Prefer sealed classes over enums when the state carries associated data (e.g. `PizzaOrderStatus(orderId)`); enums cannot hold per-instance data
+        """.trimIndent(),
+        "dsl builders" to """
+            # Kotlin DSL Builders
+            Build type-safe, readable builders via receiver lambdas and trailing-lambda syntax.
+
+            ## Recipe
+            ```kotlin
+            class Trip {
+                var hotel: String? = null
+                fun day(label: String, plan: Day.() -> Unit = {}) = Day(label).apply(plan).also { days += it }
+            }
+            val trip = Trip().apply {
+                hotel = "Ritz"
+                day("Mon") { visit("Louvre") }
+            }
+            ```
+            - Receiver lambda `T.() -> Unit` grants `this` = receiver inside the block (used with `apply`/`also`/`build`). To also expose the outer receiver use `this@Outer`.
+            - Trailing lambda allows `build { }` call-suffix without parentheses: `Trip().apply { ... }`.
+            - `lateinit` (non-null, non-primitive) for values set later; reading before assignment throws `UninitializedPropertyAccessException`.
+            - Scope function pick: `apply` = configure + return receiver; `also` = side-effect + return receiver; `run` = compute value from receiver; `let` = transform nullable.
+        """.trimIndent(),
+        "cooperative cancellation" to """
+            # Cooperative Cancellation
+            Kotlin cancellation is COOPERATIVE: `cancel()` only takes effect at a suspension point.
+            - `delay()`, `yield()`, and suspending I/O all check cancellation; a tight CPU loop that never suspends does NOT stop on cancel.
+            - `Thread.sleep()` inside a coroutine blocks and is NOT cancellable — use `delay()` instead (also detects cancellation).
+            - Catching `CancellationException` for cleanup is legal, but NEVER swallow it: the coroutine is still cancelled afterwards. Re-throw `throw e` after cleanup, or use a `finally` block for the cleanup without catching.
+            - `yield()` is an explicit checkpoint to allow cancellation/progress on a single context.
+        """.trimIndent(),
+        "structured concurrency" to """
+            # Structured Concurrency & Exception Propagation
+            Default `coroutineScope { }` semantics:
+            - A parent coroutine waits for ALL its children to finish before completing.
+            - When ONE child throws, the exception cancels the parent AND every sibling, then propagates unless every child already finished (in that case siblings' exceptions still propagate if any).
+            - `launch` failures must not go unhandled; they are delivered via the (uncaught) exception handler of the root Job.
+            - `supervisorScope { }` ISOLATES failures: a failing child cancels only itself; siblings and the scope survive. Use it for independent sub-tasks (one failure should not abort the batch).
+            - Cancellation of the parent still cascades into a `supervisorScope` — supervision only changes child-failure propagation, not parent cancellation.
+        """.trimIndent(),
+        "flow backpressure" to """
+            # Flow: Cold Semantics & Backpressure Operators
+            - `Flow` is COLD: no work happens until collected; each collector triggers a fresh producer run (emissions repeat per subscriber). Channels are HOT: emissions are broadcast to subscribers only from subscription time.
+            - Default backpressure: the producer suspends (`collect` is suspending) whenever the collector is slower, i.e. emissions are sequential and backpressured naturally.
+            - `buffer(capacity)` — decouples producer and consumer into a channel with the given capacity; producer runs AHEAD, queueing up to `capacity` (default 64) items. Unbounded buffering can exhaust memory.
+            - `conflate()` — only the LATEST value matters; slow consumer skips intermediate emissions, producer never blocks (capacity 1 with drop-oldest). Use when a slow consumer and outdated intermediate values are acceptable (e.g. UI state tickers).
+            - Default errors: exceptions thrown by the producer are delivered to the collector and abort the flow; use `catch`/`retry`/`onEach` for operator-level handling.
+        """.trimIndent(),
+        "async barrier" to """
+            # Barrier / Start-All-Then-Await Pattern
+            Launch all N independent coroutines FIRST, then await all results — otherwise they run sequentially.
+            ```kotlin
+            // WRONG: b only starts AFTER a finishes → serialized (a + b durations)
+            val a = x.async().await()
+            val b = y.async().await()
+            // RIGHT: both start immediately, then we await (max(a, b) total)
+            val d1 = x.async(); val d2 = y.async()
+            val a = d1.await(); val b = d2.await()
+            // Homogeneous: just use awaitAll()
+            val results = (1..3).map { repo.fetch(it).async() }.awaitAll()
+            ```
+            Rule: gather all `async` handles before any `await`. For a homogeneous batch that returns the same type, prefer `awaitAll()`.
+        """.trimIndent(),
+        "select expression" to """
+            # `select` is Biased — use `selectUnbiased` for Fairness
+            `select { }` suspends until ONE of several clauses is ready. When MULTIPLE clauses are
+            ready at the same time, `select` deterministically picks the EARLIEST-listed clause
+            (syntax order wins). This is the "bias": channel order decides ties, NOT randomness.
+            `selectUnbiased { }` picks uniformly at random among simultaneously-ready clauses.
+            Use `selectUnbiased` when you need fair load distribution across ready channels, and
+            plain `select` when you want deterministic tie-breaking (e.g. prefer the first ready
+            source). Clauses may have different result types; the block returns the value of the
+            chosen clause (use `onAwait`, `onReceive`, `onSend` to register them).
+        """.trimIndent(),
+        "algebraic data types" to """
+            # Algebraic Data Types with Sealed + `Nothing`
+            Model sum types as a `sealed interface` plus `data class`/`object` cases. The empty
+            or base case uses the `Nothing` covariant sentinel trick:
+            ```kotlin
+            sealed interface Tree<out T> {
+                object Empty : Tree<Nothing>           // assignable to Tree<Int> via covariance
+                data class Node<T>(
+                    val value: T,
+                    val left: Tree<T> = Empty,
+                    val right: Tree<T> = Empty,
+                ) : Tree<T>
+            }
+            fun <T> Tree<T>.depth(): Int = when (this) {
+                Tree.Empty -> 0
+                is Tree.Node -> 1 + maxOf(left.depth(), right.depth())
+            }
+            ```
+            - `Nothing` is a subtype of EVERY type, so `Empty : Tree<Nothing>` works as `Tree<Int>` because of `out T`.
+            - `Any` is the TOP type and is the WRONG choice here.
+            - Sealed → exhaustive `when`, no `else` branch required (compiler proves coverage).
+            - This is the idiomatic Kotlin equivalent of Haskell/OCaml ADTs (Maybe/Option, Tree, List).
+        """.trimIndent(),
+        "input validation" to """
+            # Input Validation: `require` vs `check`
+            The two stdlib validation functions differ by the exception they throw, chosen by WHERE the mistake lives.
+            - `require(value, { msg })` → `IllegalArgumentException` — BAD INPUT / precondition: caller passed an invalid argument.
+            - `check(value, { msg })` → `IllegalStateException` — BAD STATE / postcondition: the object is in an unusable internal state.
+            - `requireNotNull(value)` / `checkNotNull(value)` are the nullable variants (same split).
+            - Both evaluate the message lambda LAZILY (only on failure): `{ "arg must be >= 0, was ${'$'}x" }`.
+            - Prefer these over hand-rolled `if (x < 0) throw IllegalArgumentException(...)` — they read as intent and never forget the message.
+            Convention: validate function inputs with `require` at the top ("fail fast" on bad parameters); use `check` inside functions for internal invariants after state transitions.
+        """.trimIndent(),
+        "serializable data classes" to """
+            # `@Serializable` DTOs (kotlinx.serialization)
+            Data classes passed through a serializer (Ktor `call.respond(dto)`, `call.receive<Dto>()`,
+            `Json.encodeToString`, request/response bodies) need ALL THREE, or you hit the cryptic
+            runtime error "Serializer for class 'X' is not found":
+            1. `@Serializable` annotation on the DTO.
+            2. The Gradle compiler plugin `kotlin("plugin.serialization")` (same version as the kotlin JVM plugin) — it generates the serializer.
+            3. The runtime artifact dependency (e.g. `kotlinx-serialization-json`).
+            Missing just the plugin surfaces as a RUNTIME `SerializationException` ("Serializer for
+            class not found") instead of a compile error, so it is easy to misdiagnose.
+        """.trimIndent(),
+        "junit kotlin lifecycle" to """
+            # JUnit 5 Lifecycle in Kotlin: @BeforeAll / @AfterAll
+            `@BeforeAll`/`@AfterAll` require static methods in Java, but Kotlin has no `static`.
+            A naive `@BeforeAll fun setup()` in a test class is SILENTLY IGNORED by JUnit (no
+            compile or runtime error) — the expensive setup never runs and tests fail mysteriously.
+            Two working forms (pick ONE):
+            ```kotlin
+            // A) PER_CLASS lifecycle → instance methods run once each way
+            @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+            class ServerTest {
+                @BeforeAll fun setup() { /* once */ }
+                @AfterAll fun cleanup() { /* once */ }
+            }
+            // B) companion object + @JvmStatic → static methods exposed to JUnit
+            class ServerTest {
+                companion object {
+                    @JvmStatic @BeforeAll fun setup() { }
+                    @JvmStatic @AfterAll fun cleanup() { }
+                }
+            }
+            ```
+            - `@BeforeEach`/`@AfterEach` work fine as instance methods under both lifecycles.
+            - `@TestInstance(PER_CLASS)` + `@Nested` inner classes share one instance; keep per-test
+              state in `@BeforeEach`/`@AfterEach` nested setters to avoid cross-test coupling.
         """.trimIndent()
     ))
 
