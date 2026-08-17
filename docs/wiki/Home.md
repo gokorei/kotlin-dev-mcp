@@ -45,6 +45,7 @@ The server also publishes bundled stdlib documentation and architecture guidelin
 
 ## Guides
 
+- [Release Notes](Release-Notes) — new features, bug fixes, and improvements per version
 - [Security and Sandboxing](Security-And-Sandboxing) — process isolation model, execution architecture, and containerized deployment for untrusted environments
 
 ---
