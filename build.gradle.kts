@@ -218,7 +218,9 @@ val generateMcpDocs = tasks.register<JavaExec>("generateMcpDocs") {
     description = "Generates the Markdown MCP tool reference directly from in-code tool definitions."
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.gokorei.kotlinmcp.doc.McpDocGeneratorKt")
-    args = listOf(layout.projectDirectory.file("docs/wiki/Tool-Reference.md").asFile.absolutePath)
+    val docFile = layout.projectDirectory.file("docs/wiki/Tool-Reference.md")
+    args = listOf(docFile.asFile.absolutePath)
+    outputs.file(docFile)
 }
 
 

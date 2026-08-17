@@ -84,9 +84,11 @@ public final class com/gokorei/kotlinmcp/doc/DefaultDocService : com/gokorei/kot
 
 public final class com/gokorei/kotlinmcp/doc/DefaultMcpDocGenerator : com/gokorei/kotlinmcp/doc/McpDocGenerator {
 	public fun <init> ()V
+	public fun <init> (Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun generateToolReferenceMarkdown ()Ljava/lang/String;
 	public fun generateToolSummaryTable ()Ljava/lang/String;
-	public final fun getToolSpecs ()Ljava/util/List;
+	public fun getToolSpecs ()Ljava/util/List;
 }
 
 public final class com/gokorei/kotlinmcp/doc/DocAction : java/lang/Enum {
@@ -143,6 +145,7 @@ public final class com/gokorei/kotlinmcp/doc/FrameworkFeatureCatalog {
 public abstract interface class com/gokorei/kotlinmcp/doc/McpDocGenerator {
 	public abstract fun generateToolReferenceMarkdown ()Ljava/lang/String;
 	public abstract fun generateToolSummaryTable ()Ljava/lang/String;
+	public abstract fun getToolSpecs ()Ljava/util/List;
 }
 
 public final class com/gokorei/kotlinmcp/doc/McpDocGeneratorKt {
@@ -1026,11 +1029,12 @@ public final class com/gokorei/kotlinmcp/server/ResourceRegistrar {
 
 public final class com/gokorei/kotlinmcp/server/ToolRegistrar {
 	public static final field INSTANCE Lcom/gokorei/kotlinmcp/server/ToolRegistrar;
+	public final fun buildToolDocSpecs (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;)Ljava/util/List;
+	public static synthetic fun buildToolDocSpecs$default (Lcom/gokorei/kotlinmcp/server/ToolRegistrar;Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;ILjava/lang/Object;)Ljava/util/List;
 	public final fun dispatchAction (Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun dispatchAction$default (Lcom/gokorei/kotlinmcp/server/ToolRegistrar;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun formatDomainDescription (Lcom/gokorei/kotlinmcp/models/ProjectEnvironmentProfile;)Ljava/lang/String;
 	public static synthetic fun formatDomainDescription$default (Lcom/gokorei/kotlinmcp/server/ToolRegistrar;Lcom/gokorei/kotlinmcp/models/ProjectEnvironmentProfile;ILjava/lang/Object;)Ljava/lang/String;
-	public final fun getFrameworkDetector ()Lcom/gokorei/kotlinmcp/server/FrameworkDetector;
 	public final fun normalizeArgs (Ljava/util/Map;)Ljava/util/Map;
 	public final fun parseClasspathElement (Lkotlinx/serialization/json/JsonElement;)Ljava/util/List;
 	public final fun parseStringList (Lkotlinx/serialization/json/JsonArray;)Ljava/util/List;
@@ -1061,17 +1065,22 @@ public final class com/gokorei/kotlinmcp/server/ToolRegistrar$ParamSpec {
 
 public final class com/gokorei/kotlinmcp/server/ToolRegistrar$ToolBuilder {
 	public fun <init> (Ljava/lang/String;Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;)V
+	public final fun actions ([Ljava/lang/String;)V
+	public final fun getActions ()Ljava/util/List;
 	public final fun getDescription ()Ljava/lang/String;
 	public final fun getKotlinServer ()Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;
 	public final fun getName ()Ljava/lang/String;
+	public final fun getParams ()Ljava/util/List;
 	public final fun getReadOnly ()Z
 	public final fun handle (Lkotlin/jvm/functions/Function2;)V
 	public final fun handleSimple (Lkotlin/jvm/functions/Function2;)V
 	public final fun param (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V
 	public static synthetic fun param$default (Lcom/gokorei/kotlinmcp/server/ToolRegistrar$ToolBuilder;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/Object;)V
 	public final fun required ([Ljava/lang/String;)V
+	public final fun setActions (Ljava/util/List;)V
 	public final fun setDescription (Ljava/lang/String;)V
 	public final fun setReadOnly (Z)V
+	public final fun toToolDocSpec ()Lcom/gokorei/kotlinmcp/doc/ToolDocSpec;
 }
 
 public abstract interface annotation class com/gokorei/kotlinmcp/server/ToolRegistrar$ToolDslMarker : java/lang/annotation/Annotation {

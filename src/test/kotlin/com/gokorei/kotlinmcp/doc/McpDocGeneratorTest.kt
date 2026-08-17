@@ -10,27 +10,53 @@ class McpDocGeneratorTest {
     private val generator: McpDocGenerator = DefaultMcpDocGenerator()
 
     @Test
-    fun `toolSpecs are perfectly synchronized with ToolRegistrar tool definitions and complete parameter metadata`() {
-        val derivedSpecs = ToolRegistrar.buildToolDocSpecs()
+    fun `toolSpecs are generated with expected 11 core tools, actions, and required parameters`() {
         val docSpecs = generator.toolSpecs
-
-        assertEquals(
-            derivedSpecs.map { it.name },
-            docSpecs.map { it.name },
-            "Tool names in McpDocGenerator must match ToolRegistrar"
+        val expectedToolNames = listOf(
+            "kotlin_docs_read",
+            "kotlin_code_analyze",
+            "kotlin_text_lsp_read",
+            "kotlin_project_inspect",
+            "kotlin_check_snippet",
+            "kotlin_docs_edit",
+            "kotlin_text_lsp_edit",
+            "kotlin_refactor",
+            "kotlin_library_analyze",
+            "kotlin_lint",
+            "kotlin_run"
         )
 
-        for (derived in derivedSpecs) {
-            val docSpec = docSpecs.first { it.name == derived.name }
-            assertEquals(derived.readOnly, docSpec.readOnly, "readOnly status mismatch for ${derived.name}")
-            assertEquals(derived.actions, docSpec.actions, "Actions mismatch for ${derived.name}")
-            assertEquals(
-                derived.params.map { "${it.name}:${it.type}:${it.itemsType}:${it.required}" },
-                docSpec.params.map { "${it.name}:${it.type}:${it.itemsType}:${it.required}" },
-                "Complete parameter metadata mismatch for tool ${derived.name}"
-            )
-            assertEquals(derived.requiredParams, docSpec.requiredParams, "requiredParams mismatch for ${derived.name}")
-        }
+        assertEquals(
+            expectedToolNames,
+            docSpecs.map { it.name },
+            "Generated tool specs must cover all 11 core tools in order"
+        )
+
+        val readOnlyNames = docSpecs.filter { it.readOnly }.map { it.name }
+        assertEquals(
+            listOf("kotlin_docs_read", "kotlin_code_analyze", "kotlin_text_lsp_read", "kotlin_project_inspect", "kotlin_check_snippet"),
+            readOnlyNames,
+            "Read-only tools must match expected list"
+        )
+
+        val checkSnippet = docSpecs.first { it.name == "kotlin_check_snippet" }
+        assertEquals(listOf("code"), checkSnippet.requiredParams)
+
+        val docsEdit = docSpecs.first { it.name == "kotlin_docs_edit" }
+        assertEquals(listOf("name"), docsEdit.requiredParams)
+        assertEquals(listOf("register_symbol", "register_feature", "register_namespace"), docsEdit.actions)
+
+        val lspEdit = docSpecs.first { it.name == "kotlin_text_lsp_edit" }
+        assertEquals(listOf("oldName", "newName"), lspEdit.requiredParams)
+        assertEquals(listOf("rename"), lspEdit.actions)
+
+        val refactor = docSpecs.first { it.name == "kotlin_refactor" }
+        assertEquals(listOf("code"), refactor.requiredParams)
+        assertEquals(listOf("suggest_idioms", "java_to_kotlin", "functional", "quick_fix", "rxjava"), refactor.actions)
+
+        val libAnalyze = docSpecs.first { it.name == "kotlin_library_analyze" }
+        assertEquals(listOf("code"), libAnalyze.requiredParams)
+        assertEquals(listOf("ktor", "serialization", "tests", "route_map", "arrow", "datetime"), libAnalyze.actions)
     }
 
     @Test

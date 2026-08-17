@@ -56,7 +56,7 @@ class DefaultMcpDocGenerator(
     override fun generateToolReferenceMarkdown(): String = buildString {
         appendLine("# Kotlin MCP Tool & Action API Reference")
         appendLine()
-        appendLine("This document is the authoritative, code-backed API reference for all **11 MCP tools** provided by `kotlin-mcp`.")
+        appendLine("This document is the authoritative, code-backed API reference for all **${toolSpecs.size} MCP tools** provided by `kotlin-mcp`.")
         appendLine("All tools use progressive discovery with action-multiplexed parameters to minimize LLM token consumption while providing complete IDE-grade capabilities.")
         appendLine()
         appendLine("---")
