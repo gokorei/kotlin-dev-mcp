@@ -17,7 +17,12 @@ plugins {
     kotlin("jvm") version "2.3.20"
     kotlin("plugin.serialization") version "2.3.20"
     id("org.jetbrains.dokka") version "2.2.0"
+    id("org.jetbrains.kotlinx.binary-compatibility-validator") version "0.18.1"
     application
+}
+
+kotlin {
+    explicitApiWarning()
 }
 
 group = "com.gokorei"
