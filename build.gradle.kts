@@ -208,6 +208,14 @@ val dokkaDocs = tasks.register("dokkaDocs") {
     dependsOn("dokkaGenerate")
 }
 
+val generateMcpDocs = tasks.register<JavaExec>("generateMcpDocs") {
+    group = "documentation"
+    description = "Generates the Markdown MCP tool reference directly from in-code tool definitions."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.gokorei.kotlinmcp.doc.McpDocGeneratorKt")
+    args = listOf(layout.projectDirectory.file("docs/wiki/Tool-Reference.md").asFile.absolutePath)
+}
+
 
 // F6CQ4XSC: syncKotlinDocs — fetch the official Kotlin stdlib API index and update the embedded doc database.
 val syncKotlinDocs = tasks.register<DefaultTask>("syncKotlinDocs") {

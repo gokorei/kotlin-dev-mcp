@@ -45,6 +45,7 @@ The server also publishes bundled stdlib documentation and architecture guidelin
 
 ## Guides
 
+- [Tool Reference](Tool-Reference) — complete in-code backed API reference for all 11 MCP tools and actions
 - [Release Notes](Release-Notes) — new features, bug fixes, and improvements per version
 - [Security and Sandboxing](Security-And-Sandboxing) — process isolation model, execution architecture, and containerized deployment for untrusted environments
 - [Configuration](Configuration) — system properties, environment variables, offline mode, and runtime tuning
