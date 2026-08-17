@@ -12,7 +12,12 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Improvements
 
+- **Reorganized README structure** — replaced dense top architecture section with concise, human-friendly Key Features and moved detailed technical architecture lower down.
+- **Clarified project status in README.md** — removed unofficial claim of being an official server.
+- **Updated contribution status** — specified in `README.md` that public contributions are locked pending community interest.
 - **Agent release-note directive** — all codebase changes must now update the next-release section of this page, and a `## Next` section is created automatically if none exists yet.
+- **Enriched release notes** — updated v1.0.0 release notes with tool call details, stdio transport safety, linter process isolation, and security controls.
+- **Dedicated Configuration wiki page** — created `Configuration.md` detailing system properties, environment variables, offline/air-gapped operation, and MCP tool loading modes.
 
 ---
 
@@ -20,23 +25,26 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### New Features
 
-- **Action-multiplexed tool suite** — 11 tools (5 read-only, 6 mutating) covering documentation, snippet diagnostics, code analysis, LSP-style text services, project inspection, refactoring, library checks, lint/format, and execution.
+- **Action-multiplexed tool suite** — 11 tools covering documentation (`kotlin_docs_read`/`edit`), embedded K2 compiler diagnostics (`kotlin_check_snippet`), static AST analysis (`kotlin_code_analyze`), LSP text services (`kotlin_text_lsp_read`/`edit`), project inspection (`kotlin_project_inspect`), library checks (`kotlin_library_analyze`), detekt/ktlint linters (`kotlin_lint`), AST refactoring (`kotlin_refactor`), and JVM execution runner (`kotlin_run`).
 - **Embedded K2 compiler** (`SnippetCompiler`, `kotlin-compiler-embeddable`) — in-process static type checking and diagnostics without external Gradle daemons.
-- **Real detekt and ktlint backends** — isolated subprocess tooling classpaths power `kotlin_lint`.
+- **Isolated detekt and ktlint backends** — executed in dedicated worker JVM subprocesses on isolated tooling classpaths to power `kotlin_lint` without classloader interference.
 - **Host JVM process runner** (`kotlin_run`) — executes Kotlin snippets, Gradle tasks, and JUnit XML test report parsing.
 - **Progressive discovery** — automatic workspace dependency detection (`build.gradle.kts` / `libs.versions.toml`) with framework-aware tool descriptions.
-- **MCP protocol extensions** — bundled stdlib documentation and architecture guidelines as Markdown resources (`kotlin://docs/index.md`, `kotlin://guidelines/architecture.md`) plus the `kotlin-task` and `kotlin-architecture` guidance prompts.
+- **MCP protocol extensions** — bundled stdlib documentation (`kotlin://docs/index.md`) and architecture guidelines (`kotlin://guidelines/architecture.md`) exposed as Markdown resources, plus `kotlin-task` and `kotlin-architecture` guidance prompts.
 - **Context injection tools** — dependency and API/DB schema digests.
-- **Built-in agent skill** (`skills/kotlin-mcp/SKILL.md`) with action matrices and refactoring pipelines.
+- **Built-in agent skill** ([`skills/kotlin-mcp/SKILL.md`](file:///Users/davymaddelein/Documents/kotlin-mcp/skills/kotlin-mcp/SKILL.md)) — operational guidance, action matrices, and refactoring pipelines for AI agents.
 - **CI, release, and wiki workflows** — GitHub Actions automation with issue and pull request templates.
 
 ### Bug Fixes
 
-> No bug fixes in this release.
+> Initial release — non-breaking design fixes consolidated into initial shipping state.
 
-### Improvements
+### Improvements & Security
 
-> No improvements in this release.
+- **Stdio transport safety** — all server logging strictly isolated to `stderr` (`kotlin-logging-jvm` + `slf4j-simple`), keeping `stdout` clean for JSON-RPC transport frames.
+- **K2 PSI AST traversal** — replaced brittle regex and multiline pattern matching across all code analysis tools with embeddable K2 PSI AST visitors.
+- **Sandboxed network audits** — network security audits in project inspection disabled by default (`kmcp.disable_network_audits`), guaranteeing safe offline/isolated runs.
+- **Hardened Maven dependency resolution** — handles malformed artifact versions and pre-release markers gracefully during library analysis.
 
 ---
 

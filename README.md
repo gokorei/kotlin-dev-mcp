@@ -4,24 +4,23 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3.20-7F52FF.svg)](https://kotlinlang.org)
 [![JDK](https://img.shields.io/badge/JDK-25-orange.svg)](https://openjdk.org)
 
-An official Model Context Protocol (MCP) server providing high-performance Kotlin development tools, live code execution, real K2 compiler static diagnostics, and documentation inspection for LLMs and AI coding assistants.
+A Model Context Protocol (MCP) server providing high-performance Kotlin development tools, live code execution, real K2 compiler static diagnostics, and documentation inspection for LLMs and AI coding assistants.
 
 ---
 
-## Capabilities & Architecture
+## Key Features
 
-- **Action-Multiplexed Tool Suite**: A consolidated suite of 11 tools (5 read-only, 6 mutating) covering documentation, code analysis, project inspection, refactoring, library checks, lint/format, and execution — each action-multiplexed to minimize prompt tokens while returning structured, LLM-consumable results.
-- **Real Lint & Format Backends**: `kotlin_lint` runs detekt static analysis and ktlint formatting in-process via isolated `ChildFirstClassLoader` instances using dedicated tooling classpaths.
-- **Embedded K2 Compiler (`SnippetCompiler`)**: Uses `kotlin-compiler-embeddable` (`K2JVMCompiler`) for in-process static type checking and diagnostic output without launching external Gradle daemons. Unresolved references are reported as hard errors; pass the owning classpath to resolve project types.
-- **Host JVM Process Runner (`kotlin_run`)**: Executes Kotlin snippets, Gradle tasks, and JUnit test report parsers in host JVM processes with JVM argument filtering and timeout enforcement.
-- **MCP Protocol Extensions**: Exposes bundled stdlib documentation and architectural guidelines as Markdown resources (`kotlin://docs/index.md`, `kotlin://guidelines/architecture.md`) and registers guidance prompts (`kotlin-task`, `kotlin-architecture`).
-- **Stdio Transport Safety**: Disables logger startup messages to ensure zero stdout pollution, keeping JSON-RPC transport frames clean over stdio.
+- **Embedded K2 Compiler**: In-process static type checking and line/column diagnostics using Kotlin 2.x compiler APIs without external Gradle daemons.
+- **11 Multiplexed Tools**: Complete surface covering documentation lookup, code analysis, AST refactoring, dependency analysis, formatting, and live execution.
+- **Detekt & KtLint Integration**: In-process static analysis and code formatting running in isolated worker classloaders.
+- **Framework Awareness**: Automatically detects project dependencies (Ktor, Spring, Compose, Arrow, Serialization) to customize tool capabilities dynamically.
+- **Safe Stdio Transport**: Clean JSON-RPC communication over stdio with isolated subprocess execution.
 
 ---
 
 ## Available Tools
 
-The server consolidates its surface into **11 tools** (4 read-only, 7 mutating/edit) using action-multiplexed parameters to minimize token usage while maximizing context:
+The server consolidates its surface into **11 tools** (5 read-only, 6 mutating) using action-multiplexed parameters to minimize token usage while maximizing context:
 
 ### Read-Only Tools (`readOnly = true`)
 
@@ -63,29 +62,27 @@ The server consolidates its surface into **11 tools** (4 read-only, 7 mutating/e
 
 ### Build Executable Application
 ```bash
-gradle installDist --no-daemon
+./gradlew installDist --no-daemon
 ```
 The executable launcher will be created at: `./build/install/kotlin-mcp/bin/kotlin-mcp`
 
 ### Build Self-Contained Uber-JAR (Fat JAR)
 To package all application classes, service action models, and dependencies into a single runnable Fat JAR:
 ```bash
-gradle uberJar --no-daemon
+./gradlew uberJar --no-daemon
 ```
 The self-contained Fat JAR will be created at: `./build/libs/kotlin-mcp-1.0.0-all.jar`
 
 ### Run Tests
 ```bash
-gradle test --no-daemon
+./gradlew test --no-daemon
 ```
-
----
 
 ---
 
 ## Agent Harness Integration Guide
 
-### Option 1: Self-Contained Uber-JAR (Requires Java 17+)
+### Option 1: Self-Contained Uber-JAR (Requires Java 21+)
 Build the Fat JAR locally:
 ```bash
 ./gradlew uberJar --no-daemon
@@ -226,10 +223,31 @@ Add to `~/.config/crush/crush.json` or project-local `crush.json`:
 
 ---
 
+## System Architecture & Technical Details
+
+- **Action-Multiplexed Tool Suite**: A consolidated suite of 11 tools (5 read-only, 6 mutating) covering documentation, code analysis, project inspection, refactoring, library checks, lint/format, and execution — each action-multiplexed to minimize prompt tokens while returning structured, LLM-consumable results.
+- **Real Lint & Format Backends**: `kotlin_lint` runs detekt static analysis and ktlint formatting in-process via isolated `ChildFirstClassLoader` instances using dedicated tooling classpaths.
+- **Embedded K2 Compiler (`SnippetCompiler`)**: Uses `kotlin-compiler-embeddable` (`K2JVMCompiler`) for in-process static type checking and diagnostic output without launching external Gradle daemons. Unresolved references are reported as hard errors; pass the owning classpath to resolve project types.
+- **Host JVM Process Runner (`kotlin_run`)**: Executes Kotlin snippets, Gradle tasks, and JUnit test report parsers in host JVM processes with JVM argument filtering and timeout enforcement.
+- **MCP Protocol Extensions**: Exposes bundled stdlib documentation and architectural guidelines as Markdown resources (`kotlin://docs/index.md`, `kotlin://guidelines/architecture.md`) and registers guidance prompts (`kotlin-task`, `kotlin-architecture`).
+- **Stdio Transport Safety**: Disables logger startup messages to ensure zero stdout pollution, keeping JSON-RPC transport frames clean over stdio.
+
+---
+
+## Documentation & Wiki
+
+For detailed guides, configuration options, and architectural deep-dives:
+
+- [Wiki Home](https://github.com/gokorei/kotlin-dev-mcp/wiki) — Full project overview and quickstart guide.
+- [Configuration Guide](https://github.com/gokorei/kotlin-dev-mcp/wiki/Configuration) — System properties, environment variables, offline/air-gapped setup, and tool loading modes.
+- [Security and Sandboxing](https://github.com/gokorei/kotlin-dev-mcp/wiki/Security-And-Sandboxing) — Process isolation model and containerized execution architecture.
+- [Release Notes](https://github.com/gokorei/kotlin-dev-mcp/wiki/Release-Notes) — Version history, feature breakdowns, and improvements.
+
+---
+
 ## Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for the
-development workflow, architecture guidelines, and code standards.
+Public contributions are currently locked until there is sufficient community interest. See [CONTRIBUTING.md](CONTRIBUTING.md) for architecture guidelines, development setup, and code standards.
 
 Security issues should be reported privately — see [SECURITY.md](SECURITY.md).
 
