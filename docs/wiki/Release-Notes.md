@@ -15,6 +15,8 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Improvements
 
+- **Tool documentation schema single source of truth** — updated `McpDocGenerator` to derive tool specifications and parameter metadata directly from `ToolRegistrar`, ensuring 100% synchronization and adding automated parameter metadata verification in `McpDocGeneratorTest`.
+
 - **Dokka 2.2.0 integration** — applied `org.jetbrains.dokka` plugin and registered `dokkaDocs` task to generate KDoc API documentation automatically.
 - **Explicit API mode and Binary Compatibility Validator** — enabled `kotlin.explicitApiWarning()` and applied `org.jetbrains.kotlinx.binary-compatibility-validator` (BCV) with `./gradlew apiCheck` and `api/kotlin-mcp.api` baseline dump.
 - **Reorganized README structure** — replaced dense top architecture section with concise, human-friendly Key Features and moved detailed technical architecture lower down.

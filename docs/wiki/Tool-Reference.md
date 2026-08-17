@@ -11,7 +11,7 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 
 ### `kotlin_docs_read`
 
-**Description:** Search and inspect Kotlin standard library documentation, symbol signatures, and language feature explanations.
+**Description:** Search and inspect Kotlin stdlib and framework documentation.
 
 **Supported Actions:** `search`, `lookup`, `explain`
 
@@ -24,7 +24,7 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 
 ### `kotlin_code_analyze`
 
-**Description:** AST static analysis for Kotlin source code snippets and files without running external Gradle daemons.
+**Description:** AST static analysis for Kotlin code snippets.
 
 **Supported Actions:** `inspect`, `nullability`, `coroutines`, `compose`, `file_context`
 
@@ -36,7 +36,7 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 
 ### `kotlin_text_lsp_read`
 
-**Description:** AST-backed text services: find symbol definitions, references, completions, fuzzy workspace search, and call/type hierarchies.
+**Description:** AST text services: find definitions, references, completions, search workspace, or trace call/type hierarchies.
 
 **Supported Actions:** `definition`, `references`, `completion`, `workspace_search`, `workspace_references`, `type_hierarchy`, `call_hierarchy`
 
@@ -49,13 +49,13 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 
 ### `kotlin_project_inspect`
 
-**Description:** Gradle build script analysis, multiplatform targets, dependency audits, security advisories, API/DB schema digests, and coverage reports.
+**Description:** Gradle build script and project layout inspection.
 
 **Supported Actions:** `structure`, `kmp_targets`, `dependencies`, `schema_digest`, `diagnose_build`, `layout_inventory`, `vulnerabilities`, `package_api`, `coverage_report`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | Inspection action: 'structure' (default, plugins & source sets), 'kmp_targets', 'dependencies', 'schema_digest' (SQL DDL, Exposed tables, @Serializable DTOs, OpenAPI), 'diagnose_build', 'layout_inventory', 'vulnerabilities', 'package_api', 'coverage_report' |
+| `action` | `string` | No | Inspection action: 'structure' (default, plugins & source sets), 'kmp_targets', 'dependencies', 'schema_digest' (API/DB schema digest from SQL DDL, Exposed tables, @Serializable DTOs, OpenAPI), 'diagnose_build' (pre-build check), 'layout_inventory' (disk layout listing), 'vulnerabilities' (security advisory audit), 'package_api' (public API surface of a package), 'coverage_report' (JaCoCo test coverage summary) |
 | `buildScriptContent` | `string` | No | Content of build.gradle.kts |
 | `projectPath` | `string` | No | Path to Gradle project root directory (aliases: workspacePath, path) |
 | `packageName` | `string` | No | Target package for package_api (e.g. com.example.app) |
@@ -67,7 +67,7 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 
 ### `kotlin_check_snippet`
 
-**Description:** Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column positions.
+**Description:** Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column.
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
@@ -82,7 +82,7 @@ Mutating tools generate code diffs, format files, rename symbols across workspac
 
 ### `kotlin_docs_edit`
 
-**Description:** Register custom documentation entries dynamically at runtime and persist them to disk.
+**Description:** Register custom documentation entries dynamically at runtime and disk persistence.
 
 **Supported Actions:** `register_symbol`, `register_feature`, `register_namespace`
 
@@ -108,63 +108,57 @@ Mutating tools generate code diffs, format files, rename symbols across workspac
 
 ### `kotlin_refactor`
 
-**Description:** Automated AST code refactorings, Java-to-Kotlin translation, imperative loop modernization, idiom suggestions, and RxJava migration.
+**Description:** Code refactorings and compiler-diagnostic quick-fixes that produce new code.
 
-**Supported Actions:** `java_to_kotlin`, `functional`, `suggest_idioms`, `quick_fix`, `rxjava`
+**Supported Actions:** `suggest_idioms`, `java_to_kotlin`, `functional`, `quick_fix`, `rxjava`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | Refactoring action: 'java_to_kotlin' (default), 'functional' (collection loops to map/filter), 'suggest_idioms', 'quick_fix' (compiler diagnostic fixes), 'rxjava' (RxJava to Kotlin Coroutines/Flow) |
-| `code` | `string` | No | Source code context or snippet to refactor |
-| `filePath` | `string` | No | Optional file path for quick_fix diagnostic resolution |
-| `fixType` | `string` | No | Optional fix type for quick_fix (e.g. 'UNRESOLVED_REFERENCE') |
+| `action` | `string` | No | Refactoring action: 'suggest_idioms' (default), 'java_to_kotlin', 'functional' (collection loops), 'quick_fix' (diagnostic diff), 'rxjava' (RxJava to coroutines) |
+| `code` | `string` | **Yes** | Source code snippet |
+| `diagnostic` | `string` | No | Diagnostic message for quick_fix |
 
 ### `kotlin_library_analyze`
 
-**Description:** Library anti-pattern checks, framework modernization suggestions, and code-transforming refactors (Ktor, Arrow, kotlinx.serialization, kotlinx-datetime).
+**Description:** Library anti-pattern checks, modernization suggestions, and code-transforming refactors (e.g. Arrow).
 
 **Supported Actions:** `ktor`, `serialization`, `tests`, `route_map`, `arrow`, `datetime`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | Library check domain: 'ktor' (Ktor plugins & config), 'serialization' (kotlinx.serialization rules), 'tests' (test hygiene), 'route_map' (HTTP routes), 'arrow' (Arrow FP refactoring), 'datetime' (kotlinx-datetime) |
-| `code` | `string` | No | Kotlin code snippet to analyze/refactor |
-| `domain` | `string` | No | Domain alias for action ('ktor', 'serialization', 'tests', 'arrow', 'datetime') |
-| `workspacePath` | `string` | No | Optional workspace root directory to detect framework dependencies |
+| `action` | `string` | No | Primary library analysis action: 'ktor' (default), 'serialization', 'tests', 'route_map', 'arrow', 'datetime' |
+| `domain` | `string` | No | Deprecated backward-compatible alias for 'action'. Domain alias ('ktor', 'serialization', 'tests', 'arrow', 'datetime') |
+| `code` | `string` | **Yes** | Kotlin code snippet to analyze |
+| `dataSources` | `string` | No | Optional schema-diff links for serialization analysis |
+| `legacy` | `string` | No | Optional 'true' for Arrow 1.x monad mode in arrow refactoring |
 
 ### `kotlin_lint`
 
-**Description:** In-process Detekt static analysis and KtLint code formatting running in isolated worker classloaders.
+**Description:** Detekt and KtLint static analysis, baseline management, and code formatting.
 
-**Supported Actions:** `detekt`, `format_ktlint`, `baseline_read`, `baseline_dump`
+**Supported Actions:** `lint`, `detekt`, `format`, `format_ktlint`, `baseline_read`, `baseline_dump`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | Linter action: 'detekt' (run detekt static analysis rules), 'format_ktlint' (run ktlint formatter), 'baseline_read' (parse detekt baseline XML), 'baseline_dump' (create/update detekt baseline XML) |
-| `code` | `string` | No | Kotlin code snippet to lint or format in memory |
-| `filePath` | `string` | No | Optional file path context or target file to format in place |
-| `configFile` | `string` | No | Optional path to custom detekt.yml config file |
-| `baselineFile` | `string` | No | Optional path to detekt baseline XML file |
-| `ruleset` | `string` | No | Optional rule set filter for detekt (e.g. 'complexity', 'style', 'naming') |
-| `workspacePath` | `string` | No | Optional workspace root directory path |
+| `action` | `string` | No | Lint action: 'lint' (default, alias: 'detekt'), 'format' (alias: 'format_ktlint'), 'baseline_read', 'baseline_dump' |
+| `code` | `string` | No | Kotlin source code snippet to lint or format |
+| `workspacePath` | `string` | No | Optional root directory path of workspace |
 
 ### `kotlin_run`
 
-**Description:** Compile and execute standalone Kotlin snippets, Gradle tasks, or test report parsers in isolated host JVM subprocesses.
+**Description:** Compile and execute standalone Kotlin snippets, Gradle tasks, or test report parsers in an isolated host JVM process.
 
 **Supported Actions:** `snippet`, `gradle_task`, `test_report`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | Execution action: 'snippet' (default, run standalone fun main()), 'gradle_task' (run ./gradlew <task>), 'test_report' (parse JUnit XML test results) |
-| `code` | `string` | No | Kotlin code containing fun main() to compile and execute |
-| `taskName` | `string` | No | Gradle task name to execute for gradle_task |
-| `reportPath` | `string` | No | Directory path containing JUnit XML test report files for test_report |
-| `workspacePath` | `string` | No | Optional workspace root directory path |
-| `timeoutSeconds` | `string` | No | Process execution timeout in seconds (default: 30s) |
-| `jvmArgs` | `string` | No | Optional space- or comma-separated JVM arguments passed to subprocess |
-| `programArgs` | `string` | No | Optional program arguments passed to fun main(args) |
+| `action` | `string` | No | Execution action: 'snippet' (default), 'gradle_task', 'test_report' |
+| `code` | `string` | No | Kotlin source code snippet containing a main() entry point or top-level expressions |
+| `taskName` | `string` | No | Gradle task name to execute for action='gradle_task' (e.g. 'test', 'check') |
+| `workspacePath` | `string` | No | Optional root directory path of project/workspace |
+| `jvmArgs` | `string` | No | Optional string array of JVM arguments (allow-listed: -D, -Xms, -Xmx, --add-opens) |
 | `classpath` | `Array<string>` | No | Optional array of jar/dir paths added to execution classpath |
+| `timeoutSeconds` | `string` | No | Execution timeout in seconds (default: 10) |
 
 ---
 

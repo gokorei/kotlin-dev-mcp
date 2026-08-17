@@ -1,5 +1,7 @@
 package com.gokorei.kotlinmcp.server
 
+import com.gokorei.kotlinmcp.doc.ParamDocSpec
+import com.gokorei.kotlinmcp.doc.ToolDocSpec
 import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
@@ -24,10 +26,37 @@ import java.io.File
 object ToolRegistrar {
 
     fun registerReadOnlyTools(server: Server, kotlinServer: KotlinMcpServer) {
+        collectReadOnlyTools(kotlinServer) { name, builder ->
+            ToolBuilder(name, kotlinServer).apply(builder).registerOn(server)
+        }
+    }
+
+    fun registerEditTools(server: Server, kotlinServer: KotlinMcpServer) {
+        collectEditTools(kotlinServer) { name, builder ->
+            ToolBuilder(name, kotlinServer).apply(builder).registerOn(server)
+        }
+    }
+
+    fun buildToolDocSpecs(kotlinServer: KotlinMcpServer = KotlinMcpServer()): List<ToolDocSpec> {
+        val list = mutableListOf<ToolDocSpec>()
+        collectReadOnlyTools(kotlinServer) { name, builder ->
+            list.add(ToolBuilder(name, kotlinServer).apply(builder).toToolDocSpec())
+        }
+        collectEditTools(kotlinServer) { name, builder ->
+            list.add(ToolBuilder(name, kotlinServer).apply(builder).toToolDocSpec())
+        }
+        return list
+    }
+
+    private fun collectReadOnlyTools(
+        kotlinServer: KotlinMcpServer,
+        register: (name: String, builder: ToolBuilder.() -> Unit) -> Unit
+    ) {
         // 1. kotlin_docs_read
-        registerTool(server, kotlinServer, "kotlin_docs_read") {
+        register("kotlin_docs_read") {
             description = "READ-ONLY. Search and inspect Kotlin stdlib and framework documentation."
             readOnly = true
+            actions("search", "lookup", "explain")
             param("action", "Operation: 'search' (default), 'lookup', 'explain'")
             param("query", "Search query or target symbol/feature name for search/lookup/explain operations")
             param("preset", "Optional response projection for lookup: 'compact' (signature only) or 'full' (default)")
@@ -47,9 +76,10 @@ object ToolRegistrar {
         }
 
         // 2. kotlin_code_analyze
-        registerTool(server, kotlinServer, "kotlin_code_analyze") {
+        register("kotlin_code_analyze") {
             description = "READ-ONLY. AST static analysis for Kotlin code snippets."
             readOnly = true
+            actions("inspect", "nullability", "coroutines", "compose", "file_context")
             param("action", "Analysis action: 'inspect' (default, declared elements), 'nullability' (unsafe null handling), 'coroutines' (scope safety & blocking calls), 'compose' (Compose anti-patterns), 'file_context' (cross-file dependencies of a target file)")
             param("code", "Kotlin source code snippet to analyze, or absolute path of a .kt file for file_context")
             param("workspacePath", "Optional workspace root directory (required for file_context)")
@@ -71,9 +101,10 @@ object ToolRegistrar {
         }
 
         // 3. kotlin_text_lsp_read
-        registerTool(server, kotlinServer, "kotlin_text_lsp_read") {
+        register("kotlin_text_lsp_read") {
             description = "READ-ONLY. AST text services: find definitions, references, completions, search workspace, or trace call/type hierarchies."
             readOnly = true
+            actions("definition", "references", "completion", "workspace_search", "workspace_references", "type_hierarchy", "call_hierarchy")
             param("action", "LSP action: 'definition' (default), 'references', 'completion', 'workspace_search' (fuzzy symbol search), 'workspace_references' (exact reference locations), 'type_hierarchy' (super/subtypes), 'call_hierarchy' (incoming/outgoing calls)")
             param("code", "Kotlin source code snippet context")
             param("symbol", "Target symbol name (or prefix for completion, or query for workspace_search)")
@@ -100,9 +131,10 @@ object ToolRegistrar {
         }
 
         // 4. kotlin_project_inspect
-        registerTool(server, kotlinServer, "kotlin_project_inspect") {
+        register("kotlin_project_inspect") {
             description = "READ-ONLY. Gradle build script and project layout inspection."
             readOnly = true
+            actions("structure", "kmp_targets", "dependencies", "schema_digest", "diagnose_build", "layout_inventory", "vulnerabilities", "package_api", "coverage_report")
             param("action", "Inspection action: 'structure' (default, plugins & source sets), 'kmp_targets', 'dependencies', 'schema_digest' (API/DB schema digest from SQL DDL, Exposed tables, @Serializable DTOs, OpenAPI), 'diagnose_build' (pre-build check), 'layout_inventory' (disk layout listing), 'vulnerabilities' (security advisory audit), 'package_api' (public API surface of a package), 'coverage_report' (JaCoCo test coverage summary)")
             param("buildScriptContent", "Content of build.gradle.kts")
             param("projectPath", "Path to Gradle project root directory (aliases: workspacePath, path)")
@@ -140,7 +172,7 @@ object ToolRegistrar {
         }
 
         // 5. kotlin_check_snippet
-        registerTool(server, kotlinServer, "kotlin_check_snippet") {
+        register("kotlin_check_snippet") {
             description = "READ-ONLY. Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column."
             readOnly = true
             param("code", "Kotlin code snippet to compile-check")
@@ -154,11 +186,15 @@ object ToolRegistrar {
         }
     }
 
-    fun registerEditTools(server: Server, kotlinServer: KotlinMcpServer) {
+    private fun collectEditTools(
+        kotlinServer: KotlinMcpServer,
+        register: (name: String, builder: ToolBuilder.() -> Unit) -> Unit
+    ) {
         // 1. kotlin_docs_edit
-        registerTool(server, kotlinServer, "kotlin_docs_edit") {
+        register("kotlin_docs_edit") {
             description = "MUTATING. Register custom documentation entries dynamically at runtime and disk persistence."
             readOnly = false
+            actions("register_symbol", "register_feature", "register_namespace")
             param("action", "Operation: 'register_symbol' (default), 'register_feature', 'register_namespace'")
             param("name", "Target name/prefix for register operations")
             param("content", "Markdown documentation content for register operations")
@@ -180,9 +216,10 @@ object ToolRegistrar {
         }
 
         // 2. kotlin_text_lsp_edit
-        registerTool(server, kotlinServer, "kotlin_text_lsp_edit") {
+        register("kotlin_text_lsp_edit") {
             description = "MUTATING. AST-based symbol renaming across snippet and workspace files in place."
             readOnly = false
+            actions("rename")
             param("action", "LSP action: 'rename' (default)")
             param("code", "Kotlin source code snippet context")
             param("oldName", "Current symbol name for rename")
@@ -205,9 +242,10 @@ object ToolRegistrar {
         }
 
         // 3. kotlin_refactor
-        registerTool(server, kotlinServer, "kotlin_refactor") {
+        register("kotlin_refactor") {
             description = "MUTATING. Code refactorings and compiler-diagnostic quick-fixes that produce new code."
             readOnly = false
+            actions("suggest_idioms", "java_to_kotlin", "functional", "quick_fix", "rxjava")
             param("action", "Refactoring action: 'suggest_idioms' (default), 'java_to_kotlin', 'functional' (collection loops), 'quick_fix' (diagnostic diff), 'rxjava' (RxJava to coroutines)")
             param("code", "Source code snippet")
             param("diagnostic", "Diagnostic message for quick_fix")
@@ -230,11 +268,12 @@ object ToolRegistrar {
         }
 
         // 4. kotlin_library_analyze
-        registerTool(server, kotlinServer, "kotlin_library_analyze") {
+        register("kotlin_library_analyze") {
             description = "MUTATING. Library anti-pattern checks, modernization suggestions, and code-transforming refactors (e.g. Arrow)."
             readOnly = false
+            actions("ktor", "serialization", "tests", "route_map", "arrow", "datetime")
             param("action", "Primary library analysis action: 'ktor' (default), 'serialization', 'tests', 'route_map', 'arrow', 'datetime'")
-            param("domain", "Deprecated backward-compatible alias for 'action'. ${formatDomainDescription()}")
+            param("domain", "Deprecated backward-compatible alias for 'action'. Domain alias ('ktor', 'serialization', 'tests', 'arrow', 'datetime')")
             param("code", "Kotlin code snippet to analyze")
             param("dataSources", "Optional schema-diff links for serialization analysis")
             param("legacy", "Optional 'true' for Arrow 1.x monad mode in arrow refactoring")
@@ -262,9 +301,10 @@ object ToolRegistrar {
         }
 
         // 5. kotlin_lint
-        registerTool(server, kotlinServer, "kotlin_lint") {
+        register("kotlin_lint") {
             description = "MUTATING. Detekt and KtLint static analysis, baseline management, and code formatting."
             readOnly = false
+            actions("lint", "detekt", "format", "format_ktlint", "baseline_read", "baseline_dump")
             param("action", "Lint action: 'lint' (default, alias: 'detekt'), 'format' (alias: 'format_ktlint'), 'baseline_read', 'baseline_dump'")
             param("code", "Kotlin source code snippet to lint or format")
             param("workspacePath", "Optional root directory path of workspace")
@@ -288,9 +328,10 @@ object ToolRegistrar {
         }
 
         // 6. kotlin_run
-        registerTool(server, kotlinServer, "kotlin_run") {
+        register("kotlin_run") {
             description = "MUTATING. Compile and execute standalone Kotlin snippets, Gradle tasks, or test report parsers in an isolated host JVM process."
             readOnly = false
+            actions("snippet", "gradle_task", "test_report")
             param("action", "Execution action: 'snippet' (default), 'gradle_task', 'test_report'")
             param("code", "Kotlin source code snippet containing a main() entry point or top-level expressions")
             param("taskName", "Gradle task name to execute for action='gradle_task' (e.g. 'test', 'check')")
@@ -378,9 +419,14 @@ object ToolRegistrar {
     ) {
         var description: String = ""
         var readOnly: Boolean = true
-        private val params = mutableListOf<ParamSpec>()
+        var actions: List<String> = emptyList()
+        val params = mutableListOf<ParamSpec>()
         private var requiredKeys: List<String>? = null
         private var handler: ((Map<String, JsonElement>) -> KotlinMcpResult)? = null
+
+        fun actions(vararg actionNames: String) {
+            actions = actionNames.toList()
+        }
 
         fun param(name: String, description: String, type: String = "string", itemsType: String? = null, required: Boolean = false) {
             params.add(ParamSpec(name, description, type, itemsType, required))
@@ -406,6 +452,29 @@ object ToolRegistrar {
                 val normalized = normalizeArgs(strArgs)
                 block(kotlinServer, normalized)
             }
+        }
+
+        fun toToolDocSpec(): ToolDocSpec {
+            val finalRequired = requiredKeys ?: params.filter { it.required }.map { it.name }
+            val cleanDescription = description
+                .removePrefix("READ-ONLY. ")
+                .removePrefix("MUTATING. ")
+            return ToolDocSpec(
+                name = name,
+                description = cleanDescription,
+                readOnly = readOnly,
+                actions = actions,
+                params = params.map { p ->
+                    ParamDocSpec(
+                        name = p.name,
+                        description = p.description,
+                        type = p.type,
+                        itemsType = p.itemsType,
+                        required = p.required || finalRequired.contains(p.name)
+                    )
+                },
+                requiredParams = finalRequired
+            )
         }
 
         internal fun registerOn(server: Server) {
@@ -443,68 +512,41 @@ object ToolRegistrar {
         }
     }
 
-
     fun normalizeArgs(args: Map<String, String>): Map<String, String> {
         val result = args.toMutableMap()
         val snippetAlias = args["snippet"] ?: args["code"]
         if (snippetAlias != null) {
-            result.putIfAbsent("code", snippetAlias)
-            result.putIfAbsent("snippet", snippetAlias)
+            result["code"] = snippetAlias
         }
-        val pathAlias = args["workspacePath"] ?: args["projectPath"] ?: args["path"] ?: args["targetPath"]
-        if (pathAlias != null) {
-            result.putIfAbsent("workspacePath", pathAlias)
-            result.putIfAbsent("projectPath", pathAlias)
-            result.putIfAbsent("path", pathAlias)
-        }
-        val symbolAlias = args["query"] ?: args["symbol"]
-        if (symbolAlias != null) {
-            result.putIfAbsent("symbol", symbolAlias)
-            result.putIfAbsent("query", symbolAlias)
-        }
-        val actionAlias = args["action"] ?: args["domain"]
-        if (actionAlias != null) {
-            result.putIfAbsent("action", actionAlias)
-            result.putIfAbsent("domain", actionAlias)
+        val projectAlias = args["projectPath"] ?: args["workspacePath"] ?: args["path"]
+        if (projectAlias != null) {
+            result["projectPath"] = projectAlias
+            result["path"] = projectAlias
         }
         return result
     }
 
-    val frameworkDetector: FrameworkDetector = DefaultFrameworkDetector()
-
-    fun formatDomainDescription(profile: com.gokorei.kotlinmcp.models.ProjectEnvironmentProfile = frameworkDetector.detectFromProjectDir(".")): String {
-        val allDomains = listOf("ktor", "serialization", "tests", "arrow", "datetime")
-        val activeIds = profile.activeFrameworks.map { it.id }.toSet()
-        val detected = allDomains.filter { it in activeIds }
-
-        return if (detected.isNotEmpty()) {
-            "Target library domain: 'ktor', 'serialization', 'tests', 'arrow', 'datetime' (detected in project: ${detected.joinToString(", ")})"
+    fun formatDomainDescription(profile: com.gokorei.kotlinmcp.models.ProjectEnvironmentProfile = com.gokorei.kotlinmcp.models.ProjectEnvironmentProfile.NONE): String {
+        val base = "Domain alias ('ktor', 'serialization', 'tests', 'arrow', 'datetime')"
+        return if (profile.activeFrameworks.isNotEmpty()) {
+            val detected = profile.activeFrameworks.joinToString(", ") { it.name.lowercase() }
+            "$base (detected in project: $detected)"
         } else {
-            "Target library domain: 'ktor', 'serialization', 'tests', 'arrow', 'datetime'"
+            base
         }
     }
 
-
-    /** Strongly-typed action dispatcher for consolidated MCP tool handlers. */
     fun dispatchAction(
         action: String?,
         handlers: Map<String, (Map<String, String>) -> KotlinMcpResult>,
-        args: Map<String, String>,
-        defaultAction: String? = null
+        args: Map<String, String> = emptyMap(),
+        defaultAction: String = ""
     ): KotlinMcpResult {
-        val targetAction = action?.trim()?.ifEmpty { null } ?: defaultAction
-        if (targetAction.isNullOrBlank()) {
-            return KotlinMcpResult.Error(
-                message = "Missing 'action' parameter. Supported actions: ${handlers.keys.joinToString(", ")}.",
-                code = "MISSING_ACTION"
-            )
-        }
-        val handler = handlers[targetAction]
-            ?: return KotlinMcpResult.Error(
-                message = "Unknown action '$targetAction'. Supported actions: ${handlers.keys.joinToString(", ")}.",
-                code = "INVALID_ACTION"
-            )
+        val key = action.orEmpty().ifBlank { defaultAction }
+        val handler = handlers[key] ?: return KotlinMcpResult.Error(
+            code = "INVALID_ACTION",
+            message = "Unknown action '$key'. Supported actions: ${handlers.keys.joinToString(", ")}"
+        )
         return handler(args)
     }
 }
-

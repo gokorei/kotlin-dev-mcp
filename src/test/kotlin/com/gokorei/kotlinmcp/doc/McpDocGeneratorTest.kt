@@ -1,11 +1,37 @@
 package com.gokorei.kotlinmcp.doc
 
+import com.gokorei.kotlinmcp.server.ToolRegistrar
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class McpDocGeneratorTest {
 
     private val generator: McpDocGenerator = DefaultMcpDocGenerator()
+
+    @Test
+    fun `toolSpecs are perfectly synchronized with ToolRegistrar tool definitions and complete parameter metadata`() {
+        val derivedSpecs = ToolRegistrar.buildToolDocSpecs()
+        val docSpecs = generator.toolSpecs
+
+        assertEquals(
+            derivedSpecs.map { it.name },
+            docSpecs.map { it.name },
+            "Tool names in McpDocGenerator must match ToolRegistrar"
+        )
+
+        for (derived in derivedSpecs) {
+            val docSpec = docSpecs.first { it.name == derived.name }
+            assertEquals(derived.readOnly, docSpec.readOnly, "readOnly status mismatch for ${derived.name}")
+            assertEquals(derived.actions, docSpec.actions, "Actions mismatch for ${derived.name}")
+            assertEquals(
+                derived.params.map { "${it.name}:${it.type}:${it.itemsType}:${it.required}" },
+                docSpec.params.map { "${it.name}:${it.type}:${it.itemsType}:${it.required}" },
+                "Complete parameter metadata mismatch for tool ${derived.name}"
+            )
+            assertEquals(derived.requiredParams, docSpec.requiredParams, "requiredParams mismatch for ${derived.name}")
+        }
+    }
 
     @Test
     fun `generateToolReferenceMarkdown produces comprehensive markdown documentation`() {
