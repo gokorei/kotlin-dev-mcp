@@ -16,6 +16,7 @@ buildscript {
 plugins {
     kotlin("jvm") version "2.3.20"
     kotlin("plugin.serialization") version "2.3.20"
+    id("org.jetbrains.dokka") version "2.2.0"
     application
 }
 
@@ -199,6 +200,12 @@ val uberJar = tasks.register<Jar>("uberJar") {
 
 tasks.assemble {
     dependsOn(uberJar)
+}
+
+val dokkaDocs = tasks.register("dokkaDocs") {
+    group = "documentation"
+    description = "Generates Dokka API documentation publication."
+    dependsOn("dokkaGenerate")
 }
 
 
