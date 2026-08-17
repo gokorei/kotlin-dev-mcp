@@ -13,8 +13,9 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Bug Fixes
 
-### Improvements
+- **Corrected inaccurate built-in docs entries** — reviewed against JUnit, tailrec, coroutine, and channel semantics: instance `@BeforeAll`/`@AfterAll` under default `PER_METHOD` lifecycle now correctly described as throwing a JUnit Jupiter configuration error requiring static/`companion object` + `@JvmStatic` (permitted as instance methods under `PER_CLASS`, not "silently ignored"); `tailrec` no longer claims a single tail-call limit (branching recursion is legal); `Channel` described as a point-to-point queue (not a broadcast); the `async` barrier samples now compile inside `coroutineScope { }` with `async { }` blocks instead of invalid `x.async()` calls.
 
+- **Expanded built-in docs registry** — added 11 feature entries (GoF→idiomatic Kotlin pattern mapping, Kotlin DSL builder recipe, cooperative cancellation, structured concurrency/`supervisorScope`, Flow cold semantics + `buffer`/`conflate` backpressure, start-all-then-await barrier (`awaitAll`), biased `select` vs `selectUnbiased`, sealed+`Nothing` algebraic data types, `require` vs `check`, `@Serializable` DTO requirements) and 11 symbol entries (`kotlin.Nothing`, `require`/`check`/`requireNotNull`/`checkNotNull`, `supervisorScope`, `select`/`selectUnbiased`, `awaitAll`, `@BeforeAll`, `tailrec`). All served via `kotlin_docs_read` (search/lookup/explain) and the `kotlin://docs/{kind}/{name}` resource template, with `DocServiceTest` coverage. Also expanded `src/main/resources/docs/coroutines.md` to cover cancellation, exception propagation, backpressure, barrier, and select bias.
 - **Tool documentation schema single source of truth** — updated `McpDocGenerator` to derive tool specifications and parameter metadata directly from `ToolRegistrar`, ensuring 100% synchronization and adding automated parameter metadata verification in `McpDocGeneratorTest`.
 
 - **Dokka 2.2.0 integration** — applied `org.jetbrains.dokka` plugin and registered `dokkaDocs` task to generate KDoc API documentation automatically.

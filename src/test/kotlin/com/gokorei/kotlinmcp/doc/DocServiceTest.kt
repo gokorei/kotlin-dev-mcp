@@ -194,6 +194,32 @@ class DocServiceTest {
     }
 
     @Test
+    fun `knowledge audit feature entries are queryable`() {
+        val service = DefaultDocService()
+        // EXPLAIN_FEATURE lookups must succeed for the book-audit additions.
+        listOf("design patterns", "dsl builders", "cooperative cancellation", "structured concurrency", "flow backpressure", "async barrier", "select expression", "algebraic data types", "input validation", "serializable data classes", "junit kotlin lifecycle").forEach { feature ->
+            val r = service.execute(DocAction.EXPLAIN_FEATURE, feature)
+            assertTrue(r.isSuccess, "expected feature '$feature' resolvable, got: ${r.toFormattedText()}")
+        }
+    }
+
+    @Test
+    fun `knowledge audit symbol entries are queryable`() {
+        val service = DefaultDocService()
+        listOf("kotlin.Nothing", "require", "check", "requireNotNull", "checkNotNull", "supervisorScope", "select", "selectUnbiased", "awaitAll", "@BeforeAll", "tailrec").forEach { sym ->
+            val r = service.execute(DocAction.LOOKUP_SYMBOL, sym)
+            assertTrue(r.isSuccess, "expected symbol '$sym' resolvable, got: ${r.toFormattedText()}")
+        }
+    }
+
+    @Test
+    fun `knowledge audit search finds design patterns topic`() {
+        val service = DefaultDocService()
+        val result = service.execute(DocAction.SEARCH, "design patterns") as KotlinMcpResult.Success
+        assertTrue(result.content.contains("design patterns", ignoreCase = true), "expected design patterns in search: ${result.content}")
+    }
+
+    @Test
     fun `appliesTo library entry is hidden when library not on caller classpath`() {
         val service = DefaultDocService()
         // No classpath → everything visible.
