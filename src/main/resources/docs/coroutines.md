@@ -26,7 +26,7 @@ Default `coroutineScope { }` semantics:
 - Supervision only changes child→sibling propagation, NOT parent cancellation (parent cancel still cascades).
 
 ## Flow Backpressure
-- `Flow` is COLD: no work until collected; each collector triggers a fresh producer run (emissions repeat). Channels are HOT.
+- `Flow` is COLD: no work until collected; each collector triggers a fresh producer run (emissions repeat). A `Channel` is a QUEUE with point-to-point delivery: one receiver consumes each element (multiple consumers compete). Use `SharedFlow` to broadcast to all collectors.
 - Default: producer suspends whenever the collector is slower (sequential, naturally backpressured).
 - `buffer(capacity)`: decouples producer/consumer via a channel; producer runs ahead, queueing up to `capacity` (default 64). Unbounded buffering can exhaust memory.
 - `conflate()`: only the LATEST value matters; a slow consumer skips intermediate emissions, producer never blocks. Use for UI tickers where stale intermediate values are fine.
@@ -35,14 +35,15 @@ Default `coroutineScope { }` semantics:
 ## Start-All-Then-Await (Barrier)
 Launch all independent `async` handles FIRST, then await — otherwise they run sequentially.
 ```kotlin
+// (Runs inside `coroutineScope { }` — `async` needs a CoroutineScope receiver)
 // WRONG: b only starts after a finishes -> serialized
-val a = x.async().await()
-val b = y.async().await()
+val a = async { fetch("a") }.await()
+val b = async { fetch("b") }.await()
 // RIGHT: both start immediately, then we await
-val d1 = x.async(); val d2 = y.async()
+val d1 = async { fetch("a") }; val d2 = async { fetch("b") }
 val a = d1.await(); val b = d2.await()
 // Homogeneous: awaitAll()
-val results = (1..3).map { repo.fetch(it).async() }.awaitAll()
+val results = (1..3).map { async { repo.fetch(it) } }.awaitAll()
 ```
 Gather all `async` handles before any `await`; use `awaitAll()` for a homogeneous batch.
 
@@ -52,4 +53,4 @@ Gather all `async` handles before any `await`; use `awaitAll()` for a homogeneou
 
 ## Testing Best Practices
 Use `kotlinx-coroutines-test` `runTest` and inject `TestDispatcher` / `StandardTestDispatcher` for virtual time testing.
-Use `@BeforeAll`/`@AfterAll` correctly in Kotlin: either `@TestInstance(TestInstance.Lifecycle.PER_CLASS)` on the class or `companion object` + `@JvmStatic` — a plain instance `@BeforeAll` is silently ignored.
+Use `@BeforeAll`/`@AfterAll` correctly in Kotlin: either `@TestInstance(TestInstance.Lifecycle.PER_CLASS)` on the class or `companion object` + `@JvmStatic` — a plain instance `@BeforeAll` throws a JUnit configuration error (must be static unless PER_CLASS), it is not silently ignored.

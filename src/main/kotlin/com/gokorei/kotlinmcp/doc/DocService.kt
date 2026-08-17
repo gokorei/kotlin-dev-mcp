@@ -403,10 +403,12 @@ class DefaultDocService(private val persistencePath: String? = null) : DocServic
         "tailrec" to """
             # `tailrec` (modifier)
             Asks the compiler to replace a self-recursive call with a loop, preventing stack
-            overflow. HARD constraint: the recursive call must be the ONE AND ONLY tail position
-            call — otherwise the compiler warns "a function is marked as tail-recursive but no
-            tail calls are found" and the keyword is silently ignored. Tail-recursive functions
-            cannot be `open`/`override` on JVM.
+            overflow. Constraint: every self-recursive call must be the FINAL operation on its
+            execution path (tail position). Multiple branches (e.g. if/else) may each recurse,
+            as long as each call is the last thing done on its path — there is no "one call only"
+            limit. If NO call is in tail position the compiler warns "a function is marked as
+            tail-recursive but no tail calls are found" and the keyword is silently ignored.
+            Tail-recursive functions cannot be `open`/`override` on JVM.
         """.trimIndent(),
         "require" to """
             # `inline fun require(value: Boolean, lazyMessage: () -> Any = {...})`
@@ -451,8 +453,9 @@ class DefaultDocService(private val persistencePath: String? = null) : DocServic
         "@BeforeAll" to """
             # `@BeforeAll` / `@AfterAll` (org.junit.jupiter)
             Run once before/after ALL tests in a class. These require STATIC methods in Java;
-            Kotlin has no `static`, so a plain instance `@BeforeAll fun setup()` is SILENTLY
-            IGNORED (no compile error). Fix: annotate the test class `@TestInstance(TestInstance
+            Kotlin has no `static`, so a plain instance `@BeforeAll fun setup()` throws a JUnit
+            Jupiter configuration error at runtime ("must be static unless ... PER_CLASS") — it is
+            NOT silently skipped. Fix: annotate the test class `@TestInstance(TestInstance
             .Lifecycle.PER_CLASS)` (instance methods then run), or put the functions in a
             `companion object` with `@JvmStatic`. `@BeforeEach`/`@AfterEach` are unaffected.
         """.trimIndent(),
@@ -764,7 +767,7 @@ class DefaultDocService(private val persistencePath: String? = null) : DocServic
         """.trimIndent(),
         "flow backpressure" to """
             # Flow: Cold Semantics & Backpressure Operators
-            - `Flow` is COLD: no work happens until collected; each collector triggers a fresh producer run (emissions repeat per subscriber). Channels are HOT: emissions are broadcast to subscribers only from subscription time.
+            - `Flow` is COLD: no work happens until collected; each collector triggers a fresh producer run (emissions repeat per subscriber). A `Channel` is a QUEUE: point-to-point delivery where each element is consumed once — multiple consumers compete because `receive()` removes elements. Use `SharedFlow` to broadcast to all active collectors.
             - Default backpressure: the producer suspends (`collect` is suspending) whenever the collector is slower, i.e. emissions are sequential and backpressured naturally.
             - `buffer(capacity)` — decouples producer and consumer into a channel with the given capacity; producer runs AHEAD, queueing up to `capacity` (default 64) items. Unbounded buffering can exhaust memory.
             - `conflate()` — only the LATEST value matters; slow consumer skips intermediate emissions, producer never blocks (capacity 1 with drop-oldest). Use when a slow consumer and outdated intermediate values are acceptable (e.g. UI state tickers).
@@ -774,14 +777,15 @@ class DefaultDocService(private val persistencePath: String? = null) : DocServic
             # Barrier / Start-All-Then-Await Pattern
             Launch all N independent coroutines FIRST, then await all results — otherwise they run sequentially.
             ```kotlin
+            // (Snippets run inside `coroutineScope { }` — `async` needs a CoroutineScope receiver)
             // WRONG: b only starts AFTER a finishes → serialized (a + b durations)
-            val a = x.async().await()
-            val b = y.async().await()
+            val a = async { fetch("a") }.await()
+            val b = async { fetch("b") }.await()
             // RIGHT: both start immediately, then we await (max(a, b) total)
-            val d1 = x.async(); val d2 = y.async()
+            val d1 = async { fetch("a") }; val d2 = async { fetch("b") }
             val a = d1.await(); val b = d2.await()
             // Homogeneous: just use awaitAll()
-            val results = (1..3).map { repo.fetch(it).async() }.awaitAll()
+            val results = (1..3).map { async { repo.fetch(it) } }.awaitAll()
             ```
             Rule: gather all `async` handles before any `await`. For a homogeneous batch that returns the same type, prefer `awaitAll()`.
         """.trimIndent(),
@@ -843,8 +847,9 @@ class DefaultDocService(private val persistencePath: String? = null) : DocServic
         "junit kotlin lifecycle" to """
             # JUnit 5 Lifecycle in Kotlin: @BeforeAll / @AfterAll
             `@BeforeAll`/`@AfterAll` require static methods in Java, but Kotlin has no `static`.
-            A naive `@BeforeAll fun setup()` in a test class is SILENTLY IGNORED by JUnit (no
-            compile or runtime error) — the expensive setup never runs and tests fail mysteriously.
+            A naive `@BeforeAll fun setup()` in a test class throws a JUnit Jupiter configuration
+            error at runtime ("must be static unless the class uses PER_CLASS lifecycle") — it is
+            NOT silently ignored, and the failure is easy to misdiagnose.
             Two working forms (pick ONE):
             ```kotlin
             // A) PER_CLASS lifecycle → instance methods run once each way
