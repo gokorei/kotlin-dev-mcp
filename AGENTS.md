@@ -16,3 +16,19 @@
 ## 4. Test-Driven Development & Verification
 - Define functional behavior in unit/integration tests before writing implementation code.
 - Run tests (`./gradlew test --no-daemon`) to verify correctness after every completed piece of functionality.
+
+## 5. Release Notes Must Track Every Change
+- **Every change** to the codebase MUST also update the next-release section of `docs/wiki/Release-Notes.md`.
+- If no next-release section exists on that page, create one using the standard skeleton:
+  ```markdown
+  ## Next
+
+  ### New Features
+
+  ### Bug Fixes
+
+  ### Improvements
+  ```
+  If the page itself does not exist, create it with that skeleton (plus a title and a `[← Home](Home)` footer), then add your entry.
+- Add the change under the correct heading (`### New Features`, `### Bug Fixes`, or `### Improvements`) as a short, user-facing summary bullet. An empty heading is fine until it has content.
+- When a release is cut, rename `## Next` to `## vX.Y.Z — <date>` (ISO date). `CHANGELOG.md` (Keep a Changelog) can mirror the entry for external consumers, but `docs/wiki/Release-Notes.md` is the authoritative per-version record.

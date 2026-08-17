@@ -4,6 +4,18 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ---
 
+## Next
+
+### New Features
+
+### Bug Fixes
+
+### Improvements
+
+- **Agent release-note directive** — all codebase changes must now update the next-release section of this page, and a `## Next` section is created automatically if none exists yet.
+
+---
+
 ## v1.0.0 — 2026-08-16
 
 ### New Features
