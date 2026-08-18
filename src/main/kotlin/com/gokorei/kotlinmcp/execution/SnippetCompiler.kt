@@ -83,6 +83,15 @@ internal object SnippetCompiler {
         resolveDefaultImports(System.getProperty("java.class.path").orEmpty())
     }
 
+    /**
+     * Resolves the default classpath for snippet compilation/execution.
+     *
+     * Prefers the name-filtered system `java.class.path` (the `gradle test` /
+     * `gradle run` layout). When that yields nothing — e.g. under
+     * `java -jar <all.jar>`, where the JVM reports the single flat fat jar —
+     * falls back to the library jars bundled as resources by the
+     * `dumpSnippetClasspath` Gradle task.
+     */
     internal fun resolveDefaultImports(javaClassPath: String): List<String> {
         val fromSystem = javaClassPath
             .split(File.pathSeparator)
@@ -106,27 +115,49 @@ internal object SnippetCompiler {
     @Volatile
     private var bundledSnippetClasspath: List<String>? = null
 
+    /**
+     * Materializes the library jars bundled as resources by `dumpSnippetClasspath`
+     * into a temp dir and returns their on-disk paths (K2 needs real file paths).
+     *
+     * The result is cached for the process lifetime and the temp dir is deleted on
+     * JVM shutdown. Returns an empty list (with a warning) if materialization is
+     * impossible, leaving callers to compile without the bundled libraries.
+     */
     internal fun materializeBundledSnippetClasspath(): List<String> {
         bundledSnippetClasspath?.let { return it }
         synchronized(this) {
             bundledSnippetClasspath?.let { return it }
-            val dir = Files.createTempDirectory("kmcp-snippet-classpath")
+            val dir = try {
+                Files.createTempDirectory("kmcp-snippet-classpath")
+            } catch (e: Exception) {
+                logger.warn(e) { "Could not create temp dir for bundled snippet library classpath; compiling without it" }
+                return emptyList()
+            }
             val resolved = try {
                 extractBundledJarsTo(dir)
             } catch (e: Exception) {
                 logger.warn(e) { "Bundled snippet library classpath materialization failed; compiling without it" }
+                dir.toFile().deleteRecursively()
                 emptyList()
             }
-            if (resolved.isNotEmpty()) {
-                Runtime.getRuntime().addShutdownHook(
-                    Thread { dir.toFile().deleteRecursively() }
-                )
+            if (resolved.isEmpty()) {
+                dir.toFile().deleteRecursively()
+                return emptyList()
             }
+            Runtime.getRuntime().addShutdownHook(
+                Thread { dir.toFile().deleteRecursively() }
+            )
             bundledSnippetClasspath = resolved
             return resolved
         }
     }
 
+    /**
+     * Copies every jar listed in the bundled `snippet-classpath/snippet.classpath.txt`
+     * manifest (plus any transitive jars shipped alongside) from classpath resources
+     * into [dir]. Returns the absolute paths of the jars written, skipping any whose
+     * resource cannot be located.
+     */
     private fun extractBundledJarsTo(dir: Path): List<String> {
         val loader = SnippetCompiler::class.java.classLoader ?: return emptyList()
         val manifest = loader.getResourceAsStream("snippet-classpath/snippet.classpath.txt") ?: return emptyList()

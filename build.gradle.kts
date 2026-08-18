@@ -160,8 +160,12 @@ dependencies {
     // Testing
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
-    testImplementation("app.cash.turbine:turbine:1.1.0")
+    // Turbine (an advertised snippet-importable library) depends on
+    // kotlinx-coroutines-test at runtime, so both must be on runtimeClasspath
+    // for the fat-jar fallback (dumpSnippetClasspath) to bundle them. Moving
+    // them to implementation keeps them visible to tests as well.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    implementation("app.cash.turbine:turbine:1.1.0")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {

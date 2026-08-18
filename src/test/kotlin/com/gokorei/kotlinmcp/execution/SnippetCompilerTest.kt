@@ -121,8 +121,11 @@ class SnippetCompilerTest {
             suspend fun lo(): List<Int> = coroutineScope { (1..3).map { async { it } }.map { it.await() } }
         """.trimIndent()
         val result = SnippetCompiler.compile(snippet, resolved)
-        val errors = (result as? CompileResult.Compiled)
-            ?.diagnostics?.filter { it.severity == "error" }.orEmpty()
+        assertTrue(
+            result is CompileResult.Compiled,
+            "expected compile to succeed against bundled classpath, got: $result"
+        )
+        val errors = (result as CompileResult.Compiled).diagnostics.filter { it.severity == "error" }
         assertTrue(errors.isEmpty(), "expected coroutines snippet to compile against bundled classpath, got: $errors")
         SnippetCompiler.cleanup(result)
     }
