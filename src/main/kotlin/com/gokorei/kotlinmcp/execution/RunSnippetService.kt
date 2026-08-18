@@ -194,6 +194,11 @@ class DefaultRunSnippetService(
                     details = mapOf("timeoutMillis" to timeoutMillis.toString())
                 )
             } else {
+                // waitFor only guarantees process exit; the reader thread may
+                // still be draining stdout/stderr. Join before reading so the
+                // captured output is complete (avoids a race where output is
+                // empty despite the process having printed).
+                readerThread.join(1000)
                 val rawText = String(output.toByteArray(), Charsets.UTF_8)
                 val text = LogTruncator.truncate(rawText)
                 val exit = process.exitValue()

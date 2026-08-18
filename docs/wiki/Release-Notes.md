@@ -13,6 +13,8 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Bug Fixes
 
+- **`kotlin_run` could report an empty result despite the snippet printing output** — the host-JVM runner now joins the output-drain thread before reading the captured stdout/stderr, eliminating a race where a fast snippet's output was lost.
+
 - **Snippet imports resolve under `java -jar <all.jar>` fat-jar launch** — `SnippetCompiler` now falls back to a build-time-dumped, resource-bundled set of the library jars snippets may import (kotlin-stdlib, kotlinx-coroutines/-serialization/-datetime, arrow-core, mockk, turbine, ktor) when the JVM's `java.class.path` contains no matching entries (i.e. the single flat fat jar). The jars are materialized to a temp dir at first use and reused for both `kotlin_check_snippet` compilation and `kotlin_run` execution, eliminating spurious `unresolved reference` errors and runtime failures under fat-jar deployment.
 
 - **Corrected inaccurate built-in docs entries** — reviewed against JUnit, tailrec, coroutine, and channel semantics: instance `@BeforeAll`/`@AfterAll` under default `PER_METHOD` lifecycle now correctly described as throwing a JUnit Jupiter configuration error requiring static/`companion object` + `@JvmStatic` (permitted as instance methods under `PER_CLASS`, not "silently ignored"); `tailrec` no longer claims a single tail-call limit (branching recursion is legal); `Channel` described as a point-to-point queue (not a broadcast); the `async` barrier samples now compile inside `coroutineScope { }` with `async { }` blocks instead of invalid `x.async()` calls.
