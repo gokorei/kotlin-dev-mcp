@@ -9,7 +9,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 ### New Features
 
 - **Snippet tools now see the workspace** — `kotlin_check_snippet` accepts a `projectPath`/`workspacePath` parameter and `kotlin_run`'s snippet action forwards the workspace, so a snippet referencing project-internal types or the project's compiled classes (`build/classes`…), generated sources, and `build/libs` jars compiles and runs without manually naming jar/dir paths. The unresolved-symbol hint in `kotlin_check_snippet` was updated to match this behavior.
-
+- **Backend resilience & error modeling guidelines** — added progressive discovery guideline (`kotlin://guidelines/resilience.md`) covering independent verification probing ("Silence != Recovery"), verifiable state caching ("Memory Must Not Lie"), and deterministic remediation state machines; updated core architecture guidelines (`kotlin://guidelines/architecture.md`) with domain error modeling (`sealed interface` / errors-as-values).
 - **In-code MCP tool reference generator** — added `McpDocGenerator` and `./gradlew generateMcpDocs` task to generate `docs/wiki/Tool-Reference.md` directly from in-code tool definitions and metadata.
 - **CI documentation sync test** — added `DocumentationSyncTest` enforcing that committed Markdown wiki docs match in-code tool definitions during `./gradlew test`.
 

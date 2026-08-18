@@ -228,6 +228,7 @@ class KotlinMcpIntegrationTest {
             // NOT one resource per stdlib symbol/feature entry.
             assertTrue(uris.contains(ResourceRegistrar.DOCS_INDEX_URI), "expected doc index in $uris")
             assertTrue(uris.contains(ResourceRegistrar.GUIDELINES_URI), "expected guidelines in $uris")
+            assertTrue(uris.contains(ResourceRegistrar.RESILIENCE_GUIDELINES_URI), "expected resilience guidelines in $uris")
             assertTrue(
                 uris.none { it.startsWith("kotlin://docs/symbol/") || it.startsWith("kotlin://docs/feature/") },
                 "bulk per-entry resources must not be registered: $uris"
@@ -240,6 +241,14 @@ class KotlinMcpIntegrationTest {
             )
             val text = read.contents.joinToString { it.toString() }
             assertTrue(text.contains("Kotlin Documentation Index"), "expected index content, got: $text")
+
+            val resilienceRead = client.readResource(
+                io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest(
+                    io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequestParams(ResourceRegistrar.RESILIENCE_GUIDELINES_URI)
+                )
+            )
+            val resilienceText = resilienceRead.contents.joinToString { it.toString() }
+            assertTrue(resilienceText.contains("Kotlin Backend Resilience"), "expected resilience content, got: $resilienceText")
 
             val templateRead = client.readResource(
                 io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest(

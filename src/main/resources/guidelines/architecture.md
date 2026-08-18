@@ -25,4 +25,11 @@
   lists, repeated deconstructed tuples/pairs, or raw maps when configuring parameters and building complex shapes.
 - A higher level of semantic abstraction is significantly more expressive, self-documenting, and maintainable than destructuring.
 
+## 5. Domain Error Modeling (Errors as Values)
+- Model expected domain and operational failure variants as explicit `sealed interface` (e.g. `sealed interface ApplicationError`)
+  or Arrow `Either<Failure, Success>` with structured metadata signatures instead of throwing unchecked runtime exceptions across boundaries.
+- Intercept and translate domain errors into transport responses (HTTP status codes, RPC codes, or UI states) strictly at the architectural boundary.
+- For backend resilience and self-healing systems, see `kotlin://guidelines/resilience.md`.
+
 Use `kotlin_project_inspect_structure` (reporting ui/domain/data layering) to verify these boundaries hold.
+
