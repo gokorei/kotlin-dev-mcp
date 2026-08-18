@@ -440,7 +440,7 @@ public abstract interface class com/gokorei/kotlinmcp/lsp/K2SemanticEngine {
 	public abstract fun workspaceStats (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/WorkspaceStats;
 }
 
-public final class com/gokorei/kotlinmcp/lsp/K2SemanticEngineKt {
+public final class com/gokorei/kotlinmcp/lsp/K2SemanticModelsKt {
 	public static final field SEMANTIC_FILE_CAP I
 }
 
@@ -678,6 +678,7 @@ public final class com/gokorei/kotlinmcp/lsp/ResolvedDeclaration {
 
 public final class com/gokorei/kotlinmcp/lsp/ResolvedReference {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()I
@@ -1103,8 +1104,8 @@ public abstract interface class com/gokorei/kotlinmcp/server/FrameworkDetector {
 
 public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public fun <init> ()V
-	public fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;)V
-	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;)V
+	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun analyzeKtor (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun analyzeSerialization (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun analyzeTests (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -1131,6 +1132,7 @@ public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public final fun formatKtlint (Ljava/lang/String;ZLjava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun formatKtlint$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;ZLjava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun getDocService ()Lcom/gokorei/kotlinmcp/doc/DocService;
+	public final fun getSemanticEngine ()Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;
 	public final fun gradleRun (Ljava/lang/String;Ljava/lang/String;J)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun gradleRun$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;JILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun lspCallHierarchy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -1288,6 +1290,8 @@ public final class com/gokorei/kotlinmcp/shared/LogTruncator {
 
 public final class com/gokorei/kotlinmcp/shared/SourceUtils {
 	public static final field INSTANCE Lcom/gokorei/kotlinmcp/shared/SourceUtils;
+	public final fun collapseWhitespace (Ljava/lang/String;Ljava/lang/Integer;)Ljava/lang/String;
+	public static synthetic fun collapseWhitespace$default (Lcom/gokorei/kotlinmcp/shared/SourceUtils;Ljava/lang/String;Ljava/lang/Integer;ILjava/lang/Object;)Ljava/lang/String;
 	public final fun extractBalancedBraces (Ljava/lang/String;I)Ljava/lang/String;
 	public final fun isSyntacticallyBalanced (Ljava/lang/String;)Z
 	public final fun lineAndColumnOf (Ljava/lang/String;I)Lkotlin/Pair;

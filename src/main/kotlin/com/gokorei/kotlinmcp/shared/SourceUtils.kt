@@ -100,4 +100,24 @@ object SourceUtils {
         }
         return count % 2 != 0
     }
+
+    /**
+     * Collapses consecutive whitespace characters into a single space and trims
+     * without using regular expressions (AGENTS.md Rule 1).
+     */
+    fun collapseWhitespace(text: String, maxLength: Int? = null): String {
+        val bounded = if (maxLength != null) text.take(maxLength) else text
+        val sb = StringBuilder(bounded.length)
+        var pendingSpace = false
+        for (c in bounded) {
+            if (c.isWhitespace()) {
+                pendingSpace = sb.isNotEmpty()
+            } else {
+                if (pendingSpace) sb.append(' ')
+                pendingSpace = false
+                sb.append(c)
+            }
+        }
+        return sb.toString().trim()
+    }
 }

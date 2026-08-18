@@ -177,10 +177,8 @@ class DefaultLspService(
         return result
     }
 
-    private fun signatureOf(decl: org.jetbrains.kotlin.psi.KtNamedDeclaration): String {
-        val text = decl.text.take(140).replace(Regex("\\s+"), " ").trim()
-        return text
-    }
+    private fun signatureOf(decl: org.jetbrains.kotlin.psi.KtNamedDeclaration): String =
+        com.gokorei.kotlinmcp.shared.SourceUtils.collapseWhitespace(decl.text, maxLength = 140)
 
     private fun findReferences(code: String, symbol: String?, workspacePath: String?): KotlinMcpResult {
         if (symbol.isNullOrBlank()) {

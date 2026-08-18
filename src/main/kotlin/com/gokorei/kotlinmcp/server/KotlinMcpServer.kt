@@ -23,6 +23,7 @@ import com.gokorei.kotlinmcp.refactoring.*
  */
 class KotlinMcpServer(
     val docService: DocService = DefaultDocService(),
+    val semanticEngine: K2SemanticEngine = DefaultK2SemanticEngine(),
     private val codeAnalysisService: CodeAnalysisService = DefaultCodeAnalysisService(),
     private val diagnosticService: DiagnosticService = DefaultDiagnosticService(),
     private val projectService: ProjectService = DefaultProjectService(),
@@ -34,7 +35,7 @@ class KotlinMcpServer(
     private val lintService: LintService = DefaultLintService()
 ) {
 
-    private val textService: LspService = lspService ?: DefaultLspService(docService)
+    private val textService: LspService = lspService ?: DefaultLspService(docService, semanticEngine)
 
     init {
         lintService.prewarm()

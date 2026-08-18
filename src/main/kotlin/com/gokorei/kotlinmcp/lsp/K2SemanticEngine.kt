@@ -4,19 +4,11 @@ package com.gokorei.kotlinmcp.lsp
 
 import com.gokorei.kotlinmcp.execution.SnippetCompiler
 import com.gokorei.kotlinmcp.shared.SourceUtils
-import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.descriptors.ClassConstructorDescriptor
-import org.jetbrains.kotlin.descriptors.ClassDescriptor
-import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
-import org.jetbrains.kotlin.descriptors.FunctionDescriptor
-import org.jetbrains.kotlin.descriptors.MemberDescriptor
-import org.jetbrains.kotlin.descriptors.ModuleDescriptor
+import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.psi.KtExpression
-import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtNamedDeclaration
-import org.jetbrains.kotlin.psi.KtParameter
-import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtReferenceExpression
 import org.jetbrains.kotlin.psi.KtSimpleNameExpression
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
@@ -24,74 +16,7 @@ import org.jetbrains.kotlin.com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.renderer.DescriptorRenderer
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.DescriptorUtils
-import org.jetbrains.kotlin.resolve.scopes.DescriptorKindFilter
-import org.jetbrains.kotlin.resolve.scopes.MemberScope
-import org.jetbrains.kotlin.types.KotlinType
 import java.io.File
-
-/** Where a resolved symbol's declaration lives. */
-enum class ResolvedSource { SNIPPET, WORKSPACE, EXTERNAL, UNRESOLVED }
-
-/** Default cap on `.kt` files semantically analyzed per workspace (`WORKSPACE_SEMANTIC_MAX_FILES` overrides). */
-const val SEMANTIC_FILE_CAP: Int = 2000
-
-/**
- * A resolved declaration target: where a reference points, plus the identifier
- * it resolves to. `file` is "Snippet.kt" for snippet declarations, a
- * workspace-relative path for project declarations, and a short tag for
- * external (stdlib / dependency) symbols.
- */
-data class ResolvedDeclaration(
-    val symbol: String,
-    val file: String,
-    val line: Int,
-    val fqn: String?,
-    val signature: String?,
-    val source: ResolvedSource
-)
-
-/** Completion candidates for a typed prefix: receiver-type members + in-scope names. */
-data class KotlinCompletionCandidates(
-    val members: List<String>,
-    val scope: List<String>
-)
-
-/** A byte-range edit that renames one bound occurrence of a symbol. */
-data class ResolvedRenameEdit(
-    val file: String,
-    val offset: Int,
-    val length: Int
-)
-
-/** A single bound occurrence of a symbol: either the declaration or a usage resolving to it. */
-data class ResolvedReference(
-    val symbol: String,
-    val file: String,
-    val line: Int,
-    val column: Int,
-    val snippet: String,
-    val kind: String,
-    val fqn: String?
-)
-
-/** Resolved hover info for a symbol in a snippet: type, signature, KDoc, location. */
-data class KtHoverInfo(
-    val symbol: String,
-    val type: String?,
-    val signature: String?,
-    val fqn: String?,
-    val source: ResolvedSource,
-    val file: String?,
-    val line: Int?,
-    val kdoc: String?
-)
-
-/** Stats for the semantically analyzed workspace: file-count cap applied. */
-data class WorkspaceStats(
-    val totalKtFiles: Int,
-    val analyzedFiles: Int,
-    val truncated: Boolean
-)
 
 /**
  * Workspace-level K2 semantic resolution for the LSP-facing tools.
@@ -118,7 +43,7 @@ interface K2SemanticEngine {
      * Resolves a reference expression to its declaration target (file, line,
      * FQN, signature). Returns `null` when the element is not resolvable.
      */
-fun resolveReference(session: K2AnalysisSession, reference: KtReferenceExpression, workspaceRoot: String?): ResolvedDeclaration?
+    fun resolveReference(session: K2AnalysisSession, reference: KtReferenceExpression, workspaceRoot: String?): ResolvedDeclaration?
 
     /** FQN of a named declaration as seen by the binding context. */
     fun fqNameOfDeclaration(session: K2AnalysisSession, declaration: KtNamedDeclaration): String?
@@ -141,7 +66,7 @@ fun resolveReference(session: K2AnalysisSession, reference: KtReferenceExpressio
      * stdlib extensions), and `scope` are the in-scope declaration/import
      * names matching the prefix.
      */
-fun completionCandidates(session: K2AnalysisSession, prefix: String): KotlinCompletionCandidates
+    fun completionCandidates(session: K2AnalysisSession, prefix: String): KotlinCompletionCandidates
 
     /**
      * Byte-range edits renaming every bound occurrence of [symbol] — the
@@ -151,7 +76,7 @@ fun completionCandidates(session: K2AnalysisSession, prefix: String): KotlinComp
      * the rename target and unrelated same-name symbols elsewhere are left
      * alone; otherwise the workspace-level declaration is renamed.
      */
-fun renameEditsForSymbol(session: K2AnalysisSession, symbol: String, workspacePath: String?): List<ResolvedRenameEdit>
+    fun renameEditsForSymbol(session: K2AnalysisSession, symbol: String, workspacePath: String?): List<ResolvedRenameEdit>
 
     /**
      * Type hierarchy for a class/interface/object named [symbol], derived from
@@ -227,7 +152,11 @@ class DefaultK2SemanticEngine(
         return K2SnippetFrontend.analyzeSession(snippet, workspaceFiles(workspacePath).map { it.psi })
     }
 
-    override fun resolveReference(session: K2AnalysisSession, reference: KtReferenceExpression, workspaceRoot: String?): ResolvedDeclaration? {
+    override fun resolveReference(
+        session: K2AnalysisSession,
+        reference: KtReferenceExpression,
+        workspaceRoot: String?
+    ): ResolvedDeclaration? {
         if (closed) return null
         val descriptor = session.bindingContext[BindingContext.REFERENCE_TARGET, reference]
         if (descriptor == null) {
@@ -240,15 +169,17 @@ class DefaultK2SemanticEngine(
                 source = ResolvedSource.UNRESOLVED
             )
         }
-        val fqn = ((descriptor as? ClassConstructorDescriptor)?.constructedClass?.let { safeFqn(it) } ?: safeFqn(descriptor))
+        val fqn = ((descriptor as? ClassConstructorDescriptor)?.constructedClass?.let { K2ResolutionUtils.safeFqn(it) }
+            ?: K2ResolutionUtils.safeFqn(descriptor))
         val files = listOf("Snippet.kt" to session.file) + workspaceFiles(workspaceRoot).map { it.rel to it.psi }
-        val declPsi = declarationPsiFor(session, files, descriptor)
+        val declPsi = K2ResolutionUtils.declarationPsiFor(session, files, descriptor)
         return if (declPsi != null) {
             val containing = declPsi.containingFile as KtFile
             val isSnippet = containing == session.file || containing.name.startsWith("Snippet_")
+            val resolvedFile = if (isSnippet) "Snippet.kt" else files.firstOrNull { it.second == containing }?.first ?: containing.name
             ResolvedDeclaration(
                 symbol = reference.text,
-                file = if (isSnippet) "Snippet.kt" else containing.name,
+                file = resolvedFile,
                 line = SourceUtils.lineOf(containing.text, declPsi.textRange.startOffset),
                 fqn = fqn,
                 signature = signatureOf(declPsi),
@@ -269,7 +200,7 @@ class DefaultK2SemanticEngine(
     override fun fqNameOfDeclaration(session: K2AnalysisSession, declaration: KtNamedDeclaration): String? {
         if (closed) return null
         val descriptor = session.bindingContext[BindingContext.DECLARATION_TO_DESCRIPTOR, declaration]
-        return descriptor?.let { safeFqn(it) } ?: declaration.fqName?.asString()
+        return descriptor?.let { K2ResolutionUtils.safeFqn(it) } ?: declaration.fqName?.asString()
     }
 
     override fun typeOfExpression(session: K2AnalysisSession, expression: KtExpression): String? {
@@ -310,13 +241,9 @@ class DefaultK2SemanticEngine(
         fun descriptorOf(decl: KtNamedDeclaration): DeclarationDescriptor? =
             ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, decl]
 
-        // Target declarations: prefer symbols with a real (non-local) FQN across
-        // snippet + workspace. When the name has no real declaration anywhere,
-        // fall back to same-name local declarations so snippet-local symbols
-        // (e.g. a function parameter) still resolve to their usages.
         val realTargets = declOccurrences
             .mapNotNull { descriptorOf(it.node as KtNamedDeclaration) }
-            .filter { !DescriptorUtils.isLocal(it) && isRealFqn(safeFqn(it)) }
+            .filter { !DescriptorUtils.isLocal(it) && K2ResolutionUtils.isRealFqn(K2ResolutionUtils.safeFqn(it)) }
         val targets: List<DeclarationDescriptor> =
             if (realTargets.isNotEmpty()) realTargets
             else declOccurrences.mapNotNull { descriptorOf(it.node as KtNamedDeclaration) }
@@ -336,12 +263,12 @@ class DefaultK2SemanticEngine(
                 "decl" -> {
                     val decl = occ.node as KtNamedDeclaration
                     val d = descriptorOf(decl)
-                    if (d != null && targets.any { sameTarget(it, d) }) {
+                    if (d != null && targets.any { K2ResolutionUtils.sameTarget(it, d) }) {
                         val offset = decl.nameIdentifier?.textRange?.startOffset ?: decl.textRange.startOffset
                         val fqn = if (!DescriptorUtils.isLocal(d)) {
-                            safeFqn(d)?.takeIf { isRealFqn(it) }
+                            K2ResolutionUtils.safeFqn(d)?.takeIf { K2ResolutionUtils.isRealFqn(it) }
                         } else {
-                            runCatching { decl.fqName?.asString() }.getOrNull()?.takeIf { isRealFqn(it) }
+                            runCatching { decl.fqName?.asString() }.getOrNull()?.takeIf { K2ResolutionUtils.isRealFqn(it) }
                         }
                         rows += toRow(occ, offset, fqn)
                     }
@@ -349,11 +276,11 @@ class DefaultK2SemanticEngine(
                 "ref" -> {
                     val expr = occ.node as KtSimpleNameExpression
                     val target = ctx[BindingContext.REFERENCE_TARGET, expr]
-                    val bound = target != null && targets.any { sameTarget(it, target) }
+                    val bound = target != null && targets.any { K2ResolutionUtils.sameTarget(it, target) }
                     if (bound) {
-                        val effective = effectiveDescriptor(target)
-                        val fqn = if (effective != null && !DescriptorUtils.isLocal(effective)) {
-                            safeFqn(effective)?.takeIf { isRealFqn(it) }
+                        val effective = K2ResolutionUtils.effectiveDescriptor(target)
+                        val fqn = if (!DescriptorUtils.isLocal(effective)) {
+                            K2ResolutionUtils.safeFqn(effective)?.takeIf { K2ResolutionUtils.isRealFqn(it) }
                         } else {
                             null
                         }
@@ -365,394 +292,20 @@ class DefaultK2SemanticEngine(
         return rows.distinct()
     }
 
-    override fun completionCandidates(session: K2AnalysisSession, prefix: String): KotlinCompletionCandidates {
-        if (closed) return KotlinCompletionCandidates(emptyList(), emptyList())
-        val dot = prefix.lastIndexOf('.')
-        val memberPrefix = if (dot >= 0) prefix.substring(dot + 1) else ""
-        val receiver = if (dot >= 0) prefix.substring(0, dot).trim() else ""
-        val members = if (receiver.isNotEmpty()) {
-            receiverType(session, receiver)?.let { memberNamesOf(it, memberPrefix, session.moduleDescriptor) }.orEmpty()
-        } else {
-            emptyList()
-        }
-        return KotlinCompletionCandidates(members, scopeCandidates(session, prefix))
-    }
+    override fun completionCandidates(session: K2AnalysisSession, prefix: String): KotlinCompletionCandidates =
+        if (closed) KotlinCompletionCandidates(emptyList(), emptyList()) else K2CompletionResolver.completionCandidates(session, prefix)
 
-    /** Best resolver type for a receiver expression text, preferring the last occurrence. */
-    private fun receiverType(session: K2AnalysisSession, receiver: String): KotlinType? {
-        val ctx = session.bindingContext
-        val hits = mutableListOf<Pair<Int, KotlinType>>()
-        session.file.accept(object : KtTreeVisitorVoid() {
-            override fun visitExpression(expression: KtExpression) {
-                if (expression.text == receiver) {
-                    ctx[BindingContext.EXPRESSION_TYPE_INFO, expression]?.type?.let { hits.add(expression.textRange.startOffset to it) }
-                }
-                super.visitExpression(expression)
-            }
+    override fun renameEditsForSymbol(session: K2AnalysisSession, symbol: String, workspacePath: String?): List<ResolvedRenameEdit> =
+        if (closed) emptyList() else K2RenameResolver.renameEditsForSymbol(session, symbol, workspaceFiles(workspacePath).map { it.rel to it.psi })
 
-            override fun visitProperty(property: KtProperty) {
-                if (property.name == receiver) {
-                    val t = property.initializer?.let { ctx[BindingContext.EXPRESSION_TYPE_INFO, it]?.type }
-                        ?: property.typeReference?.let { ctx[BindingContext.TYPE, it] }
-                    t?.let { hits.add(property.textRange.startOffset to it) }
-                }
-                super.visitProperty(property)
-            }
+    override fun typeHierarchy(session: K2AnalysisSession, symbol: String, workspacePath: String?): KtTypeHierarchyResult =
+        if (closed) KtTypeHierarchyResult(symbol, emptyList(), emptyList()) else K2HierarchyResolver.typeHierarchy(session, symbol, workspaceFiles(workspacePath).map { it.rel to it.psi })
 
-            override fun visitParameter(parameter: KtParameter) {
-                if (parameter.name == receiver) {
-                    parameter.typeReference?.let { ctx[BindingContext.TYPE, it]?.let { t -> hits.add(parameter.textRange.startOffset to t) } }
-                }
-                super.visitParameter(parameter)
-            }
-        })
-        return hits.maxByOrNull { it.first }?.second
-    }
+    override fun callHierarchy(session: K2AnalysisSession, symbol: String, workspacePath: String?): KtCallHierarchyResult =
+        if (closed) KtCallHierarchyResult(symbol, emptyList()) else K2HierarchyResolver.callHierarchy(session, symbol, workspaceFiles(workspacePath).map { it.rel to it.psi })
 
-    private fun memberNamesOf(type: KotlinType, prefix: String, module: ModuleDescriptor?): List<String> {
-        val cls = type.constructor.declarationDescriptor as? ClassDescriptor ?: return emptyList()
-        val names = linkedSetOf<String>()
-        runCatching {
-            cls.unsubstitutedMemberScope.getContributedDescriptors(DescriptorKindFilter.ALL, MemberScope.ALL_NAME_FILTER).forEach { d ->
-                val n = d.name.asString()
-                val vis = (d as? MemberDescriptor)?.visibility
-                if (!n.startsWith("<") && vis != DescriptorVisibilities.PRIVATE && vis != DescriptorVisibilities.PRIVATE_TO_THIS) {
-                    if (prefix.isBlank() || n.startsWith(prefix, ignoreCase = true)) names.add(n)
-                }
-            }
-        }
-        if (module != null) {
-            for (pkgName in listOf("kotlin.text", "kotlin.collections", "kotlin")) {
-                runCatching {
-                    val pkg = module.getPackage(org.jetbrains.kotlin.name.FqName(pkgName))
-                    pkg.memberScope.getContributedDescriptors(DescriptorKindFilter.CALLABLES, MemberScope.ALL_NAME_FILTER)
-                        .filterIsInstance<FunctionDescriptor>()
-                        .forEach { fn ->
-                            val n = fn.name.asString()
-                            if (!n.startsWith("<")) {
-                                val recv = fn.extensionReceiverParameter?.type
-                                if (recv != null && safeFqn(recv.constructor.declarationDescriptor) == safeFqn(cls) &&
-                                    (prefix.isBlank() || n.startsWith(prefix, ignoreCase = true))
-                                ) {
-                                    names.add(n)
-                                }
-                            }
-                        }
-                }
-            }
-        }
-        return names.sorted()
-    }
-
-    /** In-scope names: declarations, parameters and imported names matching [prefix]. */
-    private fun scopeCandidates(session: K2AnalysisSession, prefix: String): List<String> {
-        val names = linkedSetOf<String>()
-        session.file.accept(object : KtTreeVisitorVoid() {
-            override fun visitNamedDeclaration(declaration: KtNamedDeclaration) {
-                if (declaration !is org.jetbrains.kotlin.psi.KtPrimaryConstructor) {
-                    declaration.name?.let { names.add(it) }
-                }
-                super.visitNamedDeclaration(declaration)
-            }
-
-            override fun visitParameter(parameter: KtParameter) {
-                parameter.name?.let { names.add(it) }
-                super.visitParameter(parameter)
-            }
-        })
-        session.file.importDirectives.forEach { dir ->
-            dir.importedFqName?.let { names.add(it.shortName().asString()) }
-            dir.aliasName?.let { names.add(it) }
-        }
-        return names
-            .filter { prefix.isBlank() || it.startsWith(prefix, ignoreCase = true) || it.contains(prefix, ignoreCase = true) }
-            .sortedBy { it.lowercase() }
-            .distinct()
-    }
-
-    override fun renameEditsForSymbol(session: K2AnalysisSession, symbol: String, workspacePath: String?): List<ResolvedRenameEdit> {
-        if (closed) return emptyList()
-        val ctx = session.bindingContext
-
-        data class Occurrence(val rel: String, val file: KtFile, val node: PsiElement, val kind: String)
-
-        val occurrences = mutableListOf<Occurrence>()
-        fun collect(rel: String, file: KtFile) {
-            file.accept(object : KtTreeVisitorVoid() {
-                override fun visitNamedDeclaration(declaration: KtNamedDeclaration) {
-                    if (declaration.name == symbol) {
-                        occurrences += Occurrence(rel, file, declaration, "decl")
-                    }
-                    super.visitNamedDeclaration(declaration)
-                }
-
-                override fun visitSimpleNameExpression(expression: KtSimpleNameExpression) {
-                    if (expression.getReferencedName() == symbol) {
-                        occurrences += Occurrence(rel, file, expression, "ref")
-                    }
-                    super.visitSimpleNameExpression(expression)
-                }
-            })
-        }
-
-        collect("Snippet.kt", session.file)
-        workspaceFiles(workspacePath).forEach { collect(it.rel, it.psi) }
-
-        fun descriptorOf(decl: KtNamedDeclaration): DeclarationDescriptor? =
-            ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, decl]
-
-        fun pickTargets(candidates: List<DeclarationDescriptor>): List<DeclarationDescriptor> {
-            val real = candidates.filter { !DescriptorUtils.isLocal(it) && isRealFqn(safeFqn(it)) }
-            return (if (real.isNotEmpty()) real else candidates).distinct()
-        }
-
-        val decls = occurrences.filter { it.kind == "decl" }
-        val snippetDecls = decls.filter { it.rel == "Snippet.kt" }
-        // Rename anchor, in order of preference:
-        //  1. a declaration inside the snippet (the LLM's context),
-        //  2. the declarations the snippet's references actually resolve to,
-        //  3. any workspace/global declaration with the name.
-        // An unrelated same-name symbol elsewhere is never a rename target.
-        val targets: List<DeclarationDescriptor> = when {
-            snippetDecls.isNotEmpty() -> pickTargets(snippetDecls.mapNotNull { descriptorOf(it.node as KtNamedDeclaration) })
-            else -> {
-                val snippetRefTargets = occurrences
-                    .filter { it.kind == "ref" && it.rel == "Snippet.kt" }
-                    .mapNotNull { ctx[BindingContext.REFERENCE_TARGET, it.node as KtSimpleNameExpression] }
-                if (snippetRefTargets.isNotEmpty()) {
-                    pickTargets(snippetRefTargets)
-                } else {
-                    pickTargets(decls.mapNotNull { descriptorOf(it.node as KtNamedDeclaration) })
-                }
-            }
-        }
-
-        data class Edit(val rel: String, val offset: Int)
-
-        val edits = mutableListOf<Edit>()
-        occurrences.forEach { occ ->
-            when (occ.kind) {
-                "decl" -> {
-                    val decl = occ.node as KtNamedDeclaration
-                    val d = descriptorOf(decl)
-                    if (d != null && targets.any { sameTarget(it, d) }) {
-                        val offset = decl.nameIdentifier?.textRange?.startOffset ?: decl.textRange.startOffset
-                        edits += Edit(occ.rel, offset)
-                    }
-                }
-                "ref" -> {
-                    val expr = occ.node as KtSimpleNameExpression
-                    val target = ctx[BindingContext.REFERENCE_TARGET, expr]
-                    if (target != null && targets.any { sameTarget(it, target) }) {
-                        edits += Edit(occ.rel, expr.textRange.startOffset)
-                    }
-                }
-            }
-        }
-        return edits.distinct().map { ResolvedRenameEdit(it.rel, it.offset, symbol.length) }
-    }
-
-    override fun typeHierarchy(session: K2AnalysisSession, symbol: String, workspacePath: String?): KtTypeHierarchyResult {
-        if (closed) return KtTypeHierarchyResult(symbol, emptyList(), emptyList())
-        val ctx = session.bindingContext
-
-        data class ClassEntry(val rel: String, val psi: KtFile, val node: org.jetbrains.kotlin.psi.KtClassOrObject)
-
-        val classes = mutableListOf<ClassEntry>()
-        fun collect(rel: String, psi: KtFile) {
-            psi.accept(object : KtTreeVisitorVoid() {
-                override fun visitClassOrObject(classOrObject: org.jetbrains.kotlin.psi.KtClassOrObject) {
-                    if (classOrObject.name == symbol) classes += ClassEntry(rel, psi, classOrObject)
-                    super.visitClassOrObject(classOrObject)
-                }
-            })
-        }
-        collect("Snippet.kt", session.file)
-        workspaceFiles(workspacePath).forEach { collect(it.rel, it.psi) }
-
-        val ordered = classes.filter { it.rel == "Snippet.kt" } + classes.filter { it.rel != "Snippet.kt" }
-        val descriptors = ordered.mapNotNull { ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, it.node] as? ClassDescriptor }
-        val realDescriptors = descriptors.filter { isRealFqn(safeFqn(it)) }
-        val target = (realDescriptors.ifEmpty { descriptors }).firstOrNull()
-        if (target == null) return KtTypeHierarchyResult(symbol, emptyList(), emptyList())
-
-        val supertypes = target.typeConstructor.supertypes
-            .mapNotNull { runCatching { DescriptorRenderer.FQ_NAMES_IN_TYPES.renderType(it) }.getOrNull() }
-            .distinct()
-
-        fun inherits(d: ClassDescriptor): Boolean {
-            val queue = ArrayDeque<ClassDescriptor>()
-            val seen = hashSetOf<DeclarationDescriptor>()
-            queue.add(d)
-            while (queue.isNotEmpty()) {
-                val cur = queue.removeFirst()
-                if (!seen.add(cur)) continue
-                for (superType in cur.typeConstructor.supertypes) {
-                    val dd = superType.constructor.declarationDescriptor as? ClassDescriptor ?: continue
-                    if (sameTarget(dd, target)) return true
-                    queue.add(dd)
-                }
-            }
-            return false
-        }
-
-        val subtypes = mutableListOf<KtTypeOccurrence>()
-        fun scanForSubtypes(rel: String, psi: KtFile) {
-            psi.accept(object : KtTreeVisitorVoid() {
-                override fun visitClassOrObject(classOrObject: org.jetbrains.kotlin.psi.KtClassOrObject) {
-                    val d = ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, classOrObject] as? ClassDescriptor
-                    val name = classOrObject.name
-                    if (d != null && inherits(d) && name != null) {
-                        val offset = classOrObject.nameIdentifier?.textRange?.startOffset ?: classOrObject.textRange.startOffset
-                        subtypes += KtTypeOccurrence(name, rel, SourceUtils.lineOf(psi.text, offset))
-                    }
-                    super.visitClassOrObject(classOrObject)
-                }
-            })
-        }
-        scanForSubtypes("Snippet.kt", session.file)
-        workspaceFiles(workspacePath).forEach { scanForSubtypes(it.rel, it.psi) }
-
-        return KtTypeHierarchyResult(symbol, supertypes, subtypes.distinctBy { Pair(it.name, it.file) })
-    }
-
-    override fun callHierarchy(session: K2AnalysisSession, symbol: String, workspacePath: String?): KtCallHierarchyResult {
-        if (closed) return KtCallHierarchyResult(symbol, emptyList())
-        val ctx = session.bindingContext
-
-        fun pickTargets(candidates: List<DeclarationDescriptor>): List<DeclarationDescriptor> {
-            val real = candidates.filter { !DescriptorUtils.isLocal(it) && isRealFqn(safeFqn(it)) }
-            return (if (real.isNotEmpty()) real else candidates).distinct()
-        }
-
-        val functionDecls = mutableListOf<Pair<String, KtNamedDeclaration>>()
-        val snippetCallTargets = mutableListOf<DeclarationDescriptor>()
-        fun collect(rel: String, psi: KtFile) {
-            psi.accept(object : KtTreeVisitorVoid() {
-                override fun visitNamedFunction(function: org.jetbrains.kotlin.psi.KtNamedFunction) {
-                    if (function.name == symbol) functionDecls += rel to function
-                    super.visitNamedFunction(function)
-                }
-
-                override fun visitCallExpression(expression: org.jetbrains.kotlin.psi.KtCallExpression) {
-                    val callee = expression.calleeExpression as? org.jetbrains.kotlin.psi.KtSimpleNameExpression
-                    if (callee != null && callee.getReferencedName() == symbol && rel == "Snippet.kt") {
-                        ctx[BindingContext.REFERENCE_TARGET, callee]?.let { snippetCallTargets.add(it) }
-                    }
-                    super.visitCallExpression(expression)
-                }
-            })
-        }
-        collect("Snippet.kt", session.file)
-        workspaceFiles(workspacePath).forEach { collect(it.rel, it.psi) }
-
-        val snippetDeclTargets = functionDecls
-            .filter { it.first == "Snippet.kt" }
-            .mapNotNull { (_, decl) -> ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, decl] }
-        val targets: List<DeclarationDescriptor> = when {
-            snippetDeclTargets.isNotEmpty() -> pickTargets(snippetDeclTargets)
-            snippetCallTargets.isNotEmpty() -> pickTargets(snippetCallTargets)
-            else -> pickTargets(functionDecls.mapNotNull { (_, decl) -> ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, decl] })
-        }
-        if (targets.isEmpty()) return KtCallHierarchyResult(symbol, emptyList())
-
-        fun enclosingFunction(node: org.jetbrains.kotlin.com.intellij.psi.PsiElement): org.jetbrains.kotlin.psi.KtNamedFunction? {
-            var ancestor = node.parent
-            while (ancestor != null) {
-                if (ancestor is org.jetbrains.kotlin.psi.KtNamedFunction) return ancestor
-                ancestor = ancestor.parent
-            }
-            return null
-        }
-
-        val callers = mutableListOf<KtCallOccurrence>()
-        fun scanCalls(rel: String, psi: KtFile) {
-            psi.accept(object : KtTreeVisitorVoid() {
-                override fun visitCallExpression(expression: org.jetbrains.kotlin.psi.KtCallExpression) {
-                    val callee = expression.calleeExpression as? org.jetbrains.kotlin.psi.KtSimpleNameExpression
-                    val resolved = callee?.let { ctx[BindingContext.REFERENCE_TARGET, it] }
-                    if (resolved != null && targets.any { sameTarget(it, resolved) }) {
-                        val enclosing = enclosingFunction(expression)
-                        val line = SourceUtils.lineOf(psi.text, expression.textRange.startOffset)
-                        callers += KtCallOccurrence(enclosing?.name, rel, line, expression.text.take(80))
-                    }
-                    super.visitCallExpression(expression)
-                }
-            })
-        }
-        scanCalls("Snippet.kt", session.file)
-        workspaceFiles(workspacePath).forEach { scanCalls(it.rel, it.psi) }
-
-        return KtCallHierarchyResult(symbol, callers.distinct())
-    }
-
-    override fun projectClasspath(workspacePath: String?): List<String> =
-        if (closed) emptyList() else SnippetCompiler.detectProjectClasspath(workspacePath)
-
-    override fun hover(session: K2AnalysisSession, symbol: String, workspacePath: String?): KtHoverInfo? {
-        if (closed) return null
-        val ctx = session.bindingContext
-        val files = listOf("Snippet.kt" to session.file) + workspaceFiles(workspacePath).map { it.rel to it.psi }
-
-        var reference: KtSimpleNameExpression? = null
-        var declaration: KtNamedDeclaration? = null
-        session.file.accept(object : KtTreeVisitorVoid() {
-            override fun visitSimpleNameExpression(expression: KtSimpleNameExpression) {
-                if (reference == null && expression.getReferencedName() == symbol) {
-                    reference = expression
-                }
-                super.visitSimpleNameExpression(expression)
-            }
-
-            override fun visitNamedDeclaration(decl: KtNamedDeclaration) {
-                if (declaration == null && decl !is org.jetbrains.kotlin.psi.KtPrimaryConstructor && decl.name == symbol) {
-                    declaration = decl
-                }
-                super.visitNamedDeclaration(decl)
-            }
-        })
-        if (reference == null && declaration == null) return null
-
-        val descriptor: DeclarationDescriptor? = reference?.let { ctx[BindingContext.REFERENCE_TARGET, it] }
-            ?: declaration?.let { ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, it] }
-        if (descriptor == null) return null
-        val effective = effectiveDescriptor(descriptor)
-
-        val expressionType: String? = reference?.let { ref ->
-            val typeNode: KtExpression = (ref.parent as? KtCallExpression) ?: ref
-            ctx[BindingContext.EXPRESSION_TYPE_INFO, typeNode]?.type
-                ?.let { DescriptorRenderer.FQ_NAMES_IN_TYPES.renderType(it) }
-        }
-        val declaredType: String? = (declaration as? KtProperty)?.let { prop ->
-            val t = prop.initializer?.let { ctx[BindingContext.EXPRESSION_TYPE_INFO, it]?.type }
-                ?: prop.typeReference?.let { ctx[BindingContext.TYPE, it] }
-            t?.let { DescriptorRenderer.FQ_NAMES_IN_TYPES.renderType(it) }
-        }
-        val type = expressionType ?: declaredType
-
-        val signature = runCatching { DescriptorRenderer.FQ_NAMES_IN_TYPES.render(descriptor) }.getOrNull()
-        val fqn = safeFqn(effective)
-
-        val declPsi = declarationPsiFor(session, files, descriptor)
-        val source: ResolvedSource
-        val file: String?
-        val line: Int?
-        val kdoc: String?
-        if (declPsi != null) {
-            val containing = declPsi.containingFile as KtFile
-            val isSnippet = containing == session.file || containing.name.startsWith("Snippet_")
-            source = if (isSnippet) ResolvedSource.SNIPPET else ResolvedSource.WORKSPACE
-            file = if (isSnippet) "Snippet.kt" else containing.name
-            line = SourceUtils.lineOf(containing.text, declPsi.textRange.startOffset)
-            kdoc = declPsi.docComment?.text?.trim()?.takeIf { it.isNotBlank() }
-        } else {
-            source = ResolvedSource.EXTERNAL
-            file = null
-            line = null
-            kdoc = null
-        }
-        return KtHoverInfo(symbol, type, signature, fqn, source, file, line, kdoc)
-    }
+    override fun hover(session: K2AnalysisSession, symbol: String, workspacePath: String?): KtHoverInfo? =
+        if (closed) null else K2HoverResolver.hover(session, symbol, listOf("Snippet.kt" to session.file) + workspaceFiles(workspacePath).map { it.rel to it.psi })
 
     override fun workspaceStats(workspacePath: String?): WorkspaceStats {
         if (closed) return WorkspaceStats(0, 0, false)
@@ -764,6 +317,9 @@ class DefaultK2SemanticEngine(
         val analyzed = minOf(total, fileCap)
         return WorkspaceStats(total, analyzed, total > fileCap)
     }
+
+    override fun projectClasspath(workspacePath: String?): List<String> =
+        if (closed) emptyList() else SnippetCompiler.detectProjectClasspath(workspacePath)
 
     override fun close() {
         closed = true
@@ -799,65 +355,6 @@ class DefaultK2SemanticEngine(
         }
     }
 
-    private fun declarationPsiFor(
-        session: K2AnalysisSession,
-        files: List<Pair<String, KtFile>>,
-        target: DeclarationDescriptor
-    ): KtNamedDeclaration? {
-        val ctx = session.bindingContext
-        val effective = (target as? ClassConstructorDescriptor)?.constructedClass ?: target
-        fun scan(match: (DeclarationDescriptor) -> Boolean): KtNamedDeclaration? {
-            for ((_, file) in files) {
-                var hit: KtNamedDeclaration? = null
-                file.accept(object : KtTreeVisitorVoid() {
-                    override fun visitNamedDeclaration(declaration: KtNamedDeclaration) {
-                        if (hit == null) {
-                            val d = ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, declaration]
-                            if (d != null && (d === effective || match(d))) hit = declaration
-                        }
-                        super.visitNamedDeclaration(declaration)
-                    }
-                })
-                if (hit != null) return hit
-            }
-            return null
-        }
-        scan { d -> d == effective }?.let { return it }
-        return scan { d -> sameTarget(d, effective) }
-    }
-
-    private fun effectiveDescriptor(d: DeclarationDescriptor): DeclarationDescriptor =
-        (d as? ClassConstructorDescriptor)?.constructedClass ?: d
-
-    private fun sameTarget(a: DeclarationDescriptor, b: DeclarationDescriptor): Boolean {
-        if (a == b) return true
-        val ea = effectiveDescriptor(a)
-        val eb = effectiveDescriptor(b)
-        if (ea == eb) return true
-        val fa = safeFqn(ea)
-        val fb = safeFqn(eb)
-        return fa != null && fb != null && isRealFqn(fa) && isRealFqn(fb) && fa == fb
-    }
-
-    private fun safeFqn(descriptor: DeclarationDescriptor?): String? =
-        if (descriptor == null) null else runCatching { DescriptorUtils.getFqNameSafe(descriptor).asString() }.getOrNull()
-
-    private fun isRealFqn(fqn: String?): Boolean =
-        !fqn.isNullOrEmpty() && fqn != "<root>"
-
-    private fun signatureOf(psi: PsiElement): String {
-        val text = psi.text.take(140)
-        val sb = StringBuilder(text.length)
-        var pendingSpace = false
-        for (c in text) {
-            if (c.isWhitespace()) {
-                pendingSpace = sb.isNotEmpty()
-            } else {
-                if (pendingSpace) sb.append(' ')
-                pendingSpace = false
-                sb.append(c)
-            }
-        }
-        return sb.toString().trim()
-    }
+    private fun signatureOf(psi: PsiElement): String =
+        SourceUtils.collapseWhitespace(psi.text, maxLength = 140)
 }
