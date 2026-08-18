@@ -19,11 +19,13 @@ object ResourceRegistrar {
     const val DOCS_INDEX_URI = "kotlin://docs/index.md"
     const val GUIDELINES_URI = "kotlin://guidelines/architecture.md"
     const val RESILIENCE_GUIDELINES_URI = "kotlin://guidelines/resilience.md"
+    const val KMP_STORAGE_GUIDELINES_URI = "kotlin://guidelines/kmp-storage.md"
     val SERVER_GUIDE_URI = LlmGuidance.LLM_GUIDE_RESOURCE_URI
     private const val MIME = "text/markdown"
 
     internal val architectureGuidelinesText: String get() = GUIDELINES_TEXT
     internal val resilienceGuidelinesText: String get() = RESILIENCE_TEXT
+    internal val kmpStorageGuidelinesText: String get() = KMP_STORAGE_TEXT
 
     fun registerAll(server: Server, docService: DocService) {
         server.addResource(
@@ -51,6 +53,15 @@ object ResourceRegistrar {
             description = "Resilience and fault-tolerance guidelines for Kotlin: independent verification probing, verifiable state caching, and deterministic remediation state machines."
         ) { _ ->
             ReadResourceResult(listOf(TextResourceContents(text = RESILIENCE_TEXT, uri = RESILIENCE_GUIDELINES_URI, mimeType = MIME)))
+        }
+
+        server.addResource(
+            uri = KMP_STORAGE_GUIDELINES_URI,
+            name = "kotlin-guidelines-kmp-storage",
+            mimeType = MIME,
+            description = "Kotlin Multiplatform Web storage guidelines: Room 3.0 OPFS architecture, sqlite-async driver abstraction, DataStore backends, and COOP/COEP headers."
+        ) { _ ->
+            ReadResourceResult(listOf(TextResourceContents(text = KMP_STORAGE_TEXT, uri = KMP_STORAGE_GUIDELINES_URI, mimeType = MIME)))
         }
 
         server.addResource(
@@ -89,6 +100,7 @@ object ResourceRegistrar {
         appendLine("## Guidelines")
         appendLine("- [Architecture & Testability]($GUIDELINES_URI)")
         appendLine("- [Backend Resilience & Fault Tolerance]($RESILIENCE_GUIDELINES_URI)")
+        appendLine("- [Multiplatform Storage (Web/Wasm/JS)]($KMP_STORAGE_GUIDELINES_URI)")
         appendLine()
         appendLine("## Symbols")
         docService.symbolDocs.keys.sorted().forEach { appendLine("- [$it](kotlin://docs/symbol/${encode(it)})") }
@@ -119,6 +131,19 @@ object ResourceRegistrar {
             - Independent verification probing (Silence != Recovery)
             - Verifiable state caching (Memory Must Not Lie)
             - Deterministic typed state machines for remediation
+        """.trimIndent()
+    }
+
+    private val KMP_STORAGE_TEXT: String by lazy {
+        ResourceRegistrar::class.java.getResourceAsStream("/guidelines/kmp-storage.md")?.use {
+            it.bufferedReader().readText()
+        } ?: """
+            # Kotlin Multiplatform Storage & Persistence Guidelines (Web/Wasm/JS)
+            - Room 3.0 on Web (OPFS vs. IndexedDB)
+            - SQLite Driver Asymmetry & sqlite-async
+            - Room 3.0 Coroutine-Native Architecture
+            - DataStore Web Storage Selection
+            - Cross-Origin Isolation Headers (COOP / COEP)
         """.trimIndent()
     }
 

@@ -229,6 +229,7 @@ class KotlinMcpIntegrationTest {
             assertTrue(uris.contains(ResourceRegistrar.DOCS_INDEX_URI), "expected doc index in $uris")
             assertTrue(uris.contains(ResourceRegistrar.GUIDELINES_URI), "expected guidelines in $uris")
             assertTrue(uris.contains(ResourceRegistrar.RESILIENCE_GUIDELINES_URI), "expected resilience guidelines in $uris")
+            assertTrue(uris.contains(ResourceRegistrar.KMP_STORAGE_GUIDELINES_URI), "expected kmp storage guidelines in $uris")
             assertTrue(
                 uris.none { it.startsWith("kotlin://docs/symbol/") || it.startsWith("kotlin://docs/feature/") },
                 "bulk per-entry resources must not be registered: $uris"
@@ -249,6 +250,14 @@ class KotlinMcpIntegrationTest {
             )
             val resilienceText = resilienceRead.contents.joinToString { it.toString() }
             assertTrue(resilienceText.contains("Kotlin Backend Resilience"), "expected resilience content, got: $resilienceText")
+
+            val kmpStorageRead = client.readResource(
+                io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest(
+                    io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequestParams(ResourceRegistrar.KMP_STORAGE_GUIDELINES_URI)
+                )
+            )
+            val kmpStorageText = kmpStorageRead.contents.joinToString { it.toString() }
+            assertTrue(kmpStorageText.contains("Kotlin Multiplatform Storage"), "expected kmp storage content, got: $kmpStorageText")
 
             val templateRead = client.readResource(
                 io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest(
