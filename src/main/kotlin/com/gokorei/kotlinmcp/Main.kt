@@ -4,6 +4,8 @@ import com.gokorei.kotlinmcp.server.KotlinMcpServer
 import com.gokorei.kotlinmcp.server.PromptRegistrar
 import com.gokorei.kotlinmcp.server.ResourceRegistrar
 import com.gokorei.kotlinmcp.server.ToolRegistrar
+import com.gokorei.kotlinmcp.lsp.DefaultK2SemanticEngine
+import com.gokorei.kotlinmcp.lsp.K2SemanticEngine
 import com.gokorei.kotlinmcp.lsp.K2SnippetFrontend
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.modelcontextprotocol.kotlin.sdk.server.Server
@@ -57,7 +59,12 @@ fun main() = runBlocking {
     val session = server.createSession(transport)
     val serverClosed = Job()
     session.onClose { serverClosed.complete() }
-    // Release the shared K2 KotlinCoreEnvironment (native PSI resources) on exit.
-    Runtime.getRuntime().addShutdownHook(Thread { K2SnippetFrontend.dispose() })
+    // Release the shared K2 KotlinCoreEnvironment (native PSI resources) and the
+    // semantic engine's workspace PSI cache on exit.
+    val semanticEngine: K2SemanticEngine = DefaultK2SemanticEngine()
+    Runtime.getRuntime().addShutdownHook(Thread {
+        K2SnippetFrontend.dispose()
+        semanticEngine.close()
+    })
     serverClosed.join()
 }

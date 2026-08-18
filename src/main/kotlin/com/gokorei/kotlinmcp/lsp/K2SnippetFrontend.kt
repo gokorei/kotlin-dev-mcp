@@ -2,6 +2,7 @@
 @file:OptIn(org.jetbrains.kotlin.K1Deprecation::class)
 package com.gokorei.kotlinmcp.lsp
 
+import com.gokorei.kotlinmcp.execution.SnippetCompiler
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
 import org.jetbrains.kotlin.com.intellij.openapi.Disposable
@@ -47,6 +48,12 @@ object K2SnippetFrontend {
                         put(CommonConfigurationKeys.MESSAGE_COLLECTOR_KEY, org.jetbrains.kotlin.cli.common.messages.MessageCollector.NONE)
                         put(CommonConfigurationKeys.MODULE_NAME, "snippet_module")
                     }
+                    addJvmClasspathRoots(
+                        configuration,
+                        SnippetCompiler.resolveDefaultImports(System.getProperty("java.class.path").orEmpty())
+                            .filter { it.isNotBlank() }
+                            .map { java.io.File(it) }
+                    )
                     env = KotlinCoreEnvironment.createForProduction(
                         rootDisposable,
                         configuration,
@@ -69,6 +76,22 @@ object K2SnippetFrontend {
                 return factory
             }
         }
+
+    /**
+     * Registers library jars (kotlin-stdlib etc.) as JVM classpath roots so the
+     * analysis resolves stdlib symbols. `JvmContentRootsKt.addJvmClasspathRoots`
+     * is `internal` in the compiler, so it is invoked reflectively.
+     */
+    private fun addJvmClasspathRoots(configuration: CompilerConfiguration, roots: List<java.io.File>) {
+        if (roots.isEmpty()) return
+        try {
+            val cls = Class.forName("org.jetbrains.kotlin.cli.jvm.config.JvmContentRootsKt")
+            val method = cls.getMethod("addJvmClasspathRoots", CompilerConfiguration::class.java, List::class.java)
+            method.invoke(null, configuration, roots)
+        } catch (e: Throwable) {
+            System.err.println("K2SnippetFrontend could not register stdlib classpath roots: ${e.message}")
+        }
+    }
 
     @Volatile
     private var disposed = false
