@@ -52,6 +52,13 @@ data class KotlinCompletionCandidates(
     val scope: List<String>
 )
 
+/** A byte-range edit that renames one bound occurrence of a symbol. */
+data class ResolvedRenameEdit(
+    val file: String,
+    val offset: Int,
+    val length: Int
+)
+
 /** A single bound occurrence of a symbol: either the declaration or a usage resolving to it. */
 data class ResolvedReference(
     val symbol: String,
@@ -111,7 +118,17 @@ fun resolveReference(session: K2AnalysisSession, reference: KtReferenceExpressio
      * stdlib extensions), and `scope` are the in-scope declaration/import
      * names matching the prefix.
      */
-    fun completionCandidates(session: K2AnalysisSession, prefix: String): KotlinCompletionCandidates
+fun completionCandidates(session: K2AnalysisSession, prefix: String): KotlinCompletionCandidates
+
+    /**
+     * Byte-range edits renaming every bound occurrence of [symbol] — the
+     * declaration plus all usages that resolve to it — across the snippet
+     * (`"Snippet.kt"`) and the workspace. Declarations are chosen snippet-first:
+     * if the snippet declares the name, that (possibly local) declaration is
+     * the rename target and unrelated same-name symbols elsewhere are left
+     * alone; otherwise the workspace-level declaration is renamed.
+     */
+    fun renameEditsForSymbol(session: K2AnalysisSession, symbol: String, workspacePath: String?): List<ResolvedRenameEdit>
 
     /** Compiled-class / build-libs classpath detected under the workspace. */
     fun projectClasspath(workspacePath: String?): List<String>
@@ -389,6 +406,88 @@ class DefaultK2SemanticEngine : K2SemanticEngine {
             .filter { prefix.isBlank() || it.startsWith(prefix, ignoreCase = true) || it.contains(prefix, ignoreCase = true) }
             .sortedBy { it.lowercase() }
             .distinct()
+    }
+
+    override fun renameEditsForSymbol(session: K2AnalysisSession, symbol: String, workspacePath: String?): List<ResolvedRenameEdit> {
+        if (closed) return emptyList()
+        val ctx = session.bindingContext
+
+        data class Occurrence(val rel: String, val file: KtFile, val node: PsiElement, val kind: String)
+
+        val occurrences = mutableListOf<Occurrence>()
+        fun collect(rel: String, file: KtFile) {
+            file.accept(object : KtTreeVisitorVoid() {
+                override fun visitNamedDeclaration(declaration: KtNamedDeclaration) {
+                    if (declaration.name == symbol) {
+                        occurrences += Occurrence(rel, file, declaration, "decl")
+                    }
+                    super.visitNamedDeclaration(declaration)
+                }
+
+                override fun visitSimpleNameExpression(expression: KtSimpleNameExpression) {
+                    if (expression.getReferencedName() == symbol) {
+                        occurrences += Occurrence(rel, file, expression, "ref")
+                    }
+                    super.visitSimpleNameExpression(expression)
+                }
+            })
+        }
+
+        collect("Snippet.kt", session.file)
+        workspaceFiles(workspacePath).forEach { collect(it.rel, it.psi) }
+
+        fun descriptorOf(decl: KtNamedDeclaration): DeclarationDescriptor? =
+            ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, decl]
+
+        fun pickTargets(candidates: List<DeclarationDescriptor>): List<DeclarationDescriptor> {
+            val real = candidates.filter { !DescriptorUtils.isLocal(it) && isRealFqn(safeFqn(it)) }
+            return (if (real.isNotEmpty()) real else candidates).distinct()
+        }
+
+        val decls = occurrences.filter { it.kind == "decl" }
+        val snippetDecls = decls.filter { it.rel == "Snippet.kt" }
+        // Rename anchor, in order of preference:
+        //  1. a declaration inside the snippet (the LLM's context),
+        //  2. the declarations the snippet's references actually resolve to,
+        //  3. any workspace/global declaration with the name.
+        // An unrelated same-name symbol elsewhere is never a rename target.
+        val targets: List<DeclarationDescriptor> = when {
+            snippetDecls.isNotEmpty() -> pickTargets(snippetDecls.mapNotNull { descriptorOf(it.node as KtNamedDeclaration) })
+            else -> {
+                val snippetRefTargets = occurrences
+                    .filter { it.kind == "ref" && it.rel == "Snippet.kt" }
+                    .mapNotNull { ctx[BindingContext.REFERENCE_TARGET, it.node as KtSimpleNameExpression] }
+                if (snippetRefTargets.isNotEmpty()) {
+                    pickTargets(snippetRefTargets)
+                } else {
+                    pickTargets(decls.mapNotNull { descriptorOf(it.node as KtNamedDeclaration) })
+                }
+            }
+        }
+
+        data class Edit(val rel: String, val offset: Int)
+
+        val edits = mutableListOf<Edit>()
+        occurrences.forEach { occ ->
+            when (occ.kind) {
+                "decl" -> {
+                    val decl = occ.node as KtNamedDeclaration
+                    val d = descriptorOf(decl)
+                    if (d != null && targets.any { sameTarget(it, d) }) {
+                        val offset = decl.nameIdentifier?.textRange?.startOffset ?: decl.textRange.startOffset
+                        edits += Edit(occ.rel, offset)
+                    }
+                }
+                "ref" -> {
+                    val expr = occ.node as KtSimpleNameExpression
+                    val target = ctx[BindingContext.REFERENCE_TARGET, expr]
+                    if (target != null && targets.any { sameTarget(it, target) }) {
+                        edits += Edit(occ.rel, expr.textRange.startOffset)
+                    }
+                }
+            }
+        }
+        return edits.distinct().map { ResolvedRenameEdit(it.rel, it.offset, symbol.length) }
     }
 
     override fun projectClasspath(workspacePath: String?): List<String> =

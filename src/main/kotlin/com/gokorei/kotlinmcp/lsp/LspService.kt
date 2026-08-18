@@ -290,6 +290,104 @@ class DefaultLspService(
         val old = oldName.trim()
         val new = newName.trim()
 
+        val session = runCatching { semanticEngine.session(workspacePath, code) }.getOrNull()
+        if (session != null) {
+            val edits = runCatching { semanticEngine.renameEditsForSymbol(session, old, workspacePath) }.getOrNull().orEmpty()
+            val snippetEdits = edits.filter { it.file == "Snippet.kt" }
+            val refactoredCode = applyRenameEdits(code, snippetEdits.map { it.offset to it.length }, new)
+            val snippetReplacementCount = snippetEdits.size
+
+            val workspaceChanges = mutableListOf<String>()
+            var isTruncated = false
+            var totalMatchingFiles = 0
+
+            if (!workspacePath.isNullOrBlank()) {
+                val root = File(workspacePath)
+                if (root.exists() && root.isDirectory) {
+                    val wsEdits = edits.filter { it.file != "Snippet.kt" }.groupBy { it.file }
+                    totalMatchingFiles = wsEdits.size
+                    if (totalMatchingFiles > maxFiles) {
+                        isTruncated = true
+                    }
+                    wsEdits.toSortedMap().toList().take(maxFiles).forEach { (rel, fileEdits) ->
+                        val target = root.resolve(rel)
+                        try {
+                            if (target.isFile) {
+                                val original = target.readText()
+                                val updated = applyRenameEdits(original, fileEdits.map { it.offset to it.length }, new)
+                                if (updated != original) {
+                                    target.writeText(updated)
+                                    workspaceChanges.add("$rel: ${fileEdits.size} replacements")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            workspaceChanges.add("$rel: FAILED (${e.message})")
+                        }
+                    }
+                }
+            }
+
+            val content = buildString {
+                if (isTruncated) {
+                    appendLine("⚠ Workspace scan truncated: examined $maxFiles of $totalMatchingFiles Kotlin files.")
+                    appendLine()
+                }
+                appendLine("# Symbol Rename: `$old` -> `$new`")
+                appendLine("- Replacements in snippet: $snippetReplacementCount")
+                if (workspaceChanges.isNotEmpty()) {
+                    appendLine("- Workspace files updated:")
+                    workspaceChanges.forEach { appendLine("  - $it") }
+                } else if (!workspacePath.isNullOrBlank()) {
+                    appendLine("- No workspace files matched (or workspacePath not a readable directory).")
+                }
+                appendLine()
+                appendLine("## Refactored Snippet")
+                appendLine("```kotlin")
+                appendLine(refactoredCode)
+                appendLine("```")
+            }
+
+            val metadataMap = mutableMapOf(
+                "oldName" to old,
+                "newName" to new,
+                "replacementCount" to snippetReplacementCount.toString(),
+                "workspaceFileCount" to workspaceChanges.size.toString()
+            )
+            if (isTruncated) {
+                metadataMap["truncated"] = "true"
+                metadataMap["totalFiles"] = totalMatchingFiles.toString()
+                metadataMap["maxFiles"] = maxFiles.toString()
+            }
+
+            return KotlinMcpResult.Success(
+                content = content,
+                metadata = metadataMap
+            )
+        }
+
+        return renameSymbolLegacy(code, old, new, workspacePath, maxFiles)
+    }
+
+    private fun applyRenameEdits(text: String, edits: List<Pair<Int, Int>>, replacement: String): String {
+        var result = text
+        edits.distinct().sortedByDescending { it.first }.forEach { (offset, length) ->
+            if (offset in 0..result.length && length >= 0 && offset + length <= result.length) {
+                result = result.substring(0, offset) + replacement + result.substring(offset + length)
+            }
+        }
+        return result
+    }
+
+    private fun renameSymbolLegacy(code: String, oldName: String?, newName: String?, workspacePath: String?, maxFiles: Int = 500): KotlinMcpResult {
+        if (oldName.isNullOrBlank() || newName.isNullOrBlank()) {
+            return KotlinMcpResult.Error(
+                message = "Both oldName and newName parameters are required for renameSymbol.",
+                code = "INVALID_ARGUMENTS"
+            )
+        }
+        val old = oldName.trim()
+        val new = newName.trim()
+
         val (refactoredCode, snippetReplacementCount) = renameAstNodes(code, old, new)
 
         val workspaceChanges = mutableListOf<String>()

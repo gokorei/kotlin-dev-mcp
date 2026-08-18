@@ -337,6 +337,79 @@ class LspServiceTest {
     }
 
     @Test
+    fun `renameSymbol does not rename an unrelated same-name top-level symbol`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-rename-local")
+        val otherFile = workspace.resolve("Other.kt").toFile()
+        otherFile.writeText("val total = 3\n")
+
+        val snippet = """
+            fun main() {
+                val total = 5
+                val double = total * 2
+                println(double)
+            }
+        """.trimIndent()
+
+        val result = service.execute(
+            LspAction.RENAME_SYMBOL,
+            snippet,
+            symbol = "total",
+            newName = "grandTotal",
+            workspacePath = workspace.toString()
+        )
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("val grandTotal = 5"), "snippet local must be renamed: ${success.content}")
+        assertTrue(success.content.contains("val double = grandTotal * 2"), "snippet usage must be renamed: ${success.content}")
+        assertTrue(otherFile.readText().contains("val total = 3"), "unrelated same-name top-level must be untouched: ${otherFile.readText()}")
+
+        workspace.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `renameSymbol updates all bound usages across workspace files`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-rename-bound")
+        val modelFile = workspace.resolve("model/Math.kt").toFile()
+        modelFile.parentFile.mkdirs()
+        modelFile.writeText("""
+            package app.model
+
+            fun double(price: Int): Int = price * 2
+        """.trimIndent())
+        val consumerFile = workspace.resolve("Consume.kt").toFile()
+        consumerFile.writeText("""
+            package app
+
+            import app.model.double
+
+            fun go() = double(50)
+        """.trimIndent())
+
+        val snippet = """
+            package app
+
+            import app.model.double
+
+            fun demo() { val r = double(21) }
+        """.trimIndent()
+
+        val result = service.execute(
+            LspAction.RENAME_SYMBOL,
+            snippet,
+            symbol = "double",
+            newName = "twice",
+            workspacePath = workspace.toString()
+        )
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("twice(21)"), "snippet usage must be renamed: ${success.content}")
+        assertTrue(modelFile.readText().contains("fun twice(price: Int)"), "declaration must be renamed: ${modelFile.readText()}")
+        assertTrue(consumerFile.readText().contains("fun go() = twice(50)"), "bound workspace usage must be renamed: ${consumerFile.readText()}")
+
+        workspace.toFile().deleteRecursively()
+    }
+
+    @Test
     fun `typeHierarchy traces supertypes and subclasses`() {
         val snippet = """
             interface Repository
