@@ -77,6 +77,42 @@ val dumpToolingClasspaths = tasks.register("dumpToolingClasspaths") {
     }
 }
 
+// TK-94DK6TD1: When launched as `java -jar <all.jar>`, `java.class.path` is a
+// single entry (the flat uber jar) whose name matches none of SnippetCompiler's
+// library substrings, so its defaultImportsClasspath comes out EMPTY. To keep
+// snippet compilation/running working from the fat jar, the library jars a
+// snippet may import are copied into resources here and materialized to a temp
+// dir at runtime. The name list mirrors SnippetCompiler's library filter.
+val snippetClasspathArtifactFilter = listOf(
+    "kotlin-stdlib", "kotlinx-coroutines", "kotlinx-serialization",
+    "kotlinx-datetime", "arrow-core", "mockk", "turbine", "ktor"
+)
+
+val dumpSnippetClasspath = tasks.register("dumpSnippetClasspath") {
+    group = "build"
+    description = "Dumps the library jars a snippet may import (kotlin-stdlib, kotlinx-coroutines/-serialization/-datetime, arrow-core, mockk, turbine, ktor) into resources so SnippetCompiler can resolve imports when launched from the fat uberJar."
+    val outDir = layout.buildDirectory.dir("generated/tooling/snippet-classpath")
+    outputs.dir(outDir)
+    doLast {
+        val targetDir = outDir.get().asFile
+        targetDir.mkdirs()
+        val names = configurations.runtimeClasspath.get()
+            .filter { it.isFile }
+            .mapNotNull { file ->
+                val lower = file.name.lowercase()
+                if (snippetClasspathArtifactFilter.any { lower.contains(it) }) {
+                    file.copyTo(File(targetDir, file.name), overwrite = true)
+                    file.name
+                } else {
+                    null
+                }
+            }
+            .distinct()
+            .sorted()
+        File(targetDir, "snippet.classpath.txt").writeText(names.joinToString("\n"))
+    }
+}
+
 sourceSets {
     main {
         resources {
@@ -88,6 +124,7 @@ sourceSets {
 
 tasks.processResources {
     dependsOn(dumpToolingClasspaths)
+    dependsOn(dumpSnippetClasspath)
     dependsOn(processStdlibIndex)
 }
 

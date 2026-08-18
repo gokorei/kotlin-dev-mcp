@@ -91,6 +91,43 @@ class SnippetCompilerTest {
     }
 
     @Test
+    fun `fat-jar launch falls back to bundled snippet library classpath`() {
+        // TK-94DK6TD1 regression: under `java -jar <all.jar>` the JVM's
+        // java.class.path is the single flat fat jar, so the name-filtered
+        // system classpath is empty and SnippetCompiler must fall back to the
+        // library jars bundled as resources by `dumpSnippetClasspath`.
+        val fatJarOnly = "/path/to/kotlin-mcp-1.0.0-all.jar"
+        val resolved = SnippetCompiler.resolveDefaultImports(fatJarOnly)
+
+        assertTrue(resolved.isNotEmpty(), "expected non-empty classpath fallback under fat-jar launch, got: $resolved")
+        resolved.forEach { p ->
+            assertTrue(java.io.File(p).isFile, "materialized classpath entry must be a real file on disk: $p")
+        }
+        val names = resolved.map { it.substringAfterLast('/').lowercase() }
+        assertTrue(
+            names.any { it.contains("kotlin-stdlib") },
+            "expected kotlin-stdlib in bundled classpath, got: $names"
+        )
+        assertTrue(
+            names.any { it.contains("kotlinx-coroutines") },
+            "expected kotlinx-coroutines in bundled classpath, got: $names"
+        )
+
+        // The bundled jars alone must let a coroutines snippet resolve (no
+        // unresolved-reference errors).
+        val snippet = """
+            import kotlinx.coroutines.coroutineScope
+            import kotlinx.coroutines.async
+            suspend fun lo(): List<Int> = coroutineScope { (1..3).map { async { it } }.map { it.await() } }
+        """.trimIndent()
+        val result = SnippetCompiler.compile(snippet, resolved)
+        val errors = (result as? CompileResult.Compiled)
+            ?.diagnostics?.filter { it.severity == "error" }.orEmpty()
+        assertTrue(errors.isEmpty(), "expected coroutines snippet to compile against bundled classpath, got: $errors")
+        SnippetCompiler.cleanup(result)
+    }
+
+    @Test
     fun `external library without classpath is a hard unresolved error`() {
         val snippet = """
             import org.example.missinglib.Widget
