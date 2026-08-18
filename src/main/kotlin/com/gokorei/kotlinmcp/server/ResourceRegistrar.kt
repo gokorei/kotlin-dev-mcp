@@ -18,8 +18,12 @@ object ResourceRegistrar {
 
     const val DOCS_INDEX_URI = "kotlin://docs/index.md"
     const val GUIDELINES_URI = "kotlin://guidelines/architecture.md"
+    const val RESILIENCE_GUIDELINES_URI = "kotlin://guidelines/resilience.md"
     val SERVER_GUIDE_URI = LlmGuidance.LLM_GUIDE_RESOURCE_URI
     private const val MIME = "text/markdown"
+
+    internal val architectureGuidelinesText: String get() = GUIDELINES_TEXT
+    internal val resilienceGuidelinesText: String get() = RESILIENCE_TEXT
 
     fun registerAll(server: Server, docService: DocService) {
         server.addResource(
@@ -35,9 +39,18 @@ object ResourceRegistrar {
             uri = GUIDELINES_URI,
             name = "kotlin-guidelines-architecture",
             mimeType = MIME,
-            description = "Architectural and testability guidelines for Kotlin: UI vs business-logic boundary isolation, explicit DTO-to-domain mapping, and boundary testability."
+            description = "Architectural and testability guidelines for Kotlin: UI vs business-logic boundary isolation, explicit DTO-to-domain mapping, boundary testability, and domain error modeling."
         ) { _ ->
             ReadResourceResult(listOf(TextResourceContents(text = GUIDELINES_TEXT, uri = GUIDELINES_URI, mimeType = MIME)))
+        }
+
+        server.addResource(
+            uri = RESILIENCE_GUIDELINES_URI,
+            name = "kotlin-guidelines-resilience",
+            mimeType = MIME,
+            description = "Resilience and fault-tolerance guidelines for Kotlin: independent verification probing, verifiable state caching, and deterministic remediation state machines."
+        ) { _ ->
+            ReadResourceResult(listOf(TextResourceContents(text = RESILIENCE_TEXT, uri = RESILIENCE_GUIDELINES_URI, mimeType = MIME)))
         }
 
         server.addResource(
@@ -73,6 +86,10 @@ object ResourceRegistrar {
         appendLine()
         appendLine("Resources are available at `kotlin://docs/symbol/<name>` and `kotlin://docs/feature/<name>`.")
         appendLine()
+        appendLine("## Guidelines")
+        appendLine("- [Architecture & Testability]($GUIDELINES_URI)")
+        appendLine("- [Backend Resilience & Fault Tolerance]($RESILIENCE_GUIDELINES_URI)")
+        appendLine()
         appendLine("## Symbols")
         docService.symbolDocs.keys.sorted().forEach { appendLine("- [$it](kotlin://docs/symbol/${encode(it)})") }
         appendLine()
@@ -90,6 +107,18 @@ object ResourceRegistrar {
             - UI vs business-logic boundary isolation
             - Explicit DTO-to-domain mapping
             - Boundary testability
+            - Domain error modeling
+        """.trimIndent()
+    }
+
+    private val RESILIENCE_TEXT: String by lazy {
+        ResourceRegistrar::class.java.getResourceAsStream("/guidelines/resilience.md")?.use {
+            it.bufferedReader().readText()
+        } ?: """
+            # Kotlin Backend Resilience & Fault-Tolerance Guidelines
+            - Independent verification probing (Silence != Recovery)
+            - Verifiable state caching (Memory Must Not Lie)
+            - Deterministic typed state machines for remediation
         """.trimIndent()
     }
 

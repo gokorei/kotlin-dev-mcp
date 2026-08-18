@@ -38,4 +38,24 @@ class ResourceRegistrarTest {
         assertTrue(guideText.contains("Read-Only Tools"))
         assertTrue(guideText.contains("Edit / Mutating Tools"))
     }
+
+    @Test
+    fun `registerAll registers resilience guidelines resource with expected principles`() {
+        ResourceRegistrar.registerAll(server, docService)
+
+        assertEquals("kotlin://guidelines/resilience.md", ResourceRegistrar.RESILIENCE_GUIDELINES_URI)
+        val resilienceText = ResourceRegistrar.resilienceGuidelinesText
+        assertTrue(resilienceText.contains("# Kotlin Backend Resilience & Fault-Tolerance Guidelines"))
+        assertTrue(resilienceText.contains("Silence != Recovery") || resilienceText.contains("Silence \u2260 Recovery") || resilienceText.contains("Silence Is Not Recovery"))
+        assertTrue(resilienceText.contains("Memory Must Not Lie"))
+        assertTrue(resilienceText.contains("Deterministic State Machines") || resilienceText.contains("State Machine"))
+    }
+
+    @Test
+    fun `architecture guidelines include domain error modeling`() {
+        val archText = ResourceRegistrar.architectureGuidelinesText
+        assertTrue(archText.contains("Domain Error Modeling") || archText.contains("Errors as Values"))
+        assertTrue(archText.contains("sealed interface") || archText.contains("ApplicationError"))
+    }
 }
+
