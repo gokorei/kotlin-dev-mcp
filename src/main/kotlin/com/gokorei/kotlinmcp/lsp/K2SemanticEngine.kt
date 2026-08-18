@@ -43,7 +43,8 @@ data class ResolvedReference(
     val line: Int,
     val column: Int,
     val snippet: String,
-    val kind: String
+    val kind: String,
+    val fqn: String?
 )
 
 /**
@@ -201,24 +202,28 @@ class DefaultK2SemanticEngine : K2SemanticEngine {
         collect("Snippet.kt", session.file)
         workspaceFiles(workspacePath).forEach { collect(it.rel, it.psi) }
 
-        // Target descriptors: declarations with a real (non-local) FQN. Locals
-        // carry only their name (FQN == root), so they are excluded from the
-        // target set — their references would otherwise shadow the real symbol.
-        val targets = occurrences
-            .filter { it.kind == "decl" }
-            .mapNotNull { occ ->
-                val decl = occ.node as KtNamedDeclaration
-                val descriptor = ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, decl]
-                descriptor?.takeIf { !DescriptorUtils.isLocal(it) && isRealFqn(safeFqn(it)) }
-            }
+        val declOccurrences = occurrences.filter { it.kind == "decl" }
+        fun descriptorOf(decl: KtNamedDeclaration): DeclarationDescriptor? =
+            ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, decl]
 
-        fun toRow(occ: Occurrence, offset: Int): ResolvedReference {
+        // Target declarations: prefer symbols with a real (non-local) FQN across
+        // snippet + workspace. When the name has no real declaration anywhere,
+        // fall back to same-name local declarations so snippet-local symbols
+        // (e.g. a function parameter) still resolve to their usages.
+        val realTargets = declOccurrences
+            .mapNotNull { descriptorOf(it.node as KtNamedDeclaration) }
+            .filter { !DescriptorUtils.isLocal(it) && isRealFqn(safeFqn(it)) }
+        val targets: List<DeclarationDescriptor> =
+            if (realTargets.isNotEmpty()) realTargets
+            else declOccurrences.mapNotNull { descriptorOf(it.node as KtNamedDeclaration) }
+
+        fun toRow(occ: Occurrence, offset: Int, fqn: String?): ResolvedReference {
             val line = SourceUtils.lineOf(occ.file.text, offset)
             val lineStart = occ.file.text.lastIndexOf('\n', offset - 1) + 1
             val column = offset - lineStart + 1
             val end = occ.file.text.indexOf('\n', offset).let { if (it == -1) occ.file.text.length else it }
             val lineText = occ.file.text.substring(lineStart, end).trim()
-            return ResolvedReference(symbol, occ.rel, line, column, lineText, occ.kind)
+            return ResolvedReference(symbol, occ.rel, line, column, lineText, occ.kind, fqn)
         }
 
         val rows = mutableListOf<ResolvedReference>()
@@ -226,11 +231,15 @@ class DefaultK2SemanticEngine : K2SemanticEngine {
             when (occ.kind) {
                 "decl" -> {
                     val decl = occ.node as KtNamedDeclaration
-                    val descriptor = ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, decl]
-                    val notLocal = descriptor?.let { !DescriptorUtils.isLocal(it) } != false
-                    if (notLocal && (isRealFqn(safeFqn(descriptor)) || isRealFqn(runCatching { decl.fqName?.asString() }.getOrNull()))) {
+                    val d = descriptorOf(decl)
+                    if (d != null && targets.any { sameTarget(it, d) }) {
                         val offset = decl.nameIdentifier?.textRange?.startOffset ?: decl.textRange.startOffset
-                        rows += toRow(occ, offset)
+                        val fqn = if (!DescriptorUtils.isLocal(d)) {
+                            safeFqn(d)?.takeIf { isRealFqn(it) }
+                        } else {
+                            runCatching { decl.fqName?.asString() }.getOrNull()?.takeIf { isRealFqn(it) }
+                        }
+                        rows += toRow(occ, offset, fqn)
                     }
                 }
                 "ref" -> {
@@ -238,7 +247,13 @@ class DefaultK2SemanticEngine : K2SemanticEngine {
                     val target = ctx[BindingContext.REFERENCE_TARGET, expr]
                     val bound = target != null && targets.any { sameTarget(it, target) }
                     if (bound) {
-                        rows += toRow(occ, expr.textRange.startOffset)
+                        val effective = effectiveDescriptor(target)
+                        val fqn = if (effective != null && !DescriptorUtils.isLocal(effective)) {
+                            safeFqn(effective)?.takeIf { isRealFqn(it) }
+                        } else {
+                            null
+                        }
+                        rows += toRow(occ, expr.textRange.startOffset, fqn)
                     }
                 }
             }
@@ -310,10 +325,16 @@ class DefaultK2SemanticEngine : K2SemanticEngine {
         return scan { d -> sameTarget(d, effective) }
     }
 
+    private fun effectiveDescriptor(d: DeclarationDescriptor): DeclarationDescriptor =
+        (d as? ClassConstructorDescriptor)?.constructedClass ?: d
+
     private fun sameTarget(a: DeclarationDescriptor, b: DeclarationDescriptor): Boolean {
         if (a == b) return true
-        val fa = safeFqn(a)
-        val fb = safeFqn(b)
+        val ea = effectiveDescriptor(a)
+        val eb = effectiveDescriptor(b)
+        if (ea == eb) return true
+        val fa = safeFqn(ea)
+        val fb = safeFqn(eb)
         return fa != null && fb != null && isRealFqn(fa) && isRealFqn(fb) && fa == fb
     }
 

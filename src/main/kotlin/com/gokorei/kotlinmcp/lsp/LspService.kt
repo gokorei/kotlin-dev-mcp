@@ -171,49 +171,58 @@ class DefaultLspService(
         }
         val s = symbol.trim()
         val references = mutableListOf<String>()
-        val text = code
-        fun lineOf(offset: Int): Int = text.substring(0, minOf(offset, text.length)).count { '\n' == it } + 1
 
-        val psi = K2SnippetFrontend.parsePsi(code)
-        if (psi != null) {
-            val offsets = mutableSetOf<Int>()
-            psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
-                override fun visitSimpleNameExpression(expression: org.jetbrains.kotlin.psi.KtSimpleNameExpression) {
-                    if (expression.getReferencedName() == s) offsets.add(expression.textRange.startOffset)
-                    super.visitSimpleNameExpression(expression)
-                }
-            })
-            psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
-                override fun visitNamedDeclaration(declaration: org.jetbrains.kotlin.psi.KtNamedDeclaration) {
-                    if (declaration.name == s) {
-                        declaration.nameIdentifier?.textRange?.let { offsets.add(it.startOffset) }
-                    }
-                    super.visitNamedDeclaration(declaration)
-                }
-            })
-            offsets.sorted().forEach { offset ->
-                val snippetLine = lineOf(offset)
-                val lineText = text.lines().getOrNull(snippetLine - 1)?.trim().orEmpty()
-                references.add("Snippet: Line $snippetLine: `$lineText`")
-            }
-        } else {
-            code.lines().forEachIndexed { index, line ->
-                if (Regex("""\b${Regex.escape(s)}\b""").containsMatchIn(line)) {
-                    references.add("Snippet: Line ${index + 1}: `${line.trim()}`")
+        val session = runCatching { semanticEngine.session(workspacePath, code) }.getOrNull()
+        if (session != null) {
+            val rows = runCatching { semanticEngine.referencesForSymbol(session, s, workspacePath) }.getOrNull().orEmpty()
+            val ordered = rows.sortedWith(compareBy(
+                { if (it.file == "Snippet.kt") 0 else 1 },
+                { it.file },
+                { it.line },
+                { it.column }
+            ))
+            ordered.forEach { ref ->
+                val fqn = ref.fqn?.let { " → $it" }.orEmpty()
+                if (ref.file == "Snippet.kt") {
+                    references.add("Snippet: Line ${ref.line}: `${ref.snippet}`")
+                } else {
+                    references.add("${ref.file}: Line ${ref.line}: `${ref.snippet}`$fqn")
                 }
             }
         }
 
-        if (!workspacePath.isNullOrBlank()) {
-            val index = indexer.index(workspacePath)
-            val targetFqns = index.declarations.filter { it.name == s }.mapNotNull { it.fqn }.toSet()
-            index.occurrences.filter { occ ->
-                occ.name == s &&
-                    (targetFqns.isEmpty() || occ.fqn == null || occ.fqn in targetFqns) &&
-                    occ.file != "Snippet.kt"
-            }.sortedWith(compareBy({ it.file }, { it.line }, { it.column })).forEach { occ ->
-                val fqn = occ.fqn?.let { " → $it" }.orEmpty()
-                references.add("${occ.file}: Line ${occ.line}: `${occ.snippet}`$fqn")
+        if (references.isEmpty() && session == null) {
+            val text = code
+            fun lineOf(offset: Int): Int = text.substring(0, minOf(offset, text.length)).count { '\n' == it } + 1
+
+            val psi = K2SnippetFrontend.parsePsi(code)
+            if (psi != null) {
+                val offsets = mutableSetOf<Int>()
+                psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+                    override fun visitSimpleNameExpression(expression: org.jetbrains.kotlin.psi.KtSimpleNameExpression) {
+                        if (expression.getReferencedName() == s) offsets.add(expression.textRange.startOffset)
+                        super.visitSimpleNameExpression(expression)
+                    }
+                })
+                psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+                    override fun visitNamedDeclaration(declaration: org.jetbrains.kotlin.psi.KtNamedDeclaration) {
+                        if (declaration.name == s) {
+                            declaration.nameIdentifier?.textRange?.let { offsets.add(it.startOffset) }
+                        }
+                        super.visitNamedDeclaration(declaration)
+                    }
+                })
+                offsets.sorted().forEach { offset ->
+                    val snippetLine = lineOf(offset)
+                    val lineText = text.lines().getOrNull(snippetLine - 1)?.trim().orEmpty()
+                    references.add("Snippet: Line $snippetLine: `$lineText`")
+                }
+            } else {
+                code.lines().forEachIndexed { index, line ->
+                    if (Regex("""\b${Regex.escape(s)}\b""").containsMatchIn(line)) {
+                        references.add("Snippet: Line ${index + 1}: `${line.trim()}`")
+                    }
+                }
             }
         }
 
@@ -497,36 +506,23 @@ class DefaultLspService(
                 code = "INVALID_ARGUMENTS"
             )
         }
-        val index = indexer.index(workspacePath)
-        val targetFqns = index.declarations.filter { it.name == target }.mapNotNull { it.fqn }.toSet()
-        val refs = index.occurrences.filter { occ ->
-            occ.name == target &&
-                (targetFqns.isEmpty() || occ.fqn == null || occ.fqn in targetFqns)
-        }.sortedWith(compareBy({ it.file }, { it.line }, { it.column }))
+        val session = runCatching { semanticEngine.session(workspacePath, "") }.getOrNull()
+        val refs = session?.let {
+            runCatching { semanticEngine.referencesForSymbol(it, target, workspacePath) }.getOrNull().orEmpty()
+        }.orEmpty().sortedWith(compareBy({ it.file }, { it.line }, { it.column }))
 
         val content = if (refs.isNotEmpty()) {
-            val lines = refs.joinToString("\n") { occ ->
-                val kind = if (occ.kind == OccurrenceKind.DECLARATION) "decl" else "ref"
-                val fqn = occ.fqn?.let { " → $it" }.orEmpty()
-                "- ${occ.file}:${occ.line}:${occ.column} [$kind]$fqn `${occ.snippet}`"
+            val lines = refs.joinToString("\n") { ref ->
+                val fqn = ref.fqn?.let { " → $it" }.orEmpty()
+                "- ${ref.file}:${ref.line}:${ref.column} [${ref.kind}]$fqn `${ref.snippet}`"
             }
             "# Symbol References for `$target` (${refs.size} occurrences)\n\n$lines"
         } else {
             "No occurrences or references of symbol `$target` were found in the workspace."
         }
-        val metadata = buildMap {
-            put("symbol", target)
-            put("referenceCount", refs.size.toString())
-            put("fileCount", index.fileCount.toString())
-            if (index.truncated) {
-                put("truncated", "true")
-                put("maxFiles", index.maxFiles?.toString() ?: "")
-                put("totalKtFiles", index.totalKtFiles.toString())
-            }
-        }
         return KotlinMcpResult.Success(
-            content = indexStatusPrefix(index) + content,
-            metadata = metadata
+            content = content,
+            metadata = mapOf("symbol" to target, "referenceCount" to refs.size.toString())
         )
     }
 
