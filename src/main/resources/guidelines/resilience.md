@@ -11,7 +11,7 @@
 ## 3. Deterministic Typed State Machines for Remediation
 - Model production resilience workflows as bounded, strictly typed state machines (e.g., `ApplicationError -> AgentOutcome`) with zero escape hatches.
 - Separate remediation into:
-  - **Adaptive Path**: Instant recall of verified antibody recipes for known error signatures.
+  - **Adaptive Path**: Instant recall of verified remediation recipes for known error signatures.
   - **Innate Path**: Step-by-step exploration of bounded, idempotent micro-remediations (reconnect, flush, failover), each gated by an independent probe.
 - Avoid unconstrained, non-deterministic LLM prompt loops inside critical HTTP request lifecycles.
 
