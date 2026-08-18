@@ -108,6 +108,30 @@ class RunSnippetServiceTest {
     }
 
     @Test
+    fun `run_snippet with host_jvm runner captures output larger than the pipe buffer in full`() {
+        // Emit enough output to overflow the OS pipe buffer so the process and the
+        // reader thread must drain concurrently; the captured result (truncated to
+        // its tail) must still contain the final marker line, proving the reader
+        // was drained to completion rather than reporting partial output as complete.
+        val code = """
+            fun main() {
+                val chunk = "A".repeat(1_000_000) + "\n"
+                repeat(16) { print(chunk) }
+                print("END-OF-OUTPUT")
+            }
+        """.trimIndent()
+
+        val result = service.execute(code, timeoutMillis = 30_000L, runner = "host_jvm")
+
+        assertTrue(result.isSuccess, "expected success from host_jvm, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(
+            success.content.contains("END-OF-OUTPUT"),
+            "output tail must be fully captured, got: ${success.content.takeLast(200)}"
+        )
+    }
+
+    @Test
     fun `run_snippet with invalid javaPath returns actionable error asking LLM to provide javaPath`() {
         val code = """
             fun main() {

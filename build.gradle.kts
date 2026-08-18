@@ -77,6 +77,42 @@ val dumpToolingClasspaths = tasks.register("dumpToolingClasspaths") {
     }
 }
 
+// TK-94DK6TD1: When launched as `java -jar <all.jar>`, `java.class.path` is a
+// single entry (the flat uber jar) whose name matches none of SnippetCompiler's
+// library substrings, so its defaultImportsClasspath comes out EMPTY. To keep
+// snippet compilation/running working from the fat jar, the library jars a
+// snippet may import are copied into resources here and materialized to a temp
+// dir at runtime. The name list mirrors SnippetCompiler's library filter.
+val snippetClasspathArtifactFilter = listOf(
+    "kotlin-stdlib", "kotlinx-coroutines", "kotlinx-serialization",
+    "kotlinx-datetime", "arrow-core", "mockk", "turbine", "ktor"
+)
+
+val dumpSnippetClasspath = tasks.register("dumpSnippetClasspath") {
+    group = "build"
+    description = "Dumps the library jars a snippet may import (kotlin-stdlib, kotlinx-coroutines/-serialization/-datetime, arrow-core, mockk, turbine, ktor) into resources so SnippetCompiler can resolve imports when launched from the fat uberJar."
+    val outDir = layout.buildDirectory.dir("generated/tooling/snippet-classpath")
+    outputs.dir(outDir)
+    doLast {
+        val targetDir = outDir.get().asFile
+        targetDir.mkdirs()
+        val names = configurations.runtimeClasspath.get()
+            .filter { it.isFile }
+            .mapNotNull { file ->
+                val lower = file.name.lowercase()
+                if (snippetClasspathArtifactFilter.any { lower.contains(it) }) {
+                    file.copyTo(File(targetDir, file.name), overwrite = true)
+                    file.name
+                } else {
+                    null
+                }
+            }
+            .distinct()
+            .sorted()
+        File(targetDir, "snippet.classpath.txt").writeText(names.joinToString("\n"))
+    }
+}
+
 sourceSets {
     main {
         resources {
@@ -88,6 +124,7 @@ sourceSets {
 
 tasks.processResources {
     dependsOn(dumpToolingClasspaths)
+    dependsOn(dumpSnippetClasspath)
     dependsOn(processStdlibIndex)
 }
 
@@ -123,8 +160,12 @@ dependencies {
     // Testing
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
-    testImplementation("app.cash.turbine:turbine:1.1.0")
+    // Turbine (an advertised snippet-importable library) depends on
+    // kotlinx-coroutines-test at runtime, so both must be on runtimeClasspath
+    // for the fat-jar fallback (dumpSnippetClasspath) to bundle them. Moving
+    // them to implementation keeps them visible to tests as well.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    implementation("app.cash.turbine:turbine:1.1.0")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {

@@ -194,6 +194,16 @@ class DefaultRunSnippetService(
                     details = mapOf("timeoutMillis" to timeoutMillis.toString())
                 )
             } else {
+                // The process has exited, so its stdout/stderr pipe is closed and
+                // the reader thread is guaranteed to reach EOF and finish. Join it
+                // to completion (no deadline) so the captured output is fully
+                // drained before being reported — a fixed-time join could truncate
+                // large output yet report it as complete.
+                try {
+                    readerThread.join()
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                }
                 val rawText = String(output.toByteArray(), Charsets.UTF_8)
                 val text = LogTruncator.truncate(rawText)
                 val exit = process.exitValue()
