@@ -120,7 +120,13 @@ class DefaultProjectService(
             "\n- Subprojects: ${subprojects.joinToString(", ") { "`$it`" }}"
         } else ""
         val detectedTargets = detectTargets(content)
-        val kmpGuideline = if (detectedTargets.isNotEmpty() || content.contains("multiplatform")) {
+        val isKmpPlugin = plugins.any {
+            it == "kotlin(multiplatform)" ||
+            it == "id(org.jetbrains.kotlin.multiplatform)" ||
+            it == "org.jetbrains.kotlin.multiplatform"
+        }
+        val isKmp = isKmpPlugin || detectedTargets.isNotEmpty()
+        val kmpGuideline = if (isKmp) {
             "\n\n## Recommended Guidelines\n- [Multiplatform Web Storage (Room 3.0 & DataStore)](kotlin://guidelines/kmp-storage.md)"
         } else ""
 
@@ -379,7 +385,7 @@ class DefaultProjectService(
 
     private fun detectTargets(content: String): List<String> {
         val possibleTargets = listOf(
-            "jvm", "androidTarget", "android", "iosX64", "iosArm64", "iosSimulatorArm64",
+            "jvm", "androidTarget", "iosX64", "iosArm64", "iosSimulatorArm64",
             "js", "wasmJs", "macosX64", "macosArm64", "linuxX64", "mingwX64"
         )
         return possibleTargets.filter { target ->
@@ -389,8 +395,11 @@ class DefaultProjectService(
 
     private fun listKmpTargets(content: String): KotlinMcpResult {
         val detectedTargets = detectTargets(content)
+        val isKmpPlugin = content.contains("kotlin(\"multiplatform\")") ||
+            content.contains("org.jetbrains.kotlin.multiplatform") ||
+            content.contains("kotlin(\"kmp\")")
 
-        val output = if (detectedTargets.isNotEmpty()) {
+        val output = if (detectedTargets.isNotEmpty() || isKmpPlugin) {
             "# Kotlin Multiplatform (KMP) Targets\nFound ${detectedTargets.size} target(s):\n" +
                 detectedTargets.joinToString("\n") { " - `$it`" } +
                 "\n\nSource sets structure:\n - `commonMain` / `commonTest`\n" +
