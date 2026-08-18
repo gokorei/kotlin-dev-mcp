@@ -177,11 +177,12 @@ object ToolRegistrar {
             readOnly = true
             param("code", "Kotlin code snippet to compile-check")
             param("classpath", "Optional array of jar/dir paths added to compile classpath", type = "array", itemsType = "string")
+            param("projectPath", "Optional workspace root whose compiled classes (build/classes…), generated sources, and build/libs jars are added automatically to the compile classpath (aliases: workspacePath, path)")
             required("code")
             handleSimple { k, a ->
                 val code = a["code"].orEmpty()
                 val cp = a["classpath"]?.split(",", ";")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
-                k.checkSnippet(code, cp)
+                k.checkSnippet(code, cp, a["projectPath"])
             }
         }
     }
@@ -352,7 +353,7 @@ object ToolRegistrar {
                     defaultAction = "snippet",
                     args = a,
                     handlers = mapOf(
-                        "snippet" to { k.runSnippet(code, timeoutSec * 1000L, cp, "host_jvm", jvmArgs, null) },
+                        "snippet" to { k.runSnippet(code, timeoutSec * 1000L, cp, "host_jvm", jvmArgs, null, a["projectPath"]) },
                         "gradle_task" to { k.gradleRun(ws, task, timeoutSec * 1000L) },
                         "test_report" to { k.runTestReport(ws) }
                     )

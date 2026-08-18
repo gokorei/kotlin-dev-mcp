@@ -73,6 +73,7 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 | :--- | :--- | :--- | :--- |
 | `code` | `string` | **Yes** | Kotlin code snippet to compile-check |
 | `classpath` | `Array<string>` | No | Optional array of jar/dir paths added to compile classpath |
+| `projectPath` | `string` | No | Optional workspace root whose compiled classes (build/classes…), generated sources, and build/libs jars are added automatically to the compile classpath (aliases: workspacePath, path) |
 
 ---
 

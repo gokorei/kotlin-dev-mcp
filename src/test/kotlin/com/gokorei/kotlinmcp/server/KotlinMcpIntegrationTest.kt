@@ -359,5 +359,73 @@ class KotlinMcpIntegrationTest {
             cleanup(client, sessionJob, clientTransport)
         }
     }
+
+    @Test
+    fun `client kotlin_check_snippet resolves workspace types via workspacePath`() = runBlocking {
+        val server = serverWithTools()
+        val (client, sessionJob, clientTransport) = connectedClient(server)
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-int-ws-check")
+        try {
+            workspaceWithCompiledGreeter(workspace)
+
+            val result = client.callTool(
+                "kotlin_check_snippet",
+                mapOf(
+                    "code" to "import demo.Greeter\nfun main() { println(Greeter().greet()) }",
+                    "workspacePath" to workspace.toAbsolutePath().toString()
+                )
+            )
+            assertFalse(result.isError == true, "expected success, got: ${result.content}")
+            val text = result.content.joinToString { it.toString() }
+            assertTrue(text.contains("Compilation succeeded", ignoreCase = true), "expected clean compile, got: $text")
+        } finally {
+            workspace.toFile().deleteRecursively()
+            cleanup(client, sessionJob, clientTransport)
+        }
+    }
+
+    @Test
+    fun `client kotlin_run snippet action resolves and runs workspace types via workspacePath`() = runBlocking {
+        val server = serverWithTools()
+        val (client, sessionJob, clientTransport) = connectedClient(server)
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-int-ws-run")
+        try {
+            workspaceWithCompiledGreeter(workspace)
+
+            val result = client.callTool(
+                "kotlin_run",
+                mapOf(
+                    "action" to "snippet",
+                    "code" to "import demo.Greeter\nfun main() { println(Greeter(\"kota\").greet()) }",
+                    "workspacePath" to workspace.toAbsolutePath().toString(),
+                    "timeoutSeconds" to "30"
+                )
+            )
+            assertFalse(result.isError == true, "expected success, got: ${result.content}")
+            val text = result.content.joinToString { it.toString() }
+            assertTrue(text.contains("hi, kota"), "expected workspace type output, got: $text")
+        } finally {
+            workspace.toFile().deleteRecursively()
+            cleanup(client, sessionJob, clientTransport)
+        }
+    }
+
+    private fun workspaceWithCompiledGreeter(workspace: java.nio.file.Path) {
+        val lib = com.gokorei.kotlinmcp.execution.SnippetCompiler.compile("""
+            package demo
+            class Greeter(val name: String = "world") { fun greet(): String = "hi, ${'$'}name" }
+        """.trimIndent())
+        val libOut = (lib as com.gokorei.kotlinmcp.execution.CompileResult.Compiled).outDir
+        val classesDir = workspace.resolve("build/classes/kotlin/main")
+        java.nio.file.Files.createDirectories(classesDir)
+        libOut.toFile().walkTopDown().forEach { f ->
+            if (f.isFile) {
+                val dest = classesDir.resolve(libOut.relativize(f.toPath()).toString())
+                java.nio.file.Files.createDirectories(dest.parent)
+                java.nio.file.Files.copy(f.toPath(), dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            }
+        }
+        com.gokorei.kotlinmcp.execution.SnippetCompiler.cleanup(lib)
+    }
 }
 

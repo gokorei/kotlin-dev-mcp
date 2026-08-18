@@ -61,6 +61,49 @@ class SnippetCompilerTest {
     }
 
     @Test
+    fun `compile resolves workspace project types when projectPath is supplied`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-workspace-cp")
+        try {
+            val lib = SnippetCompiler.compile("""
+                package demo
+                class Greeter { fun greet(): String = "hello" }
+            """.trimIndent())
+            val libOut = (lib as CompileResult.Compiled).outDir
+
+            val classesDir = workspace.resolve("build/classes/kotlin/main")
+            java.nio.file.Files.createDirectories(classesDir)
+            libOut.toFile().walkTopDown().forEach { f ->
+                if (f.isFile) {
+                    val dest = classesDir.resolve(libOut.relativize(f.toPath()).toString())
+                    java.nio.file.Files.createDirectories(dest.parent)
+                    java.nio.file.Files.copy(f.toPath(), dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                }
+            }
+
+            val consumer = """
+                import demo.Greeter
+                fun main() { println(Greeter().greet()) }
+            """.trimIndent()
+
+            val without = SnippetCompiler.compile(consumer)
+            val withoutErrors = (without as? CompileResult.Compiled)
+                ?.diagnostics?.filter { it.severity == "error" }.orEmpty()
+            assertTrue(withoutErrors.isNotEmpty(), "expected unresolved reference without projectPath")
+
+            val with = SnippetCompiler.compile(consumer, projectPath = workspace.toString())
+            val withErrors = (with as? CompileResult.Compiled)
+                ?.diagnostics?.filter { it.severity == "error" }.orEmpty()
+            assertTrue(withErrors.isEmpty(), "expected no errors with projectPath, got: $withErrors")
+
+            SnippetCompiler.cleanup(lib)
+            SnippetCompiler.cleanup(without)
+            SnippetCompiler.cleanup(with)
+        } finally {
+            workspace.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
     fun `detectProjectClasspath finds KSP and KAPT generated code directories`() {
         val tempDir = java.nio.file.Files.createTempDirectory("kmcp-ksp-test")
         val kspDir = tempDir.resolve("build/generated/ksp/main/kotlin")
