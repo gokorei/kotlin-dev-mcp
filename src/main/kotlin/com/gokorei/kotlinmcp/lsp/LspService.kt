@@ -15,7 +15,8 @@ enum class LspAction {
     WORKSPACE_SEARCH,
     WORKSPACE_REFERENCES,
     TYPE_HIERARCHY,
-    CALL_HIERARCHY
+    CALL_HIERARCHY,
+    HOVER
 }
 
 /**
@@ -31,6 +32,9 @@ interface LspService {
         newName: String? = null,
         workspacePath: String? = null
     ): KotlinMcpResult
+
+    /** Releases the semantic engine's cached workspace PSI state (no-op by default). */
+    fun close() {}
 }
 
 class DefaultLspService(
@@ -56,7 +60,12 @@ class DefaultLspService(
             LspAction.WORKSPACE_REFERENCES -> workspaceReferences(symbol, workspacePath)
             LspAction.TYPE_HIERARCHY -> typeHierarchy(code, symbol, workspacePath)
             LspAction.CALL_HIERARCHY -> callHierarchy(code, symbol, workspacePath)
+            LspAction.HOVER -> hover(code, symbol, workspacePath)
         }
+    }
+
+    override fun close() {
+        semanticEngine.close()
     }
 
 
@@ -75,30 +84,35 @@ class DefaultLspService(
             if (ref != null) {
                 val resolved = runCatching { semanticEngine.resolveReference(session, ref, workspacePath) }.getOrNull()
                 when (resolved?.source) {
-                    ResolvedSource.SNIPPET -> return definitionResult(
-                        s, "Line ${resolved.line}", resolved.signature, line = resolved.line
+                    ResolvedSource.SNIPPET -> return wrapIncomplete(
+                        definitionResult(s, "Line ${resolved.line}", resolved.signature, line = resolved.line),
+                        workspacePath
                     )
-                    ResolvedSource.WORKSPACE -> return definitionResult(
-                        s, "${resolved.file}:${resolved.line}", resolved.signature, line = resolved.line, file = resolved.file
+                    ResolvedSource.WORKSPACE -> return wrapIncomplete(
+                        definitionResult(s, "${resolved.file}:${resolved.line}", resolved.signature, line = resolved.line, file = resolved.file),
+                        workspacePath
                     )
                     else -> Unit // EXTERNAL / UNRESOLVED fall through to the stdlib doc lookup
                 }
             }
             val decl = findSnippetDeclaration(session.file, s)
             if (decl != null) {
-                return definitionResult(s, "Line ${decl.first}", decl.second, line = decl.first)
+                return wrapIncomplete(
+                    definitionResult(s, "Line ${decl.first}", decl.second, line = decl.first),
+                    workspacePath
+                )
             }
         }
 
         val stdlibMatch = stdlibDocFor(s)
         if (stdlibMatch != null) {
             return KotlinMcpResult.Success(
-                content = "# Definition of `$s` (Kotlin Standard Library)\n- Type/Signature: $stdlibMatch",
+                content = incompletePrefix(workspacePath) + "# Definition of `$s` (Kotlin Standard Library)\n- Type/Signature: $stdlibMatch",
                 metadata = mapOf("symbol" to s, "found" to "true", "source" to "stdlib")
             )
         }
         return KotlinMcpResult.Success(
-            content = "Symbol `$s` declaration not found in snippet. It may be an external dependency or imported symbol.",
+            content = incompletePrefix(workspacePath) + "Symbol `$s` declaration not found in snippet. It may be an external dependency or imported symbol.",
             metadata = mapOf("symbol" to s, "found" to "false")
         )
     }
@@ -122,6 +136,12 @@ class DefaultLspService(
             if (file != null) put("file", file)
         }
         return KotlinMcpResult.Success(content = content.trim(), metadata = metadata)
+    }
+
+    private fun wrapIncomplete(result: KotlinMcpResult, workspacePath: String?): KotlinMcpResult {
+        val prefix = incompletePrefix(workspacePath)
+        if (prefix.isEmpty() || result !is KotlinMcpResult.Success) return result
+        return KotlinMcpResult.Success(content = prefix + result.content, metadata = result.metadata)
     }
 
     /** First reference expression in the snippet matching [symbol], if any. */
@@ -227,9 +247,9 @@ class DefaultLspService(
         }
 
         val content = if (references.isNotEmpty()) {
-            "# Symbol References for `$s` (${references.size} occurrences found)\n\n" + references.distinct().joinToString("\n")
+            incompletePrefix(workspacePath) + "# Symbol References for `$s` (${references.size} occurrences found)\n\n" + references.distinct().joinToString("\n")
         } else {
-            "No occurrences or references of symbol `$s` were found."
+            incompletePrefix(workspacePath) + "No occurrences or references of symbol `$s` were found."
         }
 
         return KotlinMcpResult.Success(
@@ -328,6 +348,7 @@ class DefaultLspService(
             }
 
             val content = buildString {
+                append(incompletePrefix(workspacePath))
                 if (isTruncated) {
                     appendLine("⚠ Workspace scan truncated: examined $maxFiles of $totalMatchingFiles Kotlin files.")
                     appendLine()
@@ -610,9 +631,9 @@ class DefaultLspService(
                 val fqn = ref.fqn?.let { " → $it" }.orEmpty()
                 "- ${ref.file}:${ref.line}:${ref.column} [${ref.kind}]$fqn `${ref.snippet}`"
             }
-            "# Symbol References for `$target` (${refs.size} occurrences)\n\n$lines"
+            incompletePrefix(workspacePath) + "# Symbol References for `$target` (${refs.size} occurrences)\n\n$lines"
         } else {
-            "No occurrences or references of symbol `$target` were found in the workspace."
+            incompletePrefix(workspacePath) + "No occurrences or references of symbol `$target` were found in the workspace."
         }
         return KotlinMcpResult.Success(
             content = content,
@@ -667,9 +688,20 @@ class DefaultLspService(
             )
         }
 
-        val res = indexer.typeHierarchyOf(code, target, workspacePath)
+        val fallback = shouldUseIndexFallback(workspacePath)
+        val res = when {
+            fallback -> indexer.typeHierarchyOf(code, target, workspacePath)
+            else -> {
+                val session = runCatching { semanticEngine.session(workspacePath, code) }.getOrNull()
+                session?.let { runCatching { semanticEngine.typeHierarchy(it, target, workspacePath) }.getOrNull() }
+                    ?: indexer.typeHierarchyOf(code, target, workspacePath)
+            }
+        }
 
         val content = buildString {
+            if (fallback) {
+                appendLine("⚠ Structural-index fallback: workspace exceeds the semantic-analysis cap.")
+            }
             appendLine("# Type Hierarchy for `$target`")
             appendLine("## Supertypes / Base Interfaces")
             if (res.supertypes.isNotEmpty()) res.supertypes.forEach { appendLine("- `$it`") } else appendLine("- (none)")
@@ -677,10 +709,16 @@ class DefaultLspService(
             appendLine("## Subtypes & Implementations")
             if (res.subtypes.isNotEmpty()) res.subtypes.forEach { appendLine("- `${it.name}`") } else appendLine("- (none)")
         }
+        val metadata = buildMap {
+            put("symbol", target)
+            put("supertypeCount", res.supertypes.size.toString())
+            put("subtypeCount", res.subtypes.size.toString())
+            if (fallback) put("fallback", "structural-index")
+        }
 
         return KotlinMcpResult.Success(
             content = content,
-            metadata = mapOf("symbol" to target, "supertypeCount" to res.supertypes.size.toString(), "subtypeCount" to res.subtypes.size.toString())
+            metadata = metadata
         )
     }
 
@@ -693,9 +731,20 @@ class DefaultLspService(
             )
         }
 
-        val res = indexer.callHierarchyOf(code, target, workspacePath)
+        val fallback = shouldUseIndexFallback(workspacePath)
+        val res = when {
+            fallback -> indexer.callHierarchyOf(code, target, workspacePath)
+            else -> {
+                val session = runCatching { semanticEngine.session(workspacePath, code) }.getOrNull()
+                session?.let { runCatching { semanticEngine.callHierarchy(it, target, workspacePath) }.getOrNull() }
+                    ?: indexer.callHierarchyOf(code, target, workspacePath)
+            }
+        }
 
         val content = buildString {
+            if (fallback) {
+                appendLine("⚠ Structural-index fallback: workspace exceeds the semantic-analysis cap.")
+            }
             appendLine("# Call Hierarchy for `$target`")
             appendLine("## Incoming Calls & Usage Sites")
             if (res.callers.isNotEmpty()) {
@@ -711,11 +760,100 @@ class DefaultLspService(
                 appendLine("- (none found in snippet)")
             }
         }
+        val metadata = buildMap {
+            put("symbol", target)
+            put("callerCount", res.callers.size.toString())
+            if (fallback) put("fallback", "structural-index")
+        }
 
         return KotlinMcpResult.Success(
             content = content,
-            metadata = mapOf("symbol" to target, "callerCount" to res.callers.size.toString())
+            metadata = metadata
         )
+    }
+
+    private fun hover(code: String, symbol: String?, workspacePath: String?): KotlinMcpResult {
+        val target = symbol?.trim().orEmpty()
+        if (target.isEmpty()) {
+            return KotlinMcpResult.Error(
+                message = "Symbol name is required for hover.",
+                code = "INVALID_ARGUMENTS"
+            )
+        }
+
+        val session = runCatching { semanticEngine.session(workspacePath, code) }.getOrNull()
+        val info = session?.let { runCatching { semanticEngine.hover(it, target, workspacePath) }.getOrNull() }
+
+        if (info == null) {
+            val snippetDecl = session?.let { findSnippetDeclaration(it.file, target) }
+            if (snippetDecl != null) {
+                return KotlinMcpResult.Success(
+                    content = buildString {
+                        appendLine("# Hover: `$target`")
+                        appendLine("- Signature: `${snippetDecl.second}`")
+                        appendLine("- Defined at: Line ${snippetDecl.first}")
+                    }.trim(),
+                    metadata = mapOf("symbol" to target, "found" to "true", "source" to ResolvedSource.SNIPPET.name)
+                )
+            }
+            return KotlinMcpResult.Success(
+                content = "Symbol `$target` is unresolved in the snippet: no reference or declaration with that name was found.",
+                metadata = mapOf("symbol" to target, "found" to "false", "source" to ResolvedSource.UNRESOLVED.name)
+            )
+        }
+
+        val content = buildString {
+            appendLine("# Hover: `$target`")
+            info.signature?.let { appendLine("- Signature: `$it`") }
+            info.type?.let { appendLine("- Type: `$it`") }
+            info.fqn?.let { appendLine("- FQN: `$it`") }
+            val location = when (info.source) {
+                ResolvedSource.SNIPPET -> "Snippet.kt${info.line?.let { ":${it}" }.orEmpty()}"
+                ResolvedSource.WORKSPACE -> "${info.file}:${info.line}"
+                ResolvedSource.EXTERNAL -> "External (stdlib / dependency)"
+                else -> info.file ?: "Unknown"
+            }
+            appendLine("- Location: $location")
+            val docs = (info.kdoc ?: stdlibDocFor(target))?.let { "- Documentation:\n```\n$it\n```" }
+            if (docs != null) {
+                appendLine()
+                appendLine(docs)
+            }
+        }
+        val metadata = buildMap {
+            put("symbol", target)
+            put("found", "true")
+            put("source", info.source.name)
+            if (info.type != null) put("type", info.type)
+            if (info.signature != null) put("signature", info.signature)
+        }
+        return KotlinMcpResult.Success(
+            content = content.trim(),
+            metadata = metadata
+        )
+    }
+
+    /** Prefix marking results as possibly incomplete when the workspace exceeds the semantic file cap. */
+    private fun incompletePrefix(workspacePath: String?): String {
+        if (workspacePath.isNullOrBlank()) return ""
+        val stats = runCatching { semanticEngine.workspaceStats(workspacePath) }.getOrNull() ?: return ""
+        if (!stats.truncated) return ""
+        return "⚠ Workspace scan truncated: analyzed ${stats.analyzedFiles} of ${stats.totalKtFiles} .kt files " +
+            "(semantic cap ${semanticEngine.workspaceFileCap}). Results may be incomplete.\n\n"
+    }
+
+    private val semanticHierarchyMaxFiles: Int =
+        System.getenv("WORKSPACE_MAX_FILES")?.toIntOrNull() ?: 200
+
+    private fun shouldUseIndexFallback(workspacePath: String?): Boolean {
+        if (workspacePath.isNullOrBlank()) return false
+        val root = File(workspacePath)
+        if (!root.isDirectory) return false
+        val count = root.walkTopDown().onEnter { dir ->
+            val name = dir.name
+            name != "build" && name != ".gradle" && name != ".git" && name != "out" && name != "node_modules"
+        }.count { it.isFile && it.extension == "kt" }
+        return count > semanticHierarchyMaxFiles
     }
 
 }

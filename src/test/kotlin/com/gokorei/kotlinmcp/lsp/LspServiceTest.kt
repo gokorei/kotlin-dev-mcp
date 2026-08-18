@@ -443,7 +443,7 @@ class LspServiceTest {
 
         val result = service.execute(
             LspAction.TYPE_HIERARCHY,
-            code = "package com.example.app\nclass AppService : BaseService",
+            code = "package com.example.app\nimport com.example.domain.BaseService\nclass AppService : BaseService",
             symbol = "BaseService",
             workspacePath = workspace.toString()
         )
@@ -475,7 +475,7 @@ class LspServiceTest {
 
         val result = service.execute(
             LspAction.CALL_HIERARCHY,
-            code = "package com.example.main\nfun start() { executeAction() }",
+            code = "package com.example.main\nimport com.example.utils.executeAction\nfun start() { executeAction() }",
             symbol = "executeAction",
             workspacePath = workspace.toString()
         )
@@ -483,6 +483,207 @@ class LspServiceTest {
         val success = result as KotlinMcpResult.Success
         assertTrue(success.content.contains("runAll"), "callers in workspace should be identified: ${success.content}")
         assertTrue(success.content.contains("start"), "callers in snippet should be identified: ${success.content}")
+
+        workspace.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `callHierarchy derives callers from resolved call sites only`() {
+        // An unbound same-name member call must not be reported as a caller.
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-callh-bound")
+        workspace.resolve("Service.kt").toFile().writeText("""
+            package app
+
+            fun refresh() {}
+            class Widget { fun refresh() {} }
+        """.trimIndent())
+        workspace.resolve("Use.kt").toFile().writeText("""
+            package app
+
+            fun useWidget() { Widget().refresh() }
+        """.trimIndent())
+
+        val result = service.execute(
+            LspAction.CALL_HIERARCHY,
+            code = "package app\nfun go() { refresh() }",
+            symbol = "refresh",
+            workspacePath = workspace.toString()
+        )
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("go"), "snippet caller should be identified: ${success.content}")
+        assertFalse(success.content.contains("useWidget"), "unbound member call must not be a caller: ${success.content}")
+
+        workspace.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `typeHierarchy falls back to the structural index with an explicit marker over the cap`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-typeh-fallback")
+        for (i in 1..201) {
+            workspace.resolve("f$i.kt").toFile().writeText("fun f$i() {}\n")
+        }
+
+        val result = service.execute(
+            LspAction.TYPE_HIERARCHY,
+            code = "interface Repository\nclass SqlRepository : Repository",
+            symbol = "Repository",
+            workspacePath = workspace.toString()
+        )
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("Structural-index fallback"), "expected explicit fallback marker: ${success.content}")
+        assertTrue(success.content.contains("SqlRepository"), "fallback result should still find subtypes: ${success.content}")
+
+        workspace.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `hover on a function symbol returns its resolved signature and KDoc`() {
+        val snippet = """
+            /**
+             * Computes the squared value of an integer.
+             */
+            fun square(x: Int): Int = x * x
+
+            fun main() { square(4) }
+        """.trimIndent()
+
+        val result = service.execute(LspAction.HOVER, snippet, symbol = "square")
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("fun square"), "expected rendered signature: ${success.content}")
+        assertTrue(success.content.contains("Type: `kotlin.Int`"), "expected call return type: ${success.content}")
+        assertTrue(success.content.contains("Documentation"), "expected docs section: ${success.content}")
+        assertTrue(success.content.contains("squared value"), "expected KDoc body: ${success.content}")
+    }
+
+    @Test
+    fun `hover on a property returns its resolved type`() {
+        val snippet = """
+            val pageSize: Int = 20
+        """.trimIndent()
+
+        val result = service.execute(LspAction.HOVER, snippet, symbol = "pageSize")
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("Type: `kotlin.Int`"), "expected resolved property type: ${success.content}")
+        assertTrue(success.content.contains("val pageSize"), "expected rendered declaration: ${success.content}")
+    }
+
+    @Test
+    fun `hover on unknown symbol returns a clear unresolved response`() {
+        val result = service.execute(LspAction.HOVER, "fun main() { println(1) }", symbol = "nonExistentSymbol")
+        assertTrue(result is KotlinMcpResult.Success, "expected success (unresolved is a value, not an error): ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("unresolved", ignoreCase = true), "expected explicit unresolved message: ${success.content}")
+        assertEquals("false", success.metadata["found"])
+    }
+
+    @Test
+    fun `hover on a workspace function resolves its signature and file`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-hover-ws")
+        workspace.resolve("Greeter.kt").toFile().writeText("""
+            package app
+            /** Says a friendly greeting. */
+            fun greet(user: String): String = "hi, ${'$'}user"
+        """.trimIndent())
+
+        val result = service.execute(
+            LspAction.HOVER,
+            code = "package app\nimport app.greet\nfun demo() = greet(\"ada\")",
+            symbol = "greet",
+            workspacePath = workspace.toString()
+        )
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("fun greet(user: kotlin.String): kotlin.String"), "expected external signature: ${success.content}")
+        assertTrue(success.content.contains("Greeter.kt"), "expected workspace location: ${success.content}")
+        assertTrue(success.content.contains("friendly greeting"), "expected KDoc from workspace declaration: ${success.content}")
+
+        workspace.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `semantic workspace parse is cached and invalidated only when files change`() {
+        val engine = DefaultK2SemanticEngine()
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-cache")
+        workspace.resolve("a.kt").toFile().writeText("package app\nfun alpha() {}\n")
+        workspace.resolve("b.kt").toFile().writeText("package app\nfun beta() = alpha()\n")
+
+        engine.session(workspace.toString(), "package app\nfun demo() = alpha()")
+        val rebuildsAfterFirst = engine.workspaceRebuilds
+        assertTrue(rebuildsAfterFirst > 0, "first analysis must parse the workspace")
+
+        repeat(5) {
+            engine.session(workspace.toString(), "package app\nfun demo() = alpha()")
+        }
+        assertEquals(rebuildsAfterFirst, engine.workspaceRebuilds, "unchanged workspace must reuse the cached parse")
+
+        val changed = workspace.resolve("b.kt").toFile()
+        changed.writeText("package app\nfun beta() = alpha()\n// touched")
+        changed.setLastModified(System.currentTimeMillis() + 2000)
+        engine.session(workspace.toString(), "package app\nfun demo() = alpha()")
+
+        assertTrue(engine.workspaceRebuilds > rebuildsAfterFirst, "file change must invalidate and re-parse")
+
+        val stats = engine.workspaceStats(workspace.toString())
+        assertEquals(2, stats.totalKtFiles)
+        assertEquals(2, stats.analyzedFiles)
+        assertFalse(stats.truncated)
+
+        workspace.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `closed semantic engine tears down safely and stops serving`() {
+        val engine = DefaultK2SemanticEngine()
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-teardown")
+        workspace.resolve("a.kt").toFile().writeText("package app\nfun alpha() {}\n")
+
+        assertNotNull(engine.session(workspace.toString(), "fun demo() = alpha()"), "engine serves before close")
+        engine.close()
+        assertNull(engine.session(workspace.toString(), "fun demo() = alpha()"), "engine must stop serving after close")
+        val stats = engine.workspaceStats(workspace.toString())
+        assertEquals(0, stats.totalKtFiles, "work after teardown must degrade to empty stats, not throw")
+
+        workspace.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `workspace over the semantic file cap is marked incomplete instead of failing`() {
+        val engine = DefaultK2SemanticEngine(fileCap = 2)
+        val capped = DefaultLspService(semanticEngine = engine)
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-cap")
+        workspace.resolve("a.kt").toFile().writeText("package app\nval shared = 42\n")
+        workspace.resolve("b.kt").toFile().writeText("package app\nfun useShared() = shared.toString()\n")
+        workspace.resolve("c.kt").toFile().writeText("package app\nfun extra() {}\n")
+
+        val result = capped.execute(
+            LspAction.FIND_REFERENCES, code = "", symbol = "shared", workspacePath = workspace.toString()
+        )
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertFalse(result.isError, "over-cap must not fail")
+        assertTrue(success.content.contains("truncated", ignoreCase = true), "expected incomplete marker: ${success.content}")
+        assertTrue(success.content.contains("2 of 3"), "expected analyzed/total counts: ${success.content}")
+
+        workspace.toFile().deleteRecursively()
+        engine.close()
+    }
+
+    @Test
+    fun `unanalyzable or non-source workspaces degrade gracefully without error`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-degrade")
+        workspace.resolve("junk.kt").toFile().writeBytes(ByteArray(4096) { 0x00 })
+        workspace.resolve("app.kt").toFile().writeText("package app\nfun make() = 42\n")
+
+        val result = service.execute(
+            LspAction.FIND_DEFINITION, code = "package app\nfun caller() = make()", symbol = "make",
+            workspacePath = workspace.toString()
+        )
+        assertTrue(result !is KotlinMcpResult.Error, "binary junk must not surface as an error: ${result.toFormattedText()}")
+        assertTrue(result is KotlinMcpResult.Success, "expected success fallback, got: ${result.toFormattedText()}")
 
         workspace.toFile().deleteRecursively()
     }

@@ -36,13 +36,13 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 
 ### `kotlin_text_lsp_read`
 
-**Description:** AST text services: find definitions, references, completions, search workspace, or trace call/type hierarchies.
+**Description:** AST text services: find definitions, references, completions, search workspace, trace call/type hierarchies, or hover a symbol.
 
-**Supported Actions:** `definition`, `references`, `completion`, `workspace_search`, `workspace_references`, `type_hierarchy`, `call_hierarchy`
+**Supported Actions:** `definition`, `references`, `completion`, `workspace_search`, `workspace_references`, `type_hierarchy`, `call_hierarchy`, `hover`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | LSP action: 'definition' (default), 'references', 'completion', 'workspace_search' (fuzzy symbol search), 'workspace_references' (exact reference locations), 'type_hierarchy' (super/subtypes), 'call_hierarchy' (incoming/outgoing calls) |
+| `action` | `string` | No | LSP action: 'definition' (default), 'references', 'completion', 'workspace_search' (fuzzy symbol search), 'workspace_references' (exact reference locations), 'type_hierarchy' (super/subtypes), 'call_hierarchy' (incoming/outgoing calls), 'hover' (resolved type, signature and KDoc) |
 | `code` | `string` | No | Kotlin source code snippet context |
 | `symbol` | `string` | No | Target symbol name (or prefix for completion, or query for workspace_search) |
 | `workspacePath` | `string` | No | Optional root directory path of workspace (required for workspace_search/workspace_references/hierarchies) |

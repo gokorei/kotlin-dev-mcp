@@ -29,7 +29,7 @@ The server consolidates its surface into **11 tools** (5 read-only, 6 mutating) 
 | `kotlin_docs_read` | `search`, `lookup`, `explain` | **Documentation**: Query stdlib symbols and language features; search index or lookup signatures. |
 | `kotlin_check_snippet` | *(Direct)* | **Diagnostics**: Compile Kotlin snippets in-process using embedded K2 compiler and report line:col errors. |
 | `kotlin_code_analyze` | `inspect`, `nullability`, `coroutines`, `compose`, `file_context` | **Code Analysis**: AST inspection, unsafe null handling, coroutines scope safety, Compose anti-patterns, and cross-file dependencies. |
-| `kotlin_text_lsp_read` | `definition`, `references`, `completion`, `workspace_search`, `workspace_references`, `type_hierarchy`, `call_hierarchy` | **Text / LSP**: Compiler AST text services, symbol definitions, multi-file workspace search/references, and type/call hierarchies. |
+| `kotlin_text_lsp_read` | `definition`, `references`, `completion`, `workspace_search`, `workspace_references`, `type_hierarchy`, `call_hierarchy`, `hover` | **Text / LSP**: Compiler AST text services, symbol definitions, multi-file workspace search/references, type/call hierarchies, and hover signatures/KDoc. |
 | `kotlin_project_inspect` | `structure`, `kmp_targets`, `dependencies`, `schema_digest`, `diagnose_build`, `layout_inventory`, `vulnerabilities`, `package_api`, `coverage_report` | **Project**: Gradle build scripts, KMP targets, security vulnerability audits (CVEs), public package API surface dumping, API/DB schema digest (SQL DDL, Exposed tables, @Serializable DTOs, OpenAPI), and JaCoCo coverage reports. |
 
 ### Mutating / Edit Tools (`readOnly = false`)

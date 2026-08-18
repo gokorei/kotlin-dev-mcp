@@ -119,6 +119,14 @@ class KotlinMcpServer(
     fun lspCallHierarchy(code: String, symbol: String?, workspacePath: String?): KotlinMcpResult =
         textService.execute(LspAction.CALL_HIERARCHY, code, symbol = symbol, workspacePath = workspacePath)
 
+    fun lspHover(code: String, symbol: String?, workspacePath: String?): KotlinMcpResult =
+        textService.execute(LspAction.HOVER, code, symbol = symbol, workspacePath = workspacePath)
+
+    /** Releases cached PSI / analysis state held by the embedded services (safe to call once at shutdown). */
+    fun close() {
+        textService.close()
+    }
+
 
     // ---- kotlin_check_snippet / project layout ----
 

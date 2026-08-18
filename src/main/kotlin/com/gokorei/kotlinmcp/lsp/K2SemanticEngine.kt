@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.descriptors.MemberDescriptor
 import org.jetbrains.kotlin.descriptors.ModuleDescriptor
 import org.jetbrains.kotlin.psi.KtExpression
+import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtNamedDeclaration
 import org.jetbrains.kotlin.psi.KtParameter
@@ -30,6 +31,9 @@ import java.io.File
 
 /** Where a resolved symbol's declaration lives. */
 enum class ResolvedSource { SNIPPET, WORKSPACE, EXTERNAL, UNRESOLVED }
+
+/** Default cap on `.kt` files semantically analyzed per workspace (`WORKSPACE_SEMANTIC_MAX_FILES` overrides). */
+const val SEMANTIC_FILE_CAP: Int = 2000
 
 /**
  * A resolved declaration target: where a reference points, plus the identifier
@@ -68,6 +72,25 @@ data class ResolvedReference(
     val snippet: String,
     val kind: String,
     val fqn: String?
+)
+
+/** Resolved hover info for a symbol in a snippet: type, signature, KDoc, location. */
+data class KtHoverInfo(
+    val symbol: String,
+    val type: String?,
+    val signature: String?,
+    val fqn: String?,
+    val source: ResolvedSource,
+    val file: String?,
+    val line: Int?,
+    val kdoc: String?
+)
+
+/** Stats for the semantically analyzed workspace: file-count cap applied. */
+data class WorkspaceStats(
+    val totalKtFiles: Int,
+    val analyzedFiles: Int,
+    val truncated: Boolean
 )
 
 /**
@@ -128,7 +151,41 @@ fun completionCandidates(session: K2AnalysisSession, prefix: String): KotlinComp
      * the rename target and unrelated same-name symbols elsewhere are left
      * alone; otherwise the workspace-level declaration is renamed.
      */
-    fun renameEditsForSymbol(session: K2AnalysisSession, symbol: String, workspacePath: String?): List<ResolvedRenameEdit>
+fun renameEditsForSymbol(session: K2AnalysisSession, symbol: String, workspacePath: String?): List<ResolvedRenameEdit>
+
+    /**
+     * Type hierarchy for a class/interface/object named [symbol], derived from
+     * resolved types: supertype FQNs from the class descriptor and every
+     * class/object whose resolved supertype chain reaches it.
+     */
+    fun typeHierarchy(session: K2AnalysisSession, symbol: String, workspacePath: String?): KtTypeHierarchyResult
+
+    /**
+     * Call hierarchy for [symbol]: every resolved call site (across snippet and
+     * workspace) whose callee binds to a target function named [symbol], with
+     * its enclosing function. Derived from call sites' resolved targets, not
+     * name matching.
+     */
+    fun callHierarchy(session: K2AnalysisSession, symbol: String, workspacePath: String?): KtCallHierarchyResult
+
+    /**
+     * Hover info for a symbol in the snippet: the resolved type of the
+     * reference/call, the rendered descriptor signature, the FQN, where the
+     * declaration lives (snippet / workspace / external), and its KDoc when the
+     * declaration is source-visible. Returns `null` when [symbol] has neither a
+     * matching reference nor declaration in the snippet.
+     */
+    fun hover(session: K2AnalysisSession, symbol: String, workspacePath: String?): KtHoverInfo?
+
+    /**
+     * Semantically-analyzed workspace file cap: workspaces with more `.kt`
+     * files than this are truncated on analysis and their results should be
+     * surfaced as potentially incomplete.
+     */
+    val workspaceFileCap: Int
+
+    /** Total vs analyzed `.kt` file counts for a workspace, with the cap applied. */
+    fun workspaceStats(workspacePath: String?): WorkspaceStats
 
     /** Compiled-class / build-libs classpath detected under the workspace. */
     fun projectClasspath(workspacePath: String?): List<String>
@@ -140,14 +197,19 @@ fun completionCandidates(session: K2AnalysisSession, prefix: String): KotlinComp
     fun close()
 }
 
-class DefaultK2SemanticEngine : K2SemanticEngine {
+class DefaultK2SemanticEngine(
+    private val fileCap: Int = System.getenv("WORKSPACE_SEMANTIC_MAX_FILES")?.toIntOrNull() ?: SEMANTIC_FILE_CAP
+) : K2SemanticEngine {
+
+    override val workspaceFileCap: Int get() = fileCap
 
     private data class WorkspaceFile(val rel: String, val file: File, val psi: KtFile)
 
     private data class WorkspaceSnapshot(
         val root: File,
         val files: List<WorkspaceFile>,
-        val lastModified: Map<File, Long>
+        val lastModified: Map<File, Long>,
+        val totalFiles: Int = files.size
     )
 
     @Volatile
@@ -490,8 +552,218 @@ class DefaultK2SemanticEngine : K2SemanticEngine {
         return edits.distinct().map { ResolvedRenameEdit(it.rel, it.offset, symbol.length) }
     }
 
+    override fun typeHierarchy(session: K2AnalysisSession, symbol: String, workspacePath: String?): KtTypeHierarchyResult {
+        if (closed) return KtTypeHierarchyResult(symbol, emptyList(), emptyList())
+        val ctx = session.bindingContext
+
+        data class ClassEntry(val rel: String, val psi: KtFile, val node: org.jetbrains.kotlin.psi.KtClassOrObject)
+
+        val classes = mutableListOf<ClassEntry>()
+        fun collect(rel: String, psi: KtFile) {
+            psi.accept(object : KtTreeVisitorVoid() {
+                override fun visitClassOrObject(classOrObject: org.jetbrains.kotlin.psi.KtClassOrObject) {
+                    if (classOrObject.name == symbol) classes += ClassEntry(rel, psi, classOrObject)
+                    super.visitClassOrObject(classOrObject)
+                }
+            })
+        }
+        collect("Snippet.kt", session.file)
+        workspaceFiles(workspacePath).forEach { collect(it.rel, it.psi) }
+
+        val ordered = classes.filter { it.rel == "Snippet.kt" } + classes.filter { it.rel != "Snippet.kt" }
+        val descriptors = ordered.mapNotNull { ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, it.node] as? ClassDescriptor }
+        val realDescriptors = descriptors.filter { isRealFqn(safeFqn(it)) }
+        val target = (realDescriptors.ifEmpty { descriptors }).firstOrNull()
+        if (target == null) return KtTypeHierarchyResult(symbol, emptyList(), emptyList())
+
+        val supertypes = target.typeConstructor.supertypes
+            .mapNotNull { runCatching { DescriptorRenderer.FQ_NAMES_IN_TYPES.renderType(it) }.getOrNull() }
+            .distinct()
+
+        fun inherits(d: ClassDescriptor): Boolean {
+            val queue = ArrayDeque<ClassDescriptor>()
+            val seen = hashSetOf<DeclarationDescriptor>()
+            queue.add(d)
+            while (queue.isNotEmpty()) {
+                val cur = queue.removeFirst()
+                if (!seen.add(cur)) continue
+                for (superType in cur.typeConstructor.supertypes) {
+                    val dd = superType.constructor.declarationDescriptor as? ClassDescriptor ?: continue
+                    if (sameTarget(dd, target)) return true
+                    queue.add(dd)
+                }
+            }
+            return false
+        }
+
+        val subtypes = mutableListOf<KtTypeOccurrence>()
+        fun scanForSubtypes(rel: String, psi: KtFile) {
+            psi.accept(object : KtTreeVisitorVoid() {
+                override fun visitClassOrObject(classOrObject: org.jetbrains.kotlin.psi.KtClassOrObject) {
+                    val d = ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, classOrObject] as? ClassDescriptor
+                    val name = classOrObject.name
+                    if (d != null && inherits(d) && name != null) {
+                        val offset = classOrObject.nameIdentifier?.textRange?.startOffset ?: classOrObject.textRange.startOffset
+                        subtypes += KtTypeOccurrence(name, rel, SourceUtils.lineOf(psi.text, offset))
+                    }
+                    super.visitClassOrObject(classOrObject)
+                }
+            })
+        }
+        scanForSubtypes("Snippet.kt", session.file)
+        workspaceFiles(workspacePath).forEach { scanForSubtypes(it.rel, it.psi) }
+
+        return KtTypeHierarchyResult(symbol, supertypes, subtypes.distinctBy { Pair(it.name, it.file) })
+    }
+
+    override fun callHierarchy(session: K2AnalysisSession, symbol: String, workspacePath: String?): KtCallHierarchyResult {
+        if (closed) return KtCallHierarchyResult(symbol, emptyList())
+        val ctx = session.bindingContext
+
+        fun pickTargets(candidates: List<DeclarationDescriptor>): List<DeclarationDescriptor> {
+            val real = candidates.filter { !DescriptorUtils.isLocal(it) && isRealFqn(safeFqn(it)) }
+            return (if (real.isNotEmpty()) real else candidates).distinct()
+        }
+
+        val functionDecls = mutableListOf<Pair<String, KtNamedDeclaration>>()
+        val snippetCallTargets = mutableListOf<DeclarationDescriptor>()
+        fun collect(rel: String, psi: KtFile) {
+            psi.accept(object : KtTreeVisitorVoid() {
+                override fun visitNamedFunction(function: org.jetbrains.kotlin.psi.KtNamedFunction) {
+                    if (function.name == symbol) functionDecls += rel to function
+                    super.visitNamedFunction(function)
+                }
+
+                override fun visitCallExpression(expression: org.jetbrains.kotlin.psi.KtCallExpression) {
+                    val callee = expression.calleeExpression as? org.jetbrains.kotlin.psi.KtSimpleNameExpression
+                    if (callee != null && callee.getReferencedName() == symbol && rel == "Snippet.kt") {
+                        ctx[BindingContext.REFERENCE_TARGET, callee]?.let { snippetCallTargets.add(it) }
+                    }
+                    super.visitCallExpression(expression)
+                }
+            })
+        }
+        collect("Snippet.kt", session.file)
+        workspaceFiles(workspacePath).forEach { collect(it.rel, it.psi) }
+
+        val snippetDeclTargets = functionDecls
+            .filter { it.first == "Snippet.kt" }
+            .mapNotNull { (_, decl) -> ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, decl] }
+        val targets: List<DeclarationDescriptor> = when {
+            snippetDeclTargets.isNotEmpty() -> pickTargets(snippetDeclTargets)
+            snippetCallTargets.isNotEmpty() -> pickTargets(snippetCallTargets)
+            else -> pickTargets(functionDecls.mapNotNull { (_, decl) -> ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, decl] })
+        }
+        if (targets.isEmpty()) return KtCallHierarchyResult(symbol, emptyList())
+
+        fun enclosingFunction(node: org.jetbrains.kotlin.com.intellij.psi.PsiElement): org.jetbrains.kotlin.psi.KtNamedFunction? {
+            var ancestor = node.parent
+            while (ancestor != null) {
+                if (ancestor is org.jetbrains.kotlin.psi.KtNamedFunction) return ancestor
+                ancestor = ancestor.parent
+            }
+            return null
+        }
+
+        val callers = mutableListOf<KtCallOccurrence>()
+        fun scanCalls(rel: String, psi: KtFile) {
+            psi.accept(object : KtTreeVisitorVoid() {
+                override fun visitCallExpression(expression: org.jetbrains.kotlin.psi.KtCallExpression) {
+                    val callee = expression.calleeExpression as? org.jetbrains.kotlin.psi.KtSimpleNameExpression
+                    val resolved = callee?.let { ctx[BindingContext.REFERENCE_TARGET, it] }
+                    if (resolved != null && targets.any { sameTarget(it, resolved) }) {
+                        val enclosing = enclosingFunction(expression)
+                        val line = SourceUtils.lineOf(psi.text, expression.textRange.startOffset)
+                        callers += KtCallOccurrence(enclosing?.name, rel, line, expression.text.take(80))
+                    }
+                    super.visitCallExpression(expression)
+                }
+            })
+        }
+        scanCalls("Snippet.kt", session.file)
+        workspaceFiles(workspacePath).forEach { scanCalls(it.rel, it.psi) }
+
+        return KtCallHierarchyResult(symbol, callers.distinct())
+    }
+
     override fun projectClasspath(workspacePath: String?): List<String> =
         if (closed) emptyList() else SnippetCompiler.detectProjectClasspath(workspacePath)
+
+    override fun hover(session: K2AnalysisSession, symbol: String, workspacePath: String?): KtHoverInfo? {
+        if (closed) return null
+        val ctx = session.bindingContext
+        val files = listOf("Snippet.kt" to session.file) + workspaceFiles(workspacePath).map { it.rel to it.psi }
+
+        var reference: KtSimpleNameExpression? = null
+        var declaration: KtNamedDeclaration? = null
+        session.file.accept(object : KtTreeVisitorVoid() {
+            override fun visitSimpleNameExpression(expression: KtSimpleNameExpression) {
+                if (reference == null && expression.getReferencedName() == symbol) {
+                    reference = expression
+                }
+                super.visitSimpleNameExpression(expression)
+            }
+
+            override fun visitNamedDeclaration(decl: KtNamedDeclaration) {
+                if (declaration == null && decl !is org.jetbrains.kotlin.psi.KtPrimaryConstructor && decl.name == symbol) {
+                    declaration = decl
+                }
+                super.visitNamedDeclaration(decl)
+            }
+        })
+        if (reference == null && declaration == null) return null
+
+        val descriptor: DeclarationDescriptor? = reference?.let { ctx[BindingContext.REFERENCE_TARGET, it] }
+            ?: declaration?.let { ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, it] }
+        if (descriptor == null) return null
+        val effective = effectiveDescriptor(descriptor)
+
+        val expressionType: String? = reference?.let { ref ->
+            val typeNode: KtExpression = (ref.parent as? KtCallExpression) ?: ref
+            ctx[BindingContext.EXPRESSION_TYPE_INFO, typeNode]?.type
+                ?.let { DescriptorRenderer.FQ_NAMES_IN_TYPES.renderType(it) }
+        }
+        val declaredType: String? = (declaration as? KtProperty)?.let { prop ->
+            val t = prop.initializer?.let { ctx[BindingContext.EXPRESSION_TYPE_INFO, it]?.type }
+                ?: prop.typeReference?.let { ctx[BindingContext.TYPE, it] }
+            t?.let { DescriptorRenderer.FQ_NAMES_IN_TYPES.renderType(it) }
+        }
+        val type = expressionType ?: declaredType
+
+        val signature = runCatching { DescriptorRenderer.FQ_NAMES_IN_TYPES.render(descriptor) }.getOrNull()
+        val fqn = safeFqn(effective)
+
+        val declPsi = declarationPsiFor(session, files, descriptor)
+        val source: ResolvedSource
+        val file: String?
+        val line: Int?
+        val kdoc: String?
+        if (declPsi != null) {
+            val containing = declPsi.containingFile as KtFile
+            val isSnippet = containing == session.file || containing.name.startsWith("Snippet_")
+            source = if (isSnippet) ResolvedSource.SNIPPET else ResolvedSource.WORKSPACE
+            file = if (isSnippet) "Snippet.kt" else containing.name
+            line = SourceUtils.lineOf(containing.text, declPsi.textRange.startOffset)
+            kdoc = declPsi.docComment?.text?.trim()?.takeIf { it.isNotBlank() }
+        } else {
+            source = ResolvedSource.EXTERNAL
+            file = null
+            line = null
+            kdoc = null
+        }
+        return KtHoverInfo(symbol, type, signature, fqn, source, file, line, kdoc)
+    }
+
+    override fun workspaceStats(workspacePath: String?): WorkspaceStats {
+        if (closed) return WorkspaceStats(0, 0, false)
+        val root = if (workspacePath.isNullOrBlank()) null else File(workspacePath)
+        if (root == null || !root.isDirectory) return WorkspaceStats(0, 0, false)
+        val total = root.walkTopDown().onEnter { dir ->
+            dir.name != "build" && dir.name != ".gradle" && dir.name != ".git" && dir.name != "out" && dir.name != "node_modules"
+        }.count { it.isFile && it.extension == "kt" }
+        val analyzed = minOf(total, fileCap)
+        return WorkspaceStats(total, analyzed, total > fileCap)
+    }
 
     override fun close() {
         closed = true
@@ -503,25 +775,25 @@ class DefaultK2SemanticEngine : K2SemanticEngine {
         val root = File(workspacePath)
         if (!root.isDirectory) return emptyList()
         synchronized(this) {
-            val current = root.walkTopDown().onEnter { dir ->
+            val allFiles = root.walkTopDown().onEnter { dir ->
                 val name = dir.name
                 name != "build" && name != ".gradle" && name != ".git" && name != "out" && name != "node_modules"
             }.filter { it.isFile && it.extension == "kt" }.sortedBy { it.absolutePath }.toList()
 
             val cached = snapshot
-            if (cached != null && cached.root == root && cached.files.size == current.size &&
-                current.all { file -> cached.lastModified[file] == file.lastModified() }
+            if (cached != null && cached.root == root && cached.totalFiles == allFiles.size &&
+                allFiles.all { file -> cached.lastModified[file] == file.lastModified() }
             ) {
                 return cached.files
             }
 
-            val parsed = current.mapNotNull { file ->
+            val parsed = allFiles.take(fileCap).mapNotNull { file ->
                 val rel = try { root.toPath().relativize(file.toPath()).toString() } catch (e: Exception) { file.name }
                 val text = runCatching { file.readText() }.getOrNull() ?: return@mapNotNull null
                 val psi = runCatching { K2SnippetFrontend.psiFactory.createFile(rel, text) }.getOrNull() ?: return@mapNotNull null
                 WorkspaceFile(rel, file, psi)
             }
-            snapshot = WorkspaceSnapshot(root, parsed, current.associateWith { it.lastModified() })
+            snapshot = WorkspaceSnapshot(root, parsed, allFiles.associateWith { it.lastModified() }, allFiles.size)
             workspaceRebuilds++
             return parsed
         }
