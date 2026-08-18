@@ -240,47 +240,43 @@ class DefaultLspService(
 
     private fun getCompletions(code: String, symbol: String?): KotlinMcpResult {
         val prefix = (symbol ?: "").trim()
-        val completions = mutableListOf<String>()
+
+        val session = runCatching { semanticEngine.session(null, code) }.getOrNull()
+        val candidates = session?.let { runCatching { semanticEngine.completionCandidates(it, prefix) }.getOrNull() }
+        val semantic = ((candidates?.members).orEmpty() + (candidates?.scope).orEmpty()).distinct().sortedBy { it.lowercase() }
 
         val commonCompletions = listOf(
             "map { it }", "filter { it }", "mapNotNull { it }", "flatMap { it }",
             "takeIf { it }", "runCatching { }", "let { it }", "apply { }", "also { it }",
             "withContext(Dispatchers.IO) { }", "coroutineScope { }", "buildList { }", "buildMap { }"
         )
-
-        val declaredFun = mutableListOf<String>()
-        val declaredVal = mutableListOf<String>()
-        K2SnippetFrontend.parsePsi(code)?.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
-            override fun visitNamedFunction(function: org.jetbrains.kotlin.psi.KtNamedFunction) {
-                function.name?.let { declaredFun.add(it) }
-                super.visitNamedFunction(function)
-            }
-            override fun visitProperty(property: org.jetbrains.kotlin.psi.KtProperty) {
-                property.name?.let { declaredVal.add(it) }
-                super.visitProperty(property)
-            }
-        })
-
-        val stdlibNames = docService.symbolDocs.keys
-            .flatMap { listOf(it, it.substringAfterLast('.', it)) }
-            .filter { prefix.isBlank() || it.startsWith(prefix, ignoreCase = true) || it.contains(prefix, ignoreCase = true) }
-
-        val allCandidates: List<String> = (declaredFun + declaredVal + stdlibNames + commonCompletions).distinct()
-        val matches: List<String> = if (prefix.isNotBlank()) {
-            allCandidates.filter { it.startsWith(prefix, ignoreCase = true) || it.contains(prefix, ignoreCase = true) }
+        val curated = if (prefix.isNotBlank() && !prefix.contains(".")) {
+            commonCompletions.filter { it.startsWith(prefix, ignoreCase = true) || it.contains(prefix, ignoreCase = true) }
         } else {
-            allCandidates
+            commonCompletions
         }
 
-        val content = if (matches.isNotEmpty()) {
-            "# Code Completions for `${prefix.ifEmpty { "<all>" }}`\n\n" + matches.joinToString("\n") { " - `$it`" }
+        val content = if (semantic.isNotEmpty() || curated.isNotEmpty()) {
+            buildString {
+                appendLine("# Code Completions for `${prefix.ifEmpty { "<all>" }}`")
+                if (semantic.isNotEmpty()) {
+                    appendLine()
+                    appendLine("## Semantic candidates")
+                    semantic.forEach { appendLine(" - `$it`") }
+                }
+                if (curated.isNotEmpty()) {
+                    appendLine()
+                    appendLine("## Idiom suggestions (curated)")
+                    curated.forEach { appendLine(" - `$it`") }
+                }
+            }.trim()
         } else {
             "No matching completions found for prefix `$prefix`."
         }
 
         return KotlinMcpResult.Success(
             content = content,
-            metadata = mapOf("prefix" to prefix, "completionCount" to matches.size.toString())
+            metadata = mapOf("prefix" to prefix, "completionCount" to (semantic.size + curated.size).toString())
         )
     }
 

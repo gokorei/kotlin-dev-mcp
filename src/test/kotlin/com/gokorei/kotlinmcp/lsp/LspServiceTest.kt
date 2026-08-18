@@ -277,6 +277,66 @@ class LspServiceTest {
     }
 
     @Test
+    fun `getCompletions suggests String members for a String receiver`() {
+        val snippet = """
+            fun main() {
+                val name: String = "alice"
+                println(name.uppercase())
+            }
+        """.trimIndent()
+
+        val result = service.execute(LspAction.GET_COMPLETIONS, snippet, symbol = "name.")
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("length"), "expected String member 'length' in: ${success.content}")
+        assertTrue(success.content.contains("uppercase"), "expected String extension 'uppercase' in: ${success.content}")
+        assertTrue(success.content.contains("lowercase"), "expected String extension 'lowercase' in: ${success.content}")
+    }
+
+    @Test
+    fun `getCompletions includes in-scope locals and parameters`() {
+        val snippet = """
+            fun main() {
+                val total = 5
+                val totalCopy = total
+                println(totalCopy)
+            }
+        """.trimIndent()
+
+        val result = service.execute(LspAction.GET_COMPLETIONS, snippet, symbol = "total")
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("total"), "expected local 'total' in: ${success.content}")
+        assertTrue(success.content.contains("totalCopy"), "expected local 'totalCopy' in: ${success.content}")
+    }
+
+    @Test
+    fun `getCompletions lists members of a project class receiver`() {
+        val snippet = """
+            class Counter {
+                fun increment(): Int = 1
+                fun reset() {}
+            }
+            fun main() { val c = Counter(); println(c.increment()) }
+        """.trimIndent()
+
+        val result = service.execute(LspAction.GET_COMPLETIONS, snippet, symbol = "c.")
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("increment"), "expected receiver member 'increment' in: ${success.content}")
+        assertTrue(success.content.contains("reset"), "expected receiver member 'reset' in: ${success.content}")
+    }
+
+    @Test
+    fun `getCompletions keeps curated idioms in a clearly separated section`() {
+        val result = service.execute(LspAction.GET_COMPLETIONS, "", symbol = "")
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("Idiom suggestions (curated)"), "expected curated section in: ${success.content}")
+        assertTrue(success.content.contains("map { it }"), "expected idiom 'map { it }' in: ${success.content}")
+    }
+
+    @Test
     fun `typeHierarchy traces supertypes and subclasses`() {
         val snippet = """
             interface Repository
