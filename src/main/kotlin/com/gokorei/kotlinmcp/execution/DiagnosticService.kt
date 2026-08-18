@@ -25,7 +25,7 @@ class DefaultDiagnosticService : DiagnosticService {
 
     override fun execute(action: DiagnosticAction, code: String, projectPath: String?, classpath: List<String>): KotlinMcpResult {
         return when (action) {
-            DiagnosticAction.CHECK_SNIPPET -> checkSnippetEmbedded(code, classpath)
+            DiagnosticAction.CHECK_SNIPPET -> checkSnippetEmbedded(code, classpath, projectPath)
             DiagnosticAction.RUN_PROJECT_LAYOUT -> runProjectLayout(projectPath ?: ".")
         }
     }
@@ -56,7 +56,7 @@ class DefaultDiagnosticService : DiagnosticService {
                     ) { diag -> listOf(diag.line ?: "?", diag.column ?: "?", diag.message) }
                     val hasUnresolved = errors.any { it.message.contains("Unresolved reference", ignoreCase = true) || it.message.contains("UNRESOLVED", ignoreCase = true) }
                     val hint = if (hasUnresolved) {
-                        "\n\nℹ️ Hint: Unresolved symbol references detected. If referencing project-internal types or external dependencies, supply 'projectPath' or 'classpath'."
+                        "\n\nℹ️ Hint: Unresolved symbol references detected. If referencing project-internal types or project dependencies, add them to 'classpath', or supply 'workspacePath'/'projectPath' — its compiled classes (build/classes …), generated sources, and build/libs jars are added automatically."
                     } else ""
                     KotlinMcpResult.Error(
                         message = "Compilation failed with ${errors.size} error(s):\n$renderedToon$hint",

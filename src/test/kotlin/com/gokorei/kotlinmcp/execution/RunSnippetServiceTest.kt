@@ -92,6 +92,43 @@ class RunSnippetServiceTest {
     }
 
     @Test
+    fun `run_snippet with projectPath compiles and runs a workspace project type`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-workspace-run")
+        try {
+            val lib = SnippetCompiler.compile("""
+                package demo
+                class Greeter(val name: String) { fun greet(): String = "hi, ${'$'}name" }
+            """.trimIndent())
+            val libOut = (lib as CompileResult.Compiled).outDir
+
+            val classesDir = workspace.resolve("build/classes/kotlin/main")
+            java.nio.file.Files.createDirectories(classesDir)
+            libOut.toFile().walkTopDown().forEach { f ->
+                if (f.isFile) {
+                    val dest = classesDir.resolve(libOut.relativize(f.toPath()).toString())
+                    java.nio.file.Files.createDirectories(dest.parent)
+                    java.nio.file.Files.copy(f.toPath(), dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                }
+            }
+
+            val code = """
+                import demo.Greeter
+                fun main() { println(Greeter("kota").greet()) }
+            """.trimIndent()
+
+            val result = service.execute(code, timeoutMillis = 30_000L, runner = "host_jvm", projectPath = workspace.toString())
+
+            assertTrue(result.isSuccess, "expected success from host_jvm, got: ${result.toFormattedText()}")
+            val success = result as KotlinMcpResult.Success
+            assertTrue(success.content.contains("hi, kota"), "expected workspace type output, got: ${success.content}")
+
+            SnippetCompiler.cleanup(lib)
+        } finally {
+            workspace.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
     fun `run_snippet with host_jvm runner executes code in isolated subprocess`() {
         val code = """
             fun main() {

@@ -21,7 +21,8 @@ interface RunSnippetService {
         classpath: List<String> = emptyList(),
         runner: String = "host_jvm",
         jvmArgs: List<String> = emptyList(),
-        javaPath: String? = null
+        javaPath: String? = null,
+        projectPath: String? = null
     ): KotlinMcpResult
 
     fun parseTestReport(projectPath: String): KotlinMcpResult
@@ -38,7 +39,8 @@ class DefaultRunSnippetService(
         classpath: List<String>,
         runner: String,
         jvmArgs: List<String>,
-        javaPath: String?
+        javaPath: String?,
+        projectPath: String?
     ): KotlinMcpResult {
         val trimmed = code.trim()
         if (trimmed.isEmpty()) {
@@ -47,14 +49,14 @@ class DefaultRunSnippetService(
                 code = "EMPTY_SNIPPET"
             )
         }
-        return when (val compiled = SnippetCompiler.compile(trimmed, classpath)) {
+        return when (val compiled = SnippetCompiler.compile(trimmed, classpath, projectPath)) {
             is CompileResult.Failed -> KotlinMcpResult.Error(
                 message = compiled.message,
                 code = compiled.code,
                 requireAnotherCall = true
             )
             is CompileResult.Compiled -> {
-                val outcome = runFromCompiled(compiled, trimmed, timeoutMillis, classpath, runner, jvmArgs, javaPath)
+                val outcome = runFromCompiled(compiled, trimmed, timeoutMillis, classpath, runner, jvmArgs, javaPath, projectPath)
                 SnippetCompiler.cleanup(compiled)
                 outcome
             }
@@ -68,7 +70,8 @@ class DefaultRunSnippetService(
         extraClasspath: List<String>,
         runner: String,
         jvmArgs: List<String>,
-        javaPath: String?
+        javaPath: String?,
+        projectPath: String?
     ): KotlinMcpResult {
         val errors = compiled.diagnostics.filter { it.severity == "error" }
         if (errors.isNotEmpty()) {
@@ -93,10 +96,15 @@ class DefaultRunSnippetService(
                 code = "NO_MAIN_FOUND"
             )
         }
+        // The workspace's compiled classes / jars must be on the execution classpath
+        // too, otherwise a snippet that compiled against project types fails at
+        // runtime with ClassNotFoundError.
+        val projectClasspath = SnippetCompiler.detectProjectClasspath(projectPath)
+        val executionClasspath = (extraClasspath + projectClasspath).distinct().filter { it.isNotBlank() }
         return if (runner.equals("host_jvm", ignoreCase = true)) {
-            runHostJvm(compiled.outDir, timeoutMillis, extraClasspath, jvmArgs, javaPath)
+            runHostJvm(compiled.outDir, timeoutMillis, executionClasspath, jvmArgs, javaPath)
         } else {
-            runCompiled(compiled.outDir, timeoutMillis, extraClasspath)
+            runCompiled(compiled.outDir, timeoutMillis, executionClasspath)
         }
     }
 

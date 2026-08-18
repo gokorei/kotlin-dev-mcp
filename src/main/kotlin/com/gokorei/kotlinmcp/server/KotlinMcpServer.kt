@@ -122,8 +122,8 @@ class KotlinMcpServer(
 
     // ---- kotlin_check_snippet / project layout ----
 
-    fun checkSnippet(code: String, classpath: List<String> = emptyList()): KotlinMcpResult =
-        diagnosticService.execute(DiagnosticAction.CHECK_SNIPPET, code, classpath = classpath)
+    fun checkSnippet(code: String, classpath: List<String> = emptyList(), projectPath: String? = null): KotlinMcpResult =
+        diagnosticService.execute(DiagnosticAction.CHECK_SNIPPET, code, projectPath = projectPath, classpath = classpath)
 
     fun runProjectLayout(projectPath: String?): KotlinMcpResult =
         diagnosticService.execute(DiagnosticAction.RUN_PROJECT_LAYOUT, code = "", projectPath = projectPath)
@@ -136,9 +136,10 @@ class KotlinMcpServer(
         classpath: List<String> = emptyList(),
         runner: String = "host_jvm",
         jvmArgs: List<String> = emptyList(),
-        javaPath: String? = null
+        javaPath: String? = null,
+        projectPath: String? = null
     ): KotlinMcpResult =
-        runSnippetService.execute(code, timeoutMillis, classpath, runner, jvmArgs, javaPath)
+        runSnippetService.execute(code, timeoutMillis, classpath, runner, jvmArgs, javaPath, projectPath)
 
 
 
