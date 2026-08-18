@@ -119,6 +119,10 @@ class DefaultProjectService(
         val subprojectsLine = if (subprojects.isNotEmpty()) {
             "\n- Subprojects: ${subprojects.joinToString(", ") { "`$it`" }}"
         } else ""
+        val detectedTargets = detectTargets(content)
+        val kmpGuideline = if (detectedTargets.isNotEmpty() || content.contains("multiplatform")) {
+            "\n\n## Recommended Guidelines\n- [Multiplatform Web Storage (Room 3.0 & DataStore)](kotlin://guidelines/kmp-storage.md)"
+        } else ""
 
         val output = """
             # Gradle Project Structure Analysis
@@ -126,7 +130,7 @@ class DefaultProjectService(
             - Build Script Type: Kotlin DSL (`build.gradle.kts`)$subprojectsLine
             - Detected Source Sets: ${sourceSets.joinToString(", ") { "`$it`" }}
 
-            ${layering}
+            ${layering}$kmpGuideline
         """.trimIndent()
 
         val metadataMap = mutableMapOf("pluginsCount" to plugins.size.toString())
@@ -390,7 +394,8 @@ class DefaultProjectService(
             "# Kotlin Multiplatform (KMP) Targets\nFound ${detectedTargets.size} target(s):\n" +
                 detectedTargets.joinToString("\n") { " - `$it`" } +
                 "\n\nSource sets structure:\n - `commonMain` / `commonTest`\n" +
-                detectedTargets.joinToString("\n") { " - `${it}Main` / `${it}Test`" }
+                detectedTargets.joinToString("\n") { " - `${it}Main` / `${it}Test`" } +
+                "\n\n## Recommended Guidelines\n- [Multiplatform Web Storage (Room 3.0 & DataStore)](kotlin://guidelines/kmp-storage.md)"
         } else {
             "# Kotlin Project Analysis\nStandard single-target JVM project configuration."
         }

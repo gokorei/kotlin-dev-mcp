@@ -56,6 +56,9 @@ class GradleProjectInspector {
             appendLine("## KMP Targets (${allTargets.size})")
             if (allTargets.isNotEmpty()) {
                 allTargets.forEach { appendLine(" - `$it`") }
+                appendLine()
+                appendLine("## Recommended Guidelines")
+                appendLine("- [Multiplatform Web Storage (Room 3.0 & DataStore)](kotlin://guidelines/kmp-storage.md)")
             } else {
                 appendLine(" - JVM / Single-platform")
             }
@@ -82,6 +85,9 @@ class GradleProjectInspector {
             appendLine("# KMP Targets (${targets.size})")
             if (targets.isNotEmpty()) {
                 targets.forEach { appendLine("- `$it`") }
+                appendLine()
+                appendLine("## Recommended Guidelines")
+                appendLine("- [Multiplatform Web Storage (Room 3.0 & DataStore)](kotlin://guidelines/kmp-storage.md)")
             } else {
                 appendLine("- Single-platform (JVM / Android)")
             }

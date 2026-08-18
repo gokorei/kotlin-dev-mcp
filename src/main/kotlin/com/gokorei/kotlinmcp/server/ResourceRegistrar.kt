@@ -56,21 +56,31 @@ object ResourceRegistrar {
         }
 
         server.addResource(
-            uri = KMP_STORAGE_GUIDELINES_URI,
-            name = "kotlin-guidelines-kmp-storage",
-            mimeType = MIME,
-            description = "Kotlin Multiplatform Web storage guidelines: Room 3.0 OPFS architecture, sqlite-async driver abstraction, DataStore backends, and COOP/COEP headers."
-        ) { _ ->
-            ReadResourceResult(listOf(TextResourceContents(text = KMP_STORAGE_TEXT, uri = KMP_STORAGE_GUIDELINES_URI, mimeType = MIME)))
-        }
-
-        server.addResource(
             uri = DOCS_INDEX_URI,
             name = "kotlin-docs-index",
             mimeType = MIME,
             description = "Index of every Kotlin documentation resource available on this server (stdlib symbols and language features), with links to each entry."
         ) { _ ->
             ReadResourceResult(listOf(TextResourceContents(text = buildIndex(docService), uri = DOCS_INDEX_URI, mimeType = MIME)))
+        }
+
+        server.addResourceTemplate(
+            uriTemplate = "kotlin://guidelines/{name}",
+            name = "kotlin-guidelines-entry",
+            mimeType = MIME,
+            description = "Read a specialized guideline document by name (e.g. kotlin://guidelines/kmp-storage.md)."
+        ) { _, variables ->
+            val rawName = variables["name"].orEmpty()
+            val name = rawName.removeSuffix(".md")
+            val text = when (name) {
+                "architecture" -> GUIDELINES_TEXT
+                "resilience" -> RESILIENCE_TEXT
+                "kmp-storage" -> KMP_STORAGE_TEXT
+                else -> throw IllegalArgumentException("No guideline found for '$rawName'.")
+            }
+            ReadResourceResult(
+                listOf(TextResourceContents(text = text, uri = "kotlin://guidelines/$rawName", mimeType = MIME))
+            )
         }
 
         server.addResourceTemplate(
@@ -100,7 +110,6 @@ object ResourceRegistrar {
         appendLine("## Guidelines")
         appendLine("- [Architecture & Testability]($GUIDELINES_URI)")
         appendLine("- [Backend Resilience & Fault Tolerance]($RESILIENCE_GUIDELINES_URI)")
-        appendLine("- [Multiplatform Storage (Web/Wasm/JS)]($KMP_STORAGE_GUIDELINES_URI)")
         appendLine()
         appendLine("## Symbols")
         docService.symbolDocs.keys.sorted().forEach { appendLine("- [$it](kotlin://docs/symbol/${encode(it)})") }
