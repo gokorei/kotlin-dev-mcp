@@ -19,11 +19,13 @@ object ResourceRegistrar {
     const val DOCS_INDEX_URI = "kotlin://docs/index.md"
     const val GUIDELINES_URI = "kotlin://guidelines/architecture.md"
     const val RESILIENCE_GUIDELINES_URI = "kotlin://guidelines/resilience.md"
+    const val KMP_STORAGE_GUIDELINES_URI = "kotlin://guidelines/kmp-storage.md"
     val SERVER_GUIDE_URI = LlmGuidance.LLM_GUIDE_RESOURCE_URI
     private const val MIME = "text/markdown"
 
     internal val architectureGuidelinesText: String get() = GUIDELINES_TEXT
     internal val resilienceGuidelinesText: String get() = RESILIENCE_TEXT
+    internal val kmpStorageGuidelinesText: String get() = KMP_STORAGE_TEXT
 
     fun registerAll(server: Server, docService: DocService) {
         server.addResource(
@@ -60,6 +62,25 @@ object ResourceRegistrar {
             description = "Index of every Kotlin documentation resource available on this server (stdlib symbols and language features), with links to each entry."
         ) { _ ->
             ReadResourceResult(listOf(TextResourceContents(text = buildIndex(docService), uri = DOCS_INDEX_URI, mimeType = MIME)))
+        }
+
+        server.addResourceTemplate(
+            uriTemplate = "kotlin://guidelines/{name}",
+            name = "kotlin-guidelines-entry",
+            mimeType = MIME,
+            description = "Read a specialized guideline document by name (e.g. kotlin://guidelines/kmp-storage.md)."
+        ) { _, variables ->
+            val rawName = variables["name"].orEmpty()
+            val name = rawName.removeSuffix(".md")
+            val text = when (name) {
+                "architecture" -> GUIDELINES_TEXT
+                "resilience" -> RESILIENCE_TEXT
+                "kmp-storage" -> KMP_STORAGE_TEXT
+                else -> throw IllegalArgumentException("No guideline found for '$rawName'.")
+            }
+            ReadResourceResult(
+                listOf(TextResourceContents(text = text, uri = "kotlin://guidelines/$rawName", mimeType = MIME))
+            )
         }
 
         server.addResourceTemplate(
@@ -119,6 +140,19 @@ object ResourceRegistrar {
             - Independent verification probing (Silence != Recovery)
             - Verifiable state caching (Memory Must Not Lie)
             - Deterministic typed state machines for remediation
+        """.trimIndent()
+    }
+
+    private val KMP_STORAGE_TEXT: String by lazy {
+        ResourceRegistrar::class.java.getResourceAsStream("/guidelines/kmp-storage.md")?.use {
+            it.bufferedReader().readText()
+        } ?: """
+            # Kotlin Multiplatform Storage & Persistence Guidelines (Web/Wasm/JS)
+            - Room 3.0 on Web (OPFS vs. IndexedDB)
+            - SQLite Driver Asymmetry & sqlite-async
+            - Room 3.0 Coroutine-Native Architecture
+            - DataStore Web Storage Selection
+            - Cross-Origin Isolation Headers (COOP / COEP)
         """.trimIndent()
     }
 

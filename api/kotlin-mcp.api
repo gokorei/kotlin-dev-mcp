@@ -272,7 +272,7 @@ public final class com/gokorei/kotlinmcp/execution/DefaultRunSnippetService : co
 	public fun <init> ()V
 	public fun <init> (Lcom/gokorei/kotlinmcp/execution/JavaResolver;)V
 	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/execution/JavaResolver;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun execute (Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun execute (Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun parseTestReport (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
@@ -303,13 +303,13 @@ public abstract interface class com/gokorei/kotlinmcp/execution/JavaResolver {
 }
 
 public abstract interface class com/gokorei/kotlinmcp/execution/RunSnippetService {
-	public abstract fun execute (Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
-	public static synthetic fun execute$default (Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun execute (Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun execute$default (Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public abstract fun parseTestReport (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
 public final class com/gokorei/kotlinmcp/execution/RunSnippetService$DefaultImpls {
-	public static synthetic fun execute$default (Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun execute$default (Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
 public final class com/gokorei/kotlinmcp/linting/ChildFirstClassLoader : java/net/URLClassLoader {
@@ -942,8 +942,8 @@ public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public final fun baselineDump (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun baselineDump$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun baselineRead (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
-	public final fun checkSnippet (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
-	public static synthetic fun checkSnippet$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun checkSnippet (Ljava/lang/String;Ljava/util/List;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkSnippet$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun codeAnalyzeCompose (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun codeAnalyzeNullability (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun codeExplainCoroutines (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -995,8 +995,8 @@ public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public final fun runDetekt (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun runDetekt$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun runProjectLayout (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
-	public final fun runSnippet (Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
-	public static synthetic fun runSnippet$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun runSnippet (Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun runSnippet$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun runTestReport (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun suggestKotlinxDatetime (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
@@ -1022,6 +1022,7 @@ public final class com/gokorei/kotlinmcp/server/ResourceRegistrar {
 	public static final field DOCS_INDEX_URI Ljava/lang/String;
 	public static final field GUIDELINES_URI Ljava/lang/String;
 	public static final field INSTANCE Lcom/gokorei/kotlinmcp/server/ResourceRegistrar;
+	public static final field KMP_STORAGE_GUIDELINES_URI Ljava/lang/String;
 	public static final field RESILIENCE_GUIDELINES_URI Ljava/lang/String;
 	public final fun getSERVER_GUIDE_URI ()Ljava/lang/String;
 	public final fun getUSAGE_GUIDE_TEXT ()Ljava/lang/String;

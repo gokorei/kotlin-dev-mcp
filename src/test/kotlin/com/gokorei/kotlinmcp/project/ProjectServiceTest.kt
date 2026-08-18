@@ -128,7 +128,77 @@ class ProjectServiceTest {
         assertTrue(success.content.contains("jvm"))
         assertTrue(success.content.contains("androidTarget"))
         assertTrue(success.content.contains("iosX64"))
+        assertTrue(success.content.contains("kotlin://guidelines/kmp-storage.md"), "KMP targets output must suggest kmp-storage guideline")
     }
+
+    @Test
+    fun `list_kmp_targets does not suggest kmp-storage guideline for single-platform project`() {
+        val jvmScriptContent = """
+            plugins {
+                kotlin("jvm") version "2.1.0"
+            }
+        """.trimIndent()
+
+        val result = projectService.execute(
+            action = ProjectAction.LIST_KMP_TARGETS,
+            buildScriptContent = jvmScriptContent
+        )
+
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertFalse(success.content.contains("kmp-storage.md"), "Single-platform project must NOT receive kmp-storage guideline")
+    }
+
+    @Test
+    fun `inspect_structure suggests kmp-storage guideline only when KMP targets exist`() {
+        val kmpScript = """
+            kotlin {
+                wasmJs()
+                jvm()
+            }
+        """.trimIndent()
+        val kmpResult = projectService.execute(ProjectAction.INSPECT_STRUCTURE, kmpScript) as KotlinMcpResult.Success
+        assertTrue(kmpResult.content.contains("kotlin://guidelines/kmp-storage.md"), "KMP project must suggest kmp-storage guideline")
+
+        val jvmScript = """
+            plugins {
+                kotlin("jvm") version "2.1.0"
+            }
+        """.trimIndent()
+        val jvmResult = projectService.execute(ProjectAction.INSPECT_STRUCTURE, jvmScript) as KotlinMcpResult.Success
+        assertFalse(jvmResult.content.contains("kmp-storage.md"), "JVM project must NOT suggest kmp-storage guideline")
+    }
+
+    @Test
+    fun `android-only AGP project with android block is not misidentified as KMP and does not recommend kmp storage`() {
+        val androidScript = """
+            plugins {
+                id("com.android.application")
+                kotlin("android")
+            }
+            android {
+                namespace = "com.example.app"
+                compileSdk = 35
+                defaultConfig {
+                    applicationId = "com.example.app"
+                    minSdk = 24
+                    targetSdk = 35
+                }
+            }
+            dependencies {
+                implementation("androidx.core:core-ktx:1.15.0")
+            }
+        """.trimIndent()
+
+        val listResult = projectService.execute(ProjectAction.LIST_KMP_TARGETS, androidScript) as KotlinMcpResult.Success
+        assertFalse(listResult.content.contains("kmp-storage.md"), "Android-only build must NOT suggest kmp-storage in list_kmp_targets")
+        assertTrue(listResult.content.contains("Standard single-target JVM project configuration") || listResult.content.contains("Single-platform"), "Android-only build must not be identified as KMP")
+
+        val structResult = projectService.execute(ProjectAction.INSPECT_STRUCTURE, androidScript) as KotlinMcpResult.Success
+        assertFalse(structResult.content.contains("kmp-storage.md"), "Android-only build must NOT suggest kmp-storage in inspect_structure")
+    }
+
+
 
     @Test
     fun `analyze_dependencies extracts declared libraries and versions`() {

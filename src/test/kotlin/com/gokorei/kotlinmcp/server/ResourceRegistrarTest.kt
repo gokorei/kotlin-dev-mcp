@@ -57,5 +57,18 @@ class ResourceRegistrarTest {
         assertTrue(archText.contains("Domain Error Modeling") || archText.contains("Errors as Values"))
         assertTrue(archText.contains("sealed interface") || archText.contains("ApplicationError"))
     }
+
+    @Test
+    fun `registerAll registers kmp storage guidelines resource with expected principles`() {
+        ResourceRegistrar.registerAll(server, docService)
+
+        assertEquals("kotlin://guidelines/kmp-storage.md", ResourceRegistrar.KMP_STORAGE_GUIDELINES_URI)
+        val kmpStorageText = ResourceRegistrar.kmpStorageGuidelinesText
+        assertTrue(kmpStorageText.contains("# Kotlin Multiplatform Storage & Persistence Guidelines"))
+        assertTrue(kmpStorageText.contains("OPFS") || kmpStorageText.contains("Origin Private File System"))
+        assertTrue(kmpStorageText.contains("sqlite-async") || kmpStorageText.contains("SQLite Driver Asymmetry"))
+        assertTrue(kmpStorageText.contains("DataStore"))
+        assertTrue(kmpStorageText.contains("COOP") || kmpStorageText.contains("Cross-Origin-Opener-Policy") || kmpStorageText.contains("Isolation"))
+    }
 }
 
