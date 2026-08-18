@@ -14,6 +14,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 - **In-code MCP tool reference generator** — added `McpDocGenerator` and `./gradlew generateMcpDocs` task to generate `docs/wiki/Tool-Reference.md` directly from in-code tool definitions and metadata.
 - **CI documentation sync test** — added `DocumentationSyncTest` enforcing that committed Markdown wiki docs match in-code tool definitions during `./gradlew test`.
 - **Workspace-aware K2 semantic engine** — added `K2SemanticEngine` (`session`, `resolveReference`, `fqNameOfDeclaration`, `typeOfExpression`, `referencesForSymbol`) that analyzes a snippet together with all workspace `.kt` files in one binding pass, so references resolve across file boundaries. It reports a reference's target file/line/FQN/signature (snippet, workspace, or external stdlib), and finds all bound occurrences of a symbol while excluding shadowed locals. Resolved types render fully qualified (e.g. `kotlin.String`). Analysis now loads the bundled stdlib jars onto the environment classpath so stdlib symbols resolve.
+- **`definition` action jumps cross-file** — `kotlin_text_lsp_read(action="definition")` now accepts `workspacePath` and resolves the target via the K2 semantic engine, returning the declaration's real file path, line, and signature even when the symbol is declared in another workspace `.kt` file (previously it only searched the pasted snippet). Snippet-local and stdlib-doc fallbacks are preserved.
 
 ### Bug Fixes
 

@@ -95,8 +95,8 @@ class KotlinMcpServer(
 
     // ---- kotlin_lsp ----
 
-    fun lspFindDefinition(code: String, symbol: String?): KotlinMcpResult =
-        textService.execute(LspAction.FIND_DEFINITION, code, symbol = symbol)
+    fun lspFindDefinition(code: String, symbol: String?, workspacePath: String? = null): KotlinMcpResult =
+        textService.execute(LspAction.FIND_DEFINITION, code, symbol = symbol, workspacePath = workspacePath)
 
     fun lspFindReferences(code: String, symbol: String?, workspacePath: String?): KotlinMcpResult =
         textService.execute(LspAction.FIND_REFERENCES, code, symbol = symbol, workspacePath = workspacePath)

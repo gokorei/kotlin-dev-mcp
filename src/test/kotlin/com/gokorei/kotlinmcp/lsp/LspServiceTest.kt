@@ -62,6 +62,63 @@ class LspServiceTest {
     }
 
     @Test
+    fun `findDefinition resolves a symbol declared in another workspace file to that file and line`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-def")
+        try {
+            workspace.resolve("model/User.kt").toFile().apply {
+                parentFile.mkdirs()
+                writeText("package com.example.model\nclass User(val name: String)\n")
+            }
+
+            val snippet = """
+                package com.example.app
+                import com.example.model.User
+                fun main() { val u = User("x"); println(u.name) }
+            """.trimIndent()
+
+            val result = service.execute(
+                LspAction.FIND_DEFINITION, snippet,
+                symbol = "User", workspacePath = workspace.toString()
+            )
+            assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+            val success = result as KotlinMcpResult.Success
+            assertTrue(success.content.contains("model/User.kt"), "expected workspace file in: ${success.content}")
+            assertTrue(success.content.contains(":2"), "expected line 2 in: ${success.content}")
+            assertTrue(success.content.contains("class User"), "expected declaration signature in: ${success.content}")
+            assertEquals("true", success.metadata["found"])
+        } finally {
+            workspace.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `findDefinition resolves snippet-local declarations through the semantic engine`() {
+        val snippet = """
+            package spike
+            class Engine
+            fun start() { Engine() }
+        """.trimIndent()
+
+        val result = service.execute(LspAction.FIND_DEFINITION, snippet, symbol = "Engine")
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("Line 2"), "expected snippet line in: ${success.content}")
+        assertTrue(success.content.contains("class Engine"), "expected declaration in: ${success.content}")
+        assertEquals("true", success.metadata["found"])
+    }
+
+    @Test
+    fun `findDefinition falls back to stdlib docs for stdlib symbols resolved as external`() {
+        val snippet = "fun main() { val items: List<Int> = emptyList() }"
+
+        val result = service.execute(LspAction.FIND_DEFINITION, snippet, symbol = "List")
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("List"), "expected stdlib fallback in: ${success.content}")
+        assertTrue(success.content.contains("Standard Library"), "expected stdlib marker in: ${success.content}")
+    }
+
+    @Test
     fun `findReferences counts occurrences in code snippet`() {
         val snippet = """
             fun calculate(value: Int): Int {

@@ -118,7 +118,7 @@ object ToolRegistrar {
                     defaultAction = "definition",
                     args = a,
                     handlers = mapOf(
-                        "definition" to { k.lspFindDefinition(code, symbol) },
+                        "definition" to { k.lspFindDefinition(code, symbol, ws) },
                         "references" to { k.lspFindReferences(code, symbol, ws) },
                         "completion" to { k.lspGetCompletions(code, symbol) },
                         "workspace_search" to { k.lspWorkspaceSearch(symbol, ws) },

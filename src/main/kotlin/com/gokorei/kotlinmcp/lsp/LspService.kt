@@ -4,6 +4,7 @@ import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import com.gokorei.kotlinmcp.doc.DocService
 import com.gokorei.kotlinmcp.doc.DefaultDocService
 import com.gokorei.kotlinmcp.doc.DocAction
+import org.jetbrains.kotlin.psi.KtReferenceExpression
 import java.io.File
 
 enum class LspAction {
@@ -33,7 +34,8 @@ interface LspService {
 }
 
 class DefaultLspService(
-    private val docService: DocService = DefaultDocService()
+    private val docService: DocService = DefaultDocService(),
+    private val semanticEngine: K2SemanticEngine = DefaultK2SemanticEngine()
 ) : LspService {
 
     private val indexer = WorkspaceSemanticIndexer()
@@ -46,7 +48,7 @@ class DefaultLspService(
         workspacePath: String?
     ): KotlinMcpResult {
         return when (action) {
-            LspAction.FIND_DEFINITION -> findDefinition(code, symbol)
+            LspAction.FIND_DEFINITION -> findDefinition(code, symbol, workspacePath)
             LspAction.FIND_REFERENCES -> findReferences(code, symbol, workspacePath)
             LspAction.GET_COMPLETIONS -> getCompletions(code, symbol)
             LspAction.RENAME_SYMBOL -> renameSymbol(code, symbol, newName, workspacePath)
@@ -58,7 +60,7 @@ class DefaultLspService(
     }
 
 
-    private fun findDefinition(code: String, symbol: String?): KotlinMcpResult {
+    private fun findDefinition(code: String, symbol: String?, workspacePath: String?): KotlinMcpResult {
         if (symbol.isNullOrBlank()) {
             return KotlinMcpResult.Error(
                 message = "Symbol name is required for findDefinition.",
@@ -66,37 +68,25 @@ class DefaultLspService(
             )
         }
         val s = symbol.trim()
-        val psi = K2SnippetFrontend.parsePsi(code)
 
-        if (psi != null) {
-            val text = code
-            val lineOf = { offset: Int -> com.gokorei.kotlinmcp.shared.SourceUtils.lineOf(text, offset) }
-
-            var best: Pair<org.jetbrains.kotlin.psi.KtNamedDeclaration, Int>? = null
-            psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
-                override fun visitNamedDeclaration(declaration: org.jetbrains.kotlin.psi.KtNamedDeclaration) {
-                    if (declaration is org.jetbrains.kotlin.psi.KtPrimaryConstructor) return
-                    if (declaration.name == s) {
-                        val start = declaration.nameIdentifier?.textRange?.startOffset ?: declaration.textRange.startOffset
-                        best = declaration to lineOf(start)
-                    }
-                    super.visitNamedDeclaration(declaration)
+        val session = runCatching { semanticEngine.session(workspacePath, code) }.getOrNull()
+        if (session != null) {
+            val ref = findSnippetReference(session.file, s)
+            if (ref != null) {
+                val resolved = runCatching { semanticEngine.resolveReference(session, ref, workspacePath) }.getOrNull()
+                when (resolved?.source) {
+                    ResolvedSource.SNIPPET -> return definitionResult(
+                        s, "Line ${resolved.line}", resolved.signature, line = resolved.line
+                    )
+                    ResolvedSource.WORKSPACE -> return definitionResult(
+                        s, "${resolved.file}:${resolved.line}", resolved.signature, line = resolved.line, file = resolved.file
+                    )
+                    else -> Unit // EXTERNAL / UNRESOLVED fall through to the stdlib doc lookup
                 }
-            })
-
-            val foundBest = best
-            if (foundBest != null) {
-                val (decl, line) = foundBest
-                val signature = signatureOf(decl)
-                val content = buildString {
-                    appendLine("# Definition of `$s`")
-                    appendLine("- Defined at: Line $line")
-                    appendLine("- Declaration: `$signature`")
-                }
-                return KotlinMcpResult.Success(
-                    content = content.trim(),
-                    metadata = mapOf("symbol" to s, "found" to "true", "line" to line.toString())
-                )
+            }
+            val decl = findSnippetDeclaration(session.file, s)
+            if (decl != null) {
+                return definitionResult(s, "Line ${decl.first}", decl.second, line = decl.first)
             }
         }
 
@@ -111,6 +101,60 @@ class DefaultLspService(
             content = "Symbol `$s` declaration not found in snippet. It may be an external dependency or imported symbol.",
             metadata = mapOf("symbol" to s, "found" to "false")
         )
+    }
+
+    private fun definitionResult(
+        symbol: String,
+        location: String,
+        signature: String?,
+        line: Int,
+        file: String? = null
+    ): KotlinMcpResult {
+        val content = buildString {
+            appendLine("# Definition of `$symbol`")
+            appendLine("- Defined at: $location")
+            signature?.let { appendLine("- Declaration: `$it`") }
+        }
+        val metadata = buildMap {
+            put("symbol", symbol)
+            put("found", "true")
+            put("line", line.toString())
+            if (file != null) put("file", file)
+        }
+        return KotlinMcpResult.Success(content = content.trim(), metadata = metadata)
+    }
+
+    /** First reference expression in the snippet matching [symbol], if any. */
+    private fun findSnippetReference(file: org.jetbrains.kotlin.psi.KtFile, symbol: String): KtReferenceExpression? {
+        var found: KtReferenceExpression? = null
+        file.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+            override fun visitSimpleNameExpression(expression: org.jetbrains.kotlin.psi.KtSimpleNameExpression) {
+                if (found == null && expression.getReferencedName() == symbol) {
+                    found = expression
+                }
+                super.visitSimpleNameExpression(expression)
+            }
+        })
+        return found
+    }
+
+    /** Line + signature of a declaration matching [symbol] in the snippet, if any. */
+    private fun findSnippetDeclaration(file: org.jetbrains.kotlin.psi.KtFile, symbol: String): Pair<Int, String>? {
+        val text = file.text
+        var result: Pair<Int, String>? = null
+        file.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+            override fun visitNamedDeclaration(declaration: org.jetbrains.kotlin.psi.KtNamedDeclaration) {
+                if (result == null && declaration is org.jetbrains.kotlin.psi.KtPrimaryConstructor) {
+                    super.visitNamedDeclaration(declaration)
+                    return
+                }
+                if (result == null && declaration.name == symbol) {
+                    result = com.gokorei.kotlinmcp.shared.SourceUtils.lineOf(text, declaration.textRange.startOffset) to signatureOf(declaration)
+                }
+                super.visitNamedDeclaration(declaration)
+            }
+        })
+        return result
     }
 
     private fun signatureOf(decl: org.jetbrains.kotlin.psi.KtNamedDeclaration): String {
