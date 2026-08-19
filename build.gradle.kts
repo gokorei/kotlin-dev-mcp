@@ -2,6 +2,7 @@ import java.io.File
 import java.net.URI
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import org.gradle.api.DefaultTask
 
 buildscript {
@@ -113,9 +114,22 @@ val dumpSnippetClasspath = tasks.register("dumpSnippetClasspath") {
     }
 }
 
+val generateVersionResource = tasks.register("generateVersionResource") {
+    group = "build"
+    description = "Generates a version descriptor resource from project.version."
+    val outDir = layout.buildDirectory.dir("generated/version")
+    outputs.dir(outDir)
+    doLast {
+        val dir = outDir.get().asFile
+        dir.mkdirs()
+        File(dir, "kotlin-mcp-version.txt").writeText(project.version.toString())
+    }
+}
+
 sourceSets {
     main {
         resources {
+            srcDir(layout.buildDirectory.dir("generated/version"))
             srcDir(layout.buildDirectory.dir("generated/tooling"))
             srcDir(layout.buildDirectory.dir("generated/kotlin-docs"))
         }
@@ -123,6 +137,7 @@ sourceSets {
 }
 
 tasks.processResources {
+    dependsOn(generateVersionResource)
     dependsOn(dumpToolingClasspaths)
     dependsOn(dumpSnippetClasspath)
     dependsOn(processStdlibIndex)
@@ -231,13 +246,26 @@ application {
     )
 }
 
+tasks.jar {
+    manifest {
+        attributes(
+            "Implementation-Title" to "kotlin-mcp",
+            "Implementation-Version" to project.version
+        )
+    }
+}
+
 val uberJar = tasks.register<Jar>("uberJar") {
     group = "build"
     description = "Assembles an Uber/Fat JAR containing all runtime dependencies and application classes."
-    archiveClassifier.set("all")
+    archiveFileName.set("kotlin-mcp-all.jar")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
-        attributes["Main-Class"] = "com.gokorei.kotlinmcp.MainKt"
+        attributes(
+            "Main-Class" to "com.gokorei.kotlinmcp.MainKt",
+            "Implementation-Title" to "kotlin-mcp",
+            "Implementation-Version" to project.version
+        )
     }
     val dependencies = configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) }
     from(dependencies)
@@ -262,6 +290,64 @@ val generateMcpDocs = tasks.register<JavaExec>("generateMcpDocs") {
     val docFile = layout.projectDirectory.file("docs/wiki/Tool-Reference.md")
     args = listOf(docFile.asFile.absolutePath)
     outputs.file(docFile)
+}
+
+val generateChangelog = tasks.register<JavaExec>("generateChangelog") {
+    group = "documentation"
+    description = "Generates CHANGELOG.md directly from docs/wiki/Release-Notes.md."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.gokorei.kotlinmcp.doc.ChangelogGeneratorKt")
+    val releaseNotesFile = layout.projectDirectory.file("docs/wiki/Release-Notes.md")
+    val changelogFile = layout.projectDirectory.file("CHANGELOG.md")
+    args = listOf(releaseNotesFile.asFile.absolutePath, changelogFile.asFile.absolutePath)
+    inputs.file(releaseNotesFile)
+    outputs.file(changelogFile)
+}
+
+val bumpVersion = tasks.register("bumpVersion") {
+    group = "publishing"
+    description = "Bumps the project version across build.gradle.kts, Release-Notes.md, and CHANGELOG.md. Usage: ./gradlew bumpVersion -Pto=1.2.0"
+    doLast {
+        val newVersion = (project.findProperty("to") ?: project.findProperty("newVersion"))?.toString()
+            ?: throw GradleException("Please supply target version via -Pto=X.Y.Z (e.g. ./gradlew bumpVersion -Pto=1.2.0)")
+
+        if (!newVersion.matches(Regex("""^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$"""))) {
+            throw GradleException("Invalid semantic version format: '$newVersion'. Expected format: X.Y.Z")
+        }
+
+        val today = LocalDate.now().toString()
+        val buildGradle = file("build.gradle.kts")
+        val releaseNotes = file("docs/wiki/Release-Notes.md")
+
+        // 1. Update build.gradle.kts
+        val buildText = buildGradle.readText()
+        val updatedBuildText = buildText.replaceFirst(
+            Regex("""version\s*=\s*"[^"]+""""),
+            """version = "$newVersion""""
+        )
+        buildGradle.writeText(updatedBuildText)
+        logger.lifecycle("Updated build.gradle.kts version -> $newVersion")
+
+        // 2. Promote ## Next in Release-Notes.md
+        if (releaseNotes.exists()) {
+            val notesText = releaseNotes.readText()
+            val nextSkeleton = """## Next
+
+### New Features
+
+### Bug Fixes
+
+### Improvements
+
+---
+
+## v$newVersion — $today"""
+            val updatedNotesText = notesText.replaceFirst(Regex("""## Next"""), nextSkeleton)
+            releaseNotes.writeText(updatedNotesText)
+            logger.lifecycle("Promoted ## Next to ## v$newVersion — $today in docs/wiki/Release-Notes.md")
+        }
+    }
+    finalizedBy(generateChangelog)
 }
 
 

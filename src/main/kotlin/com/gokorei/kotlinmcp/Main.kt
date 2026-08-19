@@ -1,10 +1,10 @@
 package com.gokorei.kotlinmcp
 
+import com.gokorei.kotlinmcp.lsp.K2SnippetFrontend
 import com.gokorei.kotlinmcp.server.KotlinMcpServer
 import com.gokorei.kotlinmcp.server.PromptRegistrar
 import com.gokorei.kotlinmcp.server.ResourceRegistrar
 import com.gokorei.kotlinmcp.server.ToolRegistrar
-import com.gokorei.kotlinmcp.lsp.K2SnippetFrontend
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
@@ -16,6 +16,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.io.asSink
 import kotlinx.io.asSource
 import kotlinx.io.buffered
+import java.util.concurrent.atomic.AtomicBoolean
 
 // MCP stdio transport owns stdout for JSON-RPC frames. Disable the
 // kotlin-logging startup banner (kotlin-logging-jvm 8.x) which writes to
@@ -29,10 +30,22 @@ private val logger = KotlinLogging.logger {}
 
 fun main() = runBlocking {
     val kotlinServer = KotlinMcpServer()
+    val isDisposed = AtomicBoolean(false)
 
-    logger.info { "Starting Kotlin Developer MCP Server (kotlin-mcp)..." }
+    fun cleanup() {
+        if (isDisposed.compareAndSet(false, true)) {
+            runCatching { kotlinServer.close() }
+                .onFailure { logger.warn(it) { "Failed to close the LSP semantic engine during shutdown." } }
+            runCatching { K2SnippetFrontend.dispose() }
+                .onFailure { logger.warn(it) { "Failed to dispose the K2 environment during shutdown." } }
+        }
+    }
 
-    val serverInfo = Implementation(name = "kotlin-mcp", version = "1.1.0")
+    Runtime.getRuntime().addShutdownHook(Thread { cleanup() })
+
+    logger.info { "Starting Kotlin Developer MCP Server (${Version.NAME} v${Version.CURRENT})..." }
+
+    val serverInfo = Implementation(name = Version.NAME, version = Version.CURRENT)
     val options = ServerOptions(
         capabilities = ServerCapabilities(
             tools = ServerCapabilities.Tools(listChanged = false),
@@ -57,14 +70,10 @@ fun main() = runBlocking {
     val session = server.createSession(transport)
     val serverClosed = Job()
     session.onClose { serverClosed.complete() }
-    // Release the semantic engine's workspace PSI cache and the shared K2
-    // KotlinCoreEnvironment (native PSI resources) on exit so a long-running
-    // stdio server never leaks them.
-    Runtime.getRuntime().addShutdownHook(Thread {
-        runCatching { kotlinServer.close() }
-            .onFailure { logger.warn(it) { "Failed to close the LSP semantic engine during shutdown." } }
-        runCatching { K2SnippetFrontend.dispose() }
-            .onFailure { logger.warn(it) { "Failed to dispose the K2 environment during shutdown." } }
-    })
-    serverClosed.join()
+
+    try {
+        serverClosed.join()
+    } finally {
+        cleanup()
+    }
 }

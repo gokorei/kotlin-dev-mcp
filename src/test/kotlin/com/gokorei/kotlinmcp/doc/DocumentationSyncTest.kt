@@ -8,6 +8,7 @@ import java.io.File
 class DocumentationSyncTest {
 
     private val generator: McpDocGenerator = DefaultMcpDocGenerator()
+    private val changelogGenerator: ChangelogGenerator = DefaultChangelogGenerator()
 
     @Test
     fun `verify committed Tool-Reference md matches in-code McpDocGenerator output`() {
@@ -36,5 +37,23 @@ class DocumentationSyncTest {
             homeContent.contains("[Tool Reference](Tool-Reference)"),
             "docs/wiki/Home.md should include link to Tool Reference guide"
         )
+    }
+
+    @Test
+    fun `verify committed CHANGELOG md matches Release-Notes md generated content`() {
+        val releaseNotesFile = File("docs/wiki/Release-Notes.md")
+        val changelogFile = File("CHANGELOG.md")
+        if (releaseNotesFile.exists() && changelogFile.exists()) {
+            val expected = changelogGenerator.generateFromReleaseNotes(releaseNotesFile.readText())
+                .replace("\r\n", "\n").trim()
+            val actual = changelogFile.readText()
+                .replace("\r\n", "\n").trim()
+
+            assertEquals(
+                expected,
+                actual,
+                "CHANGELOG.md is out of sync with docs/wiki/Release-Notes.md! Run './gradlew generateChangelog' to synchronize."
+            )
+        }
     }
 }

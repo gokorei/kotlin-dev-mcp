@@ -20,7 +20,7 @@ For high-security or offline environments where outbound internet access is rest
 
 1. **Disable Network Audits:** Pass `-Dkmcp.disable_network_audits=true` to the `java` launch command or set `KMCP_DISABLE_NETWORK_AUDITS=true` in your MCP client configuration.
 2. **Offline Vulnerability Scans:** `kotlin_project_inspect` automatically falls back to an embedded, offline vulnerability baseline for critical Maven dependency CVEs (e.g., Log4Shell, Jackson, Netty, Commons Compress).
-3. **Offline Standard Library Docs:** `kotlin_docs_read` seeds from an embedded JSON symbol index packaged directly inside `kotlin-mcp-1.1.0-all.jar`.
+3. **Offline Standard Library Docs:** `kotlin_docs_read` seeds from an embedded JSON symbol index packaged directly inside `kotlin-mcp-all.jar`.
 
 ---
 
@@ -36,7 +36,7 @@ Injects all 11 tool definitions and parameter schemas directly into the LLM syst
   "mcpServers": {
     "kotlin-mcp": {
       "command": "java",
-      "args": ["-jar", "/path/to/kotlin-mcp-1.1.0-all.jar"],
+      "args": ["-jar", "/path/to/kotlin-mcp-all.jar"],
       "eager": true
     }
   }
