@@ -23,6 +23,7 @@ import com.gokorei.kotlinmcp.refactoring.*
  */
 class KotlinMcpServer(
     val docService: DocService = DefaultDocService(),
+    val semanticEngine: K2SemanticEngine = DefaultK2SemanticEngine(),
     private val codeAnalysisService: CodeAnalysisService = DefaultCodeAnalysisService(),
     private val diagnosticService: DiagnosticService = DefaultDiagnosticService(),
     private val projectService: ProjectService = DefaultProjectService(),
@@ -34,7 +35,7 @@ class KotlinMcpServer(
     private val lintService: LintService = DefaultLintService()
 ) {
 
-    private val textService: LspService = lspService ?: DefaultLspService(docService)
+    private val textService: LspService = lspService ?: DefaultLspService(docService, semanticEngine)
 
     init {
         lintService.prewarm()
@@ -95,8 +96,12 @@ class KotlinMcpServer(
 
     // ---- kotlin_lsp ----
 
+    fun lspFindDefinition(code: String, symbol: String?, workspacePath: String? = null): KotlinMcpResult =
+        textService.execute(LspAction.FIND_DEFINITION, code, symbol = symbol, workspacePath = workspacePath)
+
+    /** Legacy two-argument overload, retained for binary compatibility. */
     fun lspFindDefinition(code: String, symbol: String?): KotlinMcpResult =
-        textService.execute(LspAction.FIND_DEFINITION, code, symbol = symbol)
+        lspFindDefinition(code, symbol, null)
 
     fun lspFindReferences(code: String, symbol: String?, workspacePath: String?): KotlinMcpResult =
         textService.execute(LspAction.FIND_REFERENCES, code, symbol = symbol, workspacePath = workspacePath)
@@ -118,6 +123,15 @@ class KotlinMcpServer(
 
     fun lspCallHierarchy(code: String, symbol: String?, workspacePath: String?): KotlinMcpResult =
         textService.execute(LspAction.CALL_HIERARCHY, code, symbol = symbol, workspacePath = workspacePath)
+
+    fun lspHover(code: String, symbol: String?, workspacePath: String?): KotlinMcpResult =
+        textService.execute(LspAction.HOVER, code, symbol = symbol, workspacePath = workspacePath)
+
+    /** Releases cached PSI / analysis state held by the embedded services (safe to call once at shutdown). */
+    fun close() {
+        textService.close()
+        semanticEngine.close()
+    }
 
 
     // ---- kotlin_check_snippet / project layout ----

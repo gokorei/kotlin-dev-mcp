@@ -95,6 +95,72 @@ class WorkspaceSearchTest {
     }
 
     @Test
+    fun `findReferences unifies snippet and workspace usages into one result`() {
+        writeKt("model/Pricing.kt", """
+            package app.model
+
+            fun applyDiscount(price: Double, rate: Double): Double = price * rate
+        """)
+        writeKt("Consumer.kt", """
+            package app
+
+            import app.model.applyDiscount
+
+            fun total() = applyDiscount(200.0, 0.2)
+        """)
+
+        val snippet = """
+            package app
+
+            import app.model.applyDiscount
+
+            fun main() { val p = applyDiscount(100.0, 0.1) }
+        """.trimIndent()
+
+        val service = DefaultLspService()
+        val result = service.execute(LspAction.FIND_REFERENCES, snippet, symbol = "applyDiscount", workspacePath = workspace.toString())
+
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("Symbol References for `applyDiscount`"), "expected unified header: ${success.content}")
+        assertTrue(success.content.contains("model/Pricing.kt"), "expected workspace declaration: ${success.content}")
+        assertTrue(success.content.contains("Consumer.kt"), "expected workspace usage: ${success.content}")
+        assertTrue(success.content.contains("Snippet: Line 5"), "expected snippet usage: ${success.content}")
+    }
+
+    @Test
+    fun `findReferences excludes same-name shadowed locals in other files`() {
+        writeKt("model/Discount.kt", """
+            package app.model
+
+            fun applyDiscount(price: Double): Double = price * 0.9
+        """)
+        writeKt("Util.kt", """
+            package app.util
+
+            fun compute() { val applyDiscount = 42; println(applyDiscount) }
+        """)
+
+        val snippet = """
+            package app
+
+            import app.model.applyDiscount
+
+            fun main() { val p = applyDiscount(100.0) }
+        """.trimIndent()
+
+        val service = DefaultLspService()
+        val result = service.execute(LspAction.FIND_REFERENCES, snippet, symbol = "applyDiscount", workspacePath = workspace.toString())
+
+        assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("model/Discount.kt"), "expected real declaration: ${success.content}")
+        assertTrue(success.content.contains("Snippet: Line 5"), "expected snippet usage: ${success.content}")
+        assertFalse(success.content.contains("42"), "shadowed local in Util.kt must not appear: ${success.content}")
+        assertFalse(success.content.contains("Util.kt"), "unrelated file must not appear: ${success.content}")
+    }
+
+    @Test
     fun `WorkspaceSemanticIndexer reuses cached entries when files are unmodified`() {
         sampleWorkspace()
         val indexer = WorkspaceSemanticIndexer()

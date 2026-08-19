@@ -102,10 +102,10 @@ object ToolRegistrar {
 
         // 3. kotlin_text_lsp_read
         register("kotlin_text_lsp_read") {
-            description = "READ-ONLY. AST text services: find definitions, references, completions, search workspace, or trace call/type hierarchies."
+            description = "READ-ONLY. AST text services: find definitions, references, completions, search workspace, trace call/type hierarchies, or hover a symbol."
             readOnly = true
-            actions("definition", "references", "completion", "workspace_search", "workspace_references", "type_hierarchy", "call_hierarchy")
-            param("action", "LSP action: 'definition' (default), 'references', 'completion', 'workspace_search' (fuzzy symbol search), 'workspace_references' (exact reference locations), 'type_hierarchy' (super/subtypes), 'call_hierarchy' (incoming/outgoing calls)")
+            actions("definition", "references", "completion", "workspace_search", "workspace_references", "type_hierarchy", "call_hierarchy", "hover")
+            param("action", "LSP action: 'definition' (default), 'references', 'completion', 'workspace_search' (fuzzy symbol search), 'workspace_references' (exact reference locations), 'type_hierarchy' (super/subtypes), 'call_hierarchy' (incoming/outgoing calls), 'hover' (resolved type, signature and KDoc)")
             param("code", "Kotlin source code snippet context")
             param("symbol", "Target symbol name (or prefix for completion, or query for workspace_search)")
             param("workspacePath", "Optional root directory path of workspace (required for workspace_search/workspace_references/hierarchies)")
@@ -118,13 +118,14 @@ object ToolRegistrar {
                     defaultAction = "definition",
                     args = a,
                     handlers = mapOf(
-                        "definition" to { k.lspFindDefinition(code, symbol) },
+                        "definition" to { k.lspFindDefinition(code, symbol, ws) },
                         "references" to { k.lspFindReferences(code, symbol, ws) },
                         "completion" to { k.lspGetCompletions(code, symbol) },
                         "workspace_search" to { k.lspWorkspaceSearch(symbol, ws) },
                         "workspace_references" to { k.lspWorkspaceReferences(symbol, ws) },
                         "type_hierarchy" to { k.lspTypeHierarchy(code, symbol, ws) },
-                        "call_hierarchy" to { k.lspCallHierarchy(code, symbol, ws) }
+                        "call_hierarchy" to { k.lspCallHierarchy(code, symbol, ws) },
+                        "hover" to { k.lspHover(code, symbol, ws) }
                     )
                 )
             }

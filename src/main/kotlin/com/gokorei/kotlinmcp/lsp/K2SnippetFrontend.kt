@@ -2,8 +2,11 @@
 @file:OptIn(org.jetbrains.kotlin.K1Deprecation::class)
 package com.gokorei.kotlinmcp.lsp
 
+import com.gokorei.kotlinmcp.execution.SnippetCompiler
+import org.jetbrains.kotlin.cli.jvm.config.addJvmClasspathRoots
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.jetbrains.kotlin.com.intellij.openapi.Disposable
 import org.jetbrains.kotlin.com.intellij.openapi.util.Disposer
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
@@ -29,6 +32,8 @@ data class K2AnalysisSession(
  */
 object K2SnippetFrontend {
 
+    private val logger = KotlinLogging.logger {}
+
     @Volatile
     private var rootDisposable = Disposer.newDisposable("K2SnippetFrontend.root")
 
@@ -47,6 +52,12 @@ object K2SnippetFrontend {
                         put(CommonConfigurationKeys.MESSAGE_COLLECTOR_KEY, org.jetbrains.kotlin.cli.common.messages.MessageCollector.NONE)
                         put(CommonConfigurationKeys.MODULE_NAME, "snippet_module")
                     }
+                    addJvmClasspathRoots(
+                        configuration,
+                        SnippetCompiler.resolveDefaultImports(System.getProperty("java.class.path").orEmpty())
+                            .filter { it.isNotBlank() }
+                            .map { java.io.File(it) }
+                    )
                     env = KotlinCoreEnvironment.createForProduction(
                         rootDisposable,
                         configuration,
@@ -69,6 +80,21 @@ object K2SnippetFrontend {
                 return factory
             }
         }
+
+    /**
+     * Registers library jars (kotlin-stdlib etc.) as JVM classpath roots so the
+     * analysis resolves stdlib symbols. `JvmContentRootsKt.addJvmClasspathRoots`
+     * is a public extension on `CompilerConfiguration`.
+     */
+    private fun addJvmClasspathRoots(configuration: CompilerConfiguration, roots: List<java.io.File>) {
+        if (roots.isEmpty()) return
+        try {
+            configuration.addJvmClasspathRoots(roots)
+        } catch (e: Exception) {
+            logger.warn(e) { "K2SnippetFrontend could not register stdlib classpath roots: ${e.message}" }
+            throw e
+        }
+    }
 
     @Volatile
     private var disposed = false

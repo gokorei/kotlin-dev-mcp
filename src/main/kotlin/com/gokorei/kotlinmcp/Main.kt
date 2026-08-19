@@ -57,7 +57,14 @@ fun main() = runBlocking {
     val session = server.createSession(transport)
     val serverClosed = Job()
     session.onClose { serverClosed.complete() }
-    // Release the shared K2 KotlinCoreEnvironment (native PSI resources) on exit.
-    Runtime.getRuntime().addShutdownHook(Thread { K2SnippetFrontend.dispose() })
+    // Release the semantic engine's workspace PSI cache and the shared K2
+    // KotlinCoreEnvironment (native PSI resources) on exit so a long-running
+    // stdio server never leaks them.
+    Runtime.getRuntime().addShutdownHook(Thread {
+        runCatching { kotlinServer.close() }
+            .onFailure { logger.warn(it) { "Failed to close the LSP semantic engine during shutdown." } }
+        runCatching { K2SnippetFrontend.dispose() }
+            .onFailure { logger.warn(it) { "Failed to dispose the K2 environment during shutdown." } }
+    })
     serverClosed.join()
 }

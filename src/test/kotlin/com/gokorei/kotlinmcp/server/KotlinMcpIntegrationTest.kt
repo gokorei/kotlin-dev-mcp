@@ -419,6 +419,207 @@ class KotlinMcpIntegrationTest {
         }
     }
 
+    @Test
+    fun `client lsp definition jumps into a workspace file`() = runBlocking {
+        val server = serverWithTools()
+        val (client, sessionJob, clientTransport) = connectedClient(server)
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-int-def")
+        try {
+            workspace.resolve("Model.kt").toFile().writeText(
+                "package app\nclass Cart(val items: Int) { fun totalFees() = items * 2 }\n"
+            )
+            val result = client.callTool(
+                "kotlin_text_lsp_read",
+                mapOf(
+                    "action" to "definition",
+                    "code" to "package app\nfun demo(c: Cart) { c.totalFees() }",
+                    "symbol" to "totalFees",
+                    "workspacePath" to workspace.toAbsolutePath().toString()
+                )
+            )
+            assertFalse(result.isError == true, "expected success, got: ${result.content}")
+            val text = result.content.joinToString { it.toString() }
+            assertTrue(text.contains("Model.kt"), "definition must jump into the workspace file: $text")
+            assertTrue(text.contains("fun totalFees"), "expected declaration signature: $text")
+        } finally {
+            workspace.toFile().deleteRecursively()
+            cleanup(client, sessionJob, clientTransport)
+        }
+    }
+
+    @Test
+    fun `client lsp rename updates bound sites across files and nothing else`() = runBlocking {
+        val server = serverWithTools()
+        val (client, sessionJob, clientTransport) = connectedClient(server)
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-int-rename")
+        try {
+            workspace.resolve("Cart.kt").toFile().writeText("package app\nclass Cart(val n: Int) { fun totalFees() = n }\n")
+            workspace.resolve("UseA.kt").toFile().writeText("package app\nfun a(c: Cart) = c.totalFees()\n")
+            workspace.resolve("Other.kt").toFile().writeText("package app\nval totalFees = 1\n")
+
+            val result = client.callTool(
+                "kotlin_text_lsp_edit",
+                mapOf(
+                    "action" to "rename",
+                    "code" to "package app\nfun demo(c: Cart) = c.totalFees()",
+                    "oldName" to "totalFees",
+                    "newName" to "cost",
+                    "workspacePath" to workspace.toAbsolutePath().toString()
+                )
+            )
+            assertFalse(result.isError == true, "expected success, got: ${result.content}")
+
+            val cart = workspace.resolve("Cart.kt").toFile().readText()
+            val useA = workspace.resolve("UseA.kt").toFile().readText()
+            val other = workspace.resolve("Other.kt").toFile().readText()
+            assertTrue("fun cost()" in cart, "bound declaration must be renamed in Cart.kt: $cart")
+            assertTrue("c.cost()" in useA, "bound usage must be renamed in UseA.kt: $useA")
+            assertTrue(other.contains("val totalFees"), "unrelated same-name symbol must stay untouched: $other")
+        } finally {
+            workspace.toFile().deleteRecursively()
+            cleanup(client, sessionJob, clientTransport)
+        }
+    }
+
+    @Test
+    fun `client lsp completion is type-aware over the boundary`() = runBlocking {
+        val server = serverWithTools()
+        val (client, sessionJob, clientTransport) = connectedClient(server)
+        try {
+            val result = client.callTool(
+                "kotlin_text_lsp_read",
+                mapOf(
+                    "action" to "completion",
+                    "code" to "data class Point(val x: Int, val y: Int)\nfun f(p: Point) = p.",
+                    "symbol" to "p."
+                )
+            )
+            assertFalse(result.isError == true, "expected success, got: ${result.content}")
+            val text = result.content.joinToString { it.toString() }
+            assertTrue(text.contains("## Semantic candidates"), "expected semantic candidates: $text")
+            val semanticSection = text.substringAfter("## Semantic candidates").substringBefore("## Idiom suggestions")
+            assertTrue(" - `x`" in semanticSection, "receiver members must include x: $text")
+            assertTrue(" - `y`" in semanticSection, "receiver members must include y: $text")
+        } finally {
+            cleanup(client, sessionJob, clientTransport)
+        }
+    }
+
+    @Test
+    fun `client lsp references are complete and shadow-correct over the boundary`() = runBlocking {
+        val server = serverWithTools()
+        val (client, sessionJob, clientTransport) = connectedClient(server)
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-int-refs")
+        try {
+            workspace.resolve("Model.kt").toFile().writeText("package app\nval counter = 0\n")
+            workspace.resolve("UseA.kt").toFile().writeText("package app\nfun a() { println(counter) }\n")
+            workspace.resolve("UseB.kt").toFile().writeText("package app\nfun b() { val counter = 1; println(counter) }\n")
+
+            val result = client.callTool(
+                "kotlin_text_lsp_read",
+                mapOf(
+                    "action" to "references",
+                    "code" to "",
+                    "symbol" to "counter",
+                    "workspacePath" to workspace.toAbsolutePath().toString()
+                )
+            )
+            assertFalse(result.isError == true, "expected success, got: ${result.content}")
+            val text = result.content.joinToString { it.toString() }
+            assertTrue(text.contains("Model.kt"), "declaration must be listed: $text")
+            assertTrue(text.contains("UseA.kt"), "bound usage must be listed: $text")
+            assertFalse(text.contains("UseB.kt"), "shadowed local must not appear: $text")
+        } finally {
+            workspace.toFile().deleteRecursively()
+            cleanup(client, sessionJob, clientTransport)
+        }
+    }
+
+    @Test
+    fun `client lsp hover returns resolved signature and KDoc over the boundary`() = runBlocking {
+        val server = serverWithTools()
+        val (client, sessionJob, clientTransport) = connectedClient(server)
+        try {
+            val result = client.callTool(
+                "kotlin_text_lsp_read",
+                mapOf(
+                    "action" to "hover",
+                    "code" to "/** Doubles any value. */\nfun twice(x: Int): Int = x * 2\nfun main() { twice(3) }",
+                    "symbol" to "twice"
+                )
+            )
+            assertFalse(result.isError == true, "expected success, got: ${result.content}")
+            val text = result.content.joinToString { it.toString() }
+            assertTrue(text.contains("fun twice"), "expected resolved signature: $text")
+            assertTrue(text.contains("Doubles any value"), "expected KDoc: $text")
+            assertTrue(text.contains("Type: `kotlin.Int`"), "expected return type: $text")
+        } finally {
+            cleanup(client, sessionJob, clientTransport)
+        }
+    }
+
+    @Test
+    fun `client lsp type hierarchy finds workspace implementations over the boundary`() = runBlocking {
+        val server = serverWithTools()
+        val (client, sessionJob, clientTransport) = connectedClient(server)
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-int-typeh")
+        try {
+            workspace.resolve("Domain.kt").toFile().writeText(
+                "package com.example.domain\ninterface BaseService\n"
+            )
+            workspace.resolve("Impl.kt").toFile().writeText(
+                "package com.example.service\nimport com.example.domain.BaseService\nclass CustomService : BaseService\n"
+            )
+            val result = client.callTool(
+                "kotlin_text_lsp_read",
+                mapOf(
+                    "action" to "type_hierarchy",
+                    "code" to "package com.example.app\nimport com.example.domain.BaseService\nclass AppService : BaseService",
+                    "symbol" to "BaseService",
+                    "workspacePath" to workspace.toAbsolutePath().toString()
+                )
+            )
+            assertFalse(result.isError == true, "expected success, got: ${result.content}")
+            val text = result.content.joinToString { it.toString() }
+            assertTrue(text.contains("CustomService"), "workspace implementation must be listed: $text")
+            assertTrue(text.contains("AppService"), "snippet implementation must be listed: $text")
+        } finally {
+            workspace.toFile().deleteRecursively()
+            cleanup(client, sessionJob, clientTransport)
+        }
+    }
+
+    @Test
+    fun `client lsp call hierarchy lists resolved callers over the boundary`() = runBlocking {
+        val server = serverWithTools()
+        val (client, sessionJob, clientTransport) = connectedClient(server)
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-int-callh")
+        try {
+            workspace.resolve("Utils.kt").toFile().writeText(
+                "package com.example.utils\nfun executeAction() {}\n"
+            )
+            workspace.resolve("Runner.kt").toFile().writeText(
+                "package com.example.runner\nimport com.example.utils.executeAction\nfun runAll() { executeAction() }\n"
+            )
+            val result = client.callTool(
+                "kotlin_text_lsp_read",
+                mapOf(
+                    "action" to "call_hierarchy",
+                    "code" to "package com.example.main\nimport com.example.utils.executeAction\nfun start() { executeAction() }",
+                    "symbol" to "executeAction",
+                    "workspacePath" to workspace.toAbsolutePath().toString()
+                )
+            )
+            assertFalse(result.isError == true, "expected success, got: ${result.content}")
+            val text = result.content.joinToString { it.toString() }
+            assertTrue(text.contains("runAll"), "workspace caller must be listed: $text")
+            assertTrue(text.contains("start"), "snippet caller must be listed: $text")
+        } finally {
+            workspace.toFile().deleteRecursively()
+            cleanup(client, sessionJob, clientTransport)
+        }
+    }
+
     private fun workspaceWithCompiledGreeter(workspace: java.nio.file.Path) {
         val lib = com.gokorei.kotlinmcp.execution.SnippetCompiler.compile("""
             package demo

@@ -370,6 +370,28 @@ public final class com/gokorei/kotlinmcp/linting/LintService$DefaultImpls {
 	public static synthetic fun runDetekt$default (Lcom/gokorei/kotlinmcp/linting/LintService;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
+public final class com/gokorei/kotlinmcp/lsp/DefaultK2SemanticEngine : com/gokorei/kotlinmcp/lsp/K2SemanticEngine {
+	public static final field MAX_CACHED_WORKSPACES I
+	public fun <init> ()V
+	public fun <init> (I)V
+	public synthetic fun <init> (IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun callHierarchy (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/KtCallHierarchyResult;
+	public fun close ()V
+	public fun completionCandidates (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/KotlinCompletionCandidates;
+	public fun fqNameOfDeclaration (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Lorg/jetbrains/kotlin/psi/KtNamedDeclaration;)Ljava/lang/String;
+	public fun getWorkspaceFileCap ()I
+	public fun getWorkspaceRebuilds ()I
+	public fun hover (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/KtHoverInfo;
+	public fun projectClasspath (Ljava/lang/String;)Ljava/util/List;
+	public fun referencesForSymbol (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;Ljava/lang/String;)Ljava/util/List;
+	public fun renameEditsForSymbol (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;Ljava/lang/String;)Ljava/util/List;
+	public fun resolveReference (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Lorg/jetbrains/kotlin/psi/KtReferenceExpression;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/ResolvedDeclaration;
+	public fun session (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;
+	public fun typeHierarchy (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/KtTypeHierarchyResult;
+	public fun typeOfExpression (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Lorg/jetbrains/kotlin/psi/KtExpression;)Ljava/lang/String;
+	public fun workspaceStats (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/WorkspaceStats;
+}
+
 public final class com/gokorei/kotlinmcp/lsp/DefaultLibraryAnalysisService : com/gokorei/kotlinmcp/lsp/LibraryAnalysisService {
 	public fun <init> ()V
 	public fun execute (Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisAction;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -379,8 +401,9 @@ public final class com/gokorei/kotlinmcp/lsp/DefaultLibraryAnalysisService : com
 
 public final class com/gokorei/kotlinmcp/lsp/DefaultLspService : com/gokorei/kotlinmcp/lsp/LspService {
 	public fun <init> ()V
-	public fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;)V
-	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;)V
+	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun close ()V
 	public fun execute (Lcom/gokorei/kotlinmcp/lsp/LspAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
@@ -400,6 +423,28 @@ public final class com/gokorei/kotlinmcp/lsp/K2AnalysisSession {
 	public fun toString ()Ljava/lang/String;
 }
 
+public abstract interface class com/gokorei/kotlinmcp/lsp/K2SemanticEngine {
+	public abstract fun callHierarchy (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/KtCallHierarchyResult;
+	public abstract fun close ()V
+	public abstract fun completionCandidates (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/KotlinCompletionCandidates;
+	public abstract fun fqNameOfDeclaration (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Lorg/jetbrains/kotlin/psi/KtNamedDeclaration;)Ljava/lang/String;
+	public abstract fun getWorkspaceFileCap ()I
+	public abstract fun getWorkspaceRebuilds ()I
+	public abstract fun hover (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/KtHoverInfo;
+	public abstract fun projectClasspath (Ljava/lang/String;)Ljava/util/List;
+	public abstract fun referencesForSymbol (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;Ljava/lang/String;)Ljava/util/List;
+	public abstract fun renameEditsForSymbol (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;Ljava/lang/String;)Ljava/util/List;
+	public abstract fun resolveReference (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Lorg/jetbrains/kotlin/psi/KtReferenceExpression;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/ResolvedDeclaration;
+	public abstract fun session (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;
+	public abstract fun typeHierarchy (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/KtTypeHierarchyResult;
+	public abstract fun typeOfExpression (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Lorg/jetbrains/kotlin/psi/KtExpression;)Ljava/lang/String;
+	public abstract fun workspaceStats (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/WorkspaceStats;
+}
+
+public final class com/gokorei/kotlinmcp/lsp/K2SemanticModelsKt {
+	public static final field SEMANTIC_FILE_CAP I
+}
+
 public final class com/gokorei/kotlinmcp/lsp/K2SnippetFrontend {
 	public static final field INSTANCE Lcom/gokorei/kotlinmcp/lsp/K2SnippetFrontend;
 	public final fun analyzeSession (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;
@@ -409,6 +454,19 @@ public final class com/gokorei/kotlinmcp/lsp/K2SnippetFrontend {
 	public final fun getPsiFactory ()Lorg/jetbrains/kotlin/psi/KtPsiFactory;
 	public final fun parsePsi (Ljava/lang/String;)Lorg/jetbrains/kotlin/psi/KtFile;
 	public final fun resetEnvironment ()V
+}
+
+public final class com/gokorei/kotlinmcp/lsp/KotlinCompletionCandidates {
+	public fun <init> (Ljava/util/List;Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;Ljava/util/List;)Lcom/gokorei/kotlinmcp/lsp/KotlinCompletionCandidates;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/lsp/KotlinCompletionCandidates;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/lsp/KotlinCompletionCandidates;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMembers ()Ljava/util/List;
+	public final fun getScope ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class com/gokorei/kotlinmcp/lsp/KtCallHierarchyResult {
@@ -437,6 +495,31 @@ public final class com/gokorei/kotlinmcp/lsp/KtCallOccurrence {
 	public final fun getFile ()Ljava/lang/String;
 	public final fun getLine ()I
 	public final fun getSnippet ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/gokorei/kotlinmcp/lsp/KtHoverInfo {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/Integer;
+	public final fun component8 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/KtHoverInfo;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/lsp/KtHoverInfo;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/lsp/KtHoverInfo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFile ()Ljava/lang/String;
+	public final fun getFqn ()Ljava/lang/String;
+	public final fun getKdoc ()Ljava/lang/String;
+	public final fun getLine ()Ljava/lang/Integer;
+	public final fun getSignature ()Ljava/lang/String;
+	public final fun getSource ()Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;
+	public final fun getSymbol ()Ljava/lang/String;
+	public final fun getType ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -544,6 +627,7 @@ public final class com/gokorei/kotlinmcp/lsp/LspAction : java/lang/Enum {
 	public static final field FIND_DEFINITION Lcom/gokorei/kotlinmcp/lsp/LspAction;
 	public static final field FIND_REFERENCES Lcom/gokorei/kotlinmcp/lsp/LspAction;
 	public static final field GET_COMPLETIONS Lcom/gokorei/kotlinmcp/lsp/LspAction;
+	public static final field HOVER Lcom/gokorei/kotlinmcp/lsp/LspAction;
 	public static final field RENAME_SYMBOL Lcom/gokorei/kotlinmcp/lsp/LspAction;
 	public static final field TYPE_HIERARCHY Lcom/gokorei/kotlinmcp/lsp/LspAction;
 	public static final field WORKSPACE_REFERENCES Lcom/gokorei/kotlinmcp/lsp/LspAction;
@@ -554,11 +638,13 @@ public final class com/gokorei/kotlinmcp/lsp/LspAction : java/lang/Enum {
 }
 
 public abstract interface class com/gokorei/kotlinmcp/lsp/LspService {
+	public fun close ()V
 	public abstract fun execute (Lcom/gokorei/kotlinmcp/lsp/LspAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun execute$default (Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LspAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
 public final class com/gokorei/kotlinmcp/lsp/LspService$DefaultImpls {
+	public static fun close (Lcom/gokorei/kotlinmcp/lsp/LspService;)V
 	public static synthetic fun execute$default (Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LspAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
@@ -568,6 +654,76 @@ public final class com/gokorei/kotlinmcp/lsp/OccurrenceKind : java/lang/Enum {
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/OccurrenceKind;
 	public static fun values ()[Lcom/gokorei/kotlinmcp/lsp/OccurrenceKind;
+}
+
+public final class com/gokorei/kotlinmcp/lsp/ResolvedDeclaration {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;)Lcom/gokorei/kotlinmcp/lsp/ResolvedDeclaration;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/lsp/ResolvedDeclaration;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/lsp/ResolvedDeclaration;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFile ()Ljava/lang/String;
+	public final fun getFqn ()Ljava/lang/String;
+	public final fun getLine ()I
+	public final fun getSignature ()Ljava/lang/String;
+	public final fun getSource ()Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;
+	public final fun getSymbol ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/gokorei/kotlinmcp/lsp/ResolvedReference {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/ResolvedReference;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/lsp/ResolvedReference;Ljava/lang/String;Ljava/lang/String;IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/lsp/ResolvedReference;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getColumn ()I
+	public final fun getFile ()Ljava/lang/String;
+	public final fun getFqn ()Ljava/lang/String;
+	public final fun getKind ()Ljava/lang/String;
+	public final fun getLine ()I
+	public final fun getSnippet ()Ljava/lang/String;
+	public final fun getSymbol ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/gokorei/kotlinmcp/lsp/ResolvedRenameEdit {
+	public fun <init> (Ljava/lang/String;II)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun copy (Ljava/lang/String;II)Lcom/gokorei/kotlinmcp/lsp/ResolvedRenameEdit;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/lsp/ResolvedRenameEdit;Ljava/lang/String;IIILjava/lang/Object;)Lcom/gokorei/kotlinmcp/lsp/ResolvedRenameEdit;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFile ()Ljava/lang/String;
+	public final fun getLength ()I
+	public final fun getOffset ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/gokorei/kotlinmcp/lsp/ResolvedSource : java/lang/Enum {
+	public static final field EXTERNAL Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;
+	public static final field SNIPPET Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;
+	public static final field UNRESOLVED Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;
+	public static final field WORKSPACE Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;
+	public static fun values ()[Lcom/gokorei/kotlinmcp/lsp/ResolvedSource;
 }
 
 public final class com/gokorei/kotlinmcp/lsp/WorkspaceIndex {
@@ -607,6 +763,21 @@ public final class com/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer {
 	public final fun publicApiOf (Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)Lkotlin/Pair;
 	public final fun typeHierarchyOf (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/KtTypeHierarchyResult;
 	public static synthetic fun typeHierarchyOf$default (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/lsp/KtTypeHierarchyResult;
+}
+
+public final class com/gokorei/kotlinmcp/lsp/WorkspaceStats {
+	public fun <init> (IIZ)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()Z
+	public final fun copy (IIZ)Lcom/gokorei/kotlinmcp/lsp/WorkspaceStats;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/lsp/WorkspaceStats;IIZILjava/lang/Object;)Lcom/gokorei/kotlinmcp/lsp/WorkspaceStats;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAnalyzedFiles ()I
+	public final fun getTotalKtFiles ()I
+	public final fun getTruncated ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class com/gokorei/kotlinmcp/models/FrameworkFeature : java/lang/Enum {
@@ -934,8 +1105,8 @@ public abstract interface class com/gokorei/kotlinmcp/server/FrameworkDetector {
 
 public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public fun <init> ()V
-	public fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;)V
-	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;)V
+	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun analyzeKtor (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun analyzeSerialization (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun analyzeTests (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -944,6 +1115,7 @@ public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public final fun baselineRead (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun checkSnippet (Ljava/lang/String;Ljava/util/List;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun checkSnippet$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun close ()V
 	public final fun codeAnalyzeCompose (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun codeAnalyzeNullability (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun codeExplainCoroutines (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -961,12 +1133,16 @@ public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public final fun formatKtlint (Ljava/lang/String;ZLjava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun formatKtlint$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;ZLjava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun getDocService ()Lcom/gokorei/kotlinmcp/doc/DocService;
+	public final fun getSemanticEngine ()Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;
 	public final fun gradleRun (Ljava/lang/String;Ljava/lang/String;J)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun gradleRun$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;JILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun lspCallHierarchy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun lspFindDefinition (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun lspFindDefinition (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun lspFindDefinition$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun lspFindReferences (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun lspGetCompletions (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun lspHover (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun lspRenameSymbol (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun lspTypeHierarchy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun lspWorkspaceReferences (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -1116,6 +1292,8 @@ public final class com/gokorei/kotlinmcp/shared/LogTruncator {
 
 public final class com/gokorei/kotlinmcp/shared/SourceUtils {
 	public static final field INSTANCE Lcom/gokorei/kotlinmcp/shared/SourceUtils;
+	public final fun collapseWhitespace (Ljava/lang/String;Ljava/lang/Integer;)Ljava/lang/String;
+	public static synthetic fun collapseWhitespace$default (Lcom/gokorei/kotlinmcp/shared/SourceUtils;Ljava/lang/String;Ljava/lang/Integer;ILjava/lang/Object;)Ljava/lang/String;
 	public final fun extractBalancedBraces (Ljava/lang/String;I)Ljava/lang/String;
 	public final fun isSyntacticallyBalanced (Ljava/lang/String;)Z
 	public final fun lineAndColumnOf (Ljava/lang/String;I)Lkotlin/Pair;
