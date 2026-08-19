@@ -176,6 +176,60 @@ class K2SemanticEngineTest {
         assertTrue(engineToClose.projectClasspath(null).isEmpty())
     }
 
+    @Test
+    fun `workspaceStats reuses cached snapshot and renameEdits returns precise identifier ranges`() {
+        val ws = tempWorkspace("kmcp-engine-stats")
+        try {
+            ws.resolve("Model.kt").writeText("package com.example.model\nclass TargetItem(val value: Int)\n")
+            val session = engine.session(ws.absolutePath, "package com.example.app\nimport com.example.model.TargetItem\nfun use(t: TargetItem) = t.value")!!
+            val stats = engine.workspaceStats(ws.absolutePath)
+            assertEquals(1, stats.totalKtFiles)
+            assertEquals(1, stats.analyzedFiles)
+            assertFalse(stats.truncated)
+
+            val edits = engine.renameEditsForSymbol(session, "TargetItem", ws.absolutePath)
+            assertTrue(edits.isNotEmpty(), "expected rename edits for TargetItem")
+            edits.forEach { edit ->
+                assertEquals(10, edit.length, "edit length must match 'TargetItem' identifier length")
+            }
+        } finally {
+            ws.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `workspaceStats reflects file additions and removals after snapshot exists and updates truncation when fileCap crossed`() {
+        val ws = tempWorkspace("kmcp-engine-stats-updates")
+        val cappedEngine = DefaultK2SemanticEngine(fileCap = 2)
+        try {
+            ws.resolve("A.kt").writeText("package p\nclass A\n")
+            ws.resolve("B.kt").writeText("package p\nclass B\n")
+
+            // Create initial session / snapshot
+            cappedEngine.session(ws.absolutePath, "fun main() {}")
+            val initialStats = cappedEngine.workspaceStats(ws.absolutePath)
+            assertEquals(2, initialStats.totalKtFiles)
+            assertEquals(2, initialStats.analyzedFiles)
+            assertFalse(initialStats.truncated)
+
+            // Add a 3rd file crossing the fileCap of 2
+            ws.resolve("C.kt").writeText("package p\nclass C\n")
+            val statsAfterAdd = cappedEngine.workspaceStats(ws.absolutePath)
+            assertEquals(3, statsAfterAdd.totalKtFiles, "totalKtFiles must reflect new file C.kt")
+            assertEquals(2, statsAfterAdd.analyzedFiles, "analyzedFiles must be capped at 2")
+            assertTrue(statsAfterAdd.truncated, "stats must be marked truncated when totalKtFiles > fileCap")
+
+            // Remove file B.kt returning under the cap
+            ws.resolve("B.kt").delete()
+            val statsAfterRemove = cappedEngine.workspaceStats(ws.absolutePath)
+            assertEquals(2, statsAfterRemove.totalKtFiles, "totalKtFiles must reflect removal of B.kt")
+            assertEquals(2, statsAfterRemove.analyzedFiles)
+            assertFalse(statsAfterRemove.truncated, "truncation flag must clear when within cap")
+        } finally {
+            ws.deleteRecursively()
+        }
+    }
+
     private fun findReference(session: K2AnalysisSession, symbol: String): KtReferenceExpression {
         var found: KtReferenceExpression? = null
         session.file.accept(object : KtTreeVisitorVoid() {

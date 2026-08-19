@@ -50,7 +50,8 @@ internal object K2RenameResolver {
                     val decl = occ.node as KtNamedDeclaration
                     val d = descriptorOf(decl)
                     if (d != null && targets.any { K2ResolutionUtils.sameTarget(it, d) }) {
-                        val range = decl.nameIdentifier?.textRange ?: decl.textRange
+                        val nameIdent = decl.nameIdentifier ?: return@forEach
+                        val range = nameIdent.textRange
                         edits += Edit(occ.rel, range.startOffset, range.length)
                     }
                 }

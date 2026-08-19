@@ -244,4 +244,43 @@ class WorkspaceSearchTest {
             tempDir.toFile().deleteRecursively()
         }
     }
+
+    @Test
+    fun `WorkspaceSemanticIndexer and rename ignore idea, agents, github, and target directories`() {
+        val tempDir = java.nio.file.Files.createTempDirectory("kmcp-excluded-dirs-test")
+        try {
+            val srcFile = tempDir.resolve("src/App.kt")
+            val ideaFile = tempDir.resolve(".idea/Dummy.kt")
+            val agentsFile = tempDir.resolve(".agents/AgentSnippet.kt")
+            val targetFile = tempDir.resolve("target/Generated.kt")
+            val githubFile = tempDir.resolve(".github/Script.kt")
+
+            listOf(srcFile, ideaFile, agentsFile, targetFile, githubFile).forEach { path ->
+                java.nio.file.Files.createDirectories(path.parent)
+                path.toFile().writeText("val token = 123")
+            }
+
+            val indexer = WorkspaceSemanticIndexer()
+            val run = indexer.index(tempDir.toString())
+
+            assertEquals(1, run.fileCount, "only src/App.kt should be indexed, but got files: ${run.declarations.map { it.file }}")
+
+            val lspService = DefaultLspService()
+            val result = lspService.execute(
+                LspAction.RENAME_SYMBOL,
+                code = "",
+                symbol = "token",
+                newName = "newToken",
+                workspacePath = tempDir.toString()
+            )
+            assertTrue(result is KotlinMcpResult.Success)
+            assertTrue(srcFile.toFile().readText().contains("newToken"), "src file should be renamed")
+            assertTrue(ideaFile.toFile().readText().contains("token = 123"), ".idea file must not be modified")
+            assertTrue(agentsFile.toFile().readText().contains("token = 123"), ".agents file must not be modified")
+            assertTrue(targetFile.toFile().readText().contains("token = 123"), "target file must not be modified")
+            assertTrue(githubFile.toFile().readText().contains("token = 123"), ".github file must not be modified")
+        } finally {
+            tempDir.toFile().deleteRecursively()
+        }
+    }
 }

@@ -89,10 +89,8 @@ class WorkspaceSemanticIndexer(
     fun index(workspacePath: String, maxFiles: Int = defaultMaxFiles): WorkspaceIndex {
         val root = File(workspacePath)
         if (!root.isDirectory) return WorkspaceIndex(workspacePath, 0, emptyList(), emptyList(), truncated = false, maxFiles = maxFiles)
-        val allKt = root.walkTopDown().onEnter { dir ->
-            val name = dir.name
-            name != "build" && name != ".gradle" && name != ".git" && name != "out" && name != "node_modules"
-        }.filter { it.isFile && (it.extension == "kt" || it.extension == "kts" || it.extension == "java") }
+        val allKt = root.walkTopDown().onEnter { dir -> !K2ResolutionUtils.isExcludedWorkspaceDir(dir) }
+            .filter { it.isFile && (it.extension == "kt" || it.extension == "kts" || it.extension == "java") }
             .toList()
         val truncated = allKt.size > maxFiles
         val files = allKt.take(maxFiles)

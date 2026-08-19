@@ -715,5 +715,86 @@ class LspServiceTest {
 
         workspace.toFile().deleteRecursively()
     }
+
+    @Test
+    fun `renameSymbol reports conflict when file on disk has unexpected content at offset`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-rename-conflict")
+        val fileA = workspace.resolve("com/example/model/User.kt").toFile().apply {
+            parentFile.mkdirs()
+            writeText("package com.example.model\nclass User(val name: String)\n")
+        }
+
+        val customEngine = object : K2SemanticEngine by DefaultK2SemanticEngine() {
+            override fun renameEditsForSymbol(session: K2AnalysisSession, symbol: String, workspacePath: String?): List<ResolvedRenameEdit> {
+                // Return an edit with an offset pointing to something other than 'name'
+                return listOf(ResolvedRenameEdit("com/example/model/User.kt", offset = 0, length = 7))
+            }
+        }
+        val customService = DefaultLspService(semanticEngine = customEngine)
+
+        val result = customService.execute(
+            LspAction.RENAME_SYMBOL,
+            code = "package com.example.model\nfun get(u: User) = u.name",
+            symbol = "name",
+            newName = "fullName",
+            workspacePath = workspace.toString()
+        )
+        assertTrue(result is KotlinMcpResult.Success)
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("CONFLICT"), "conflict should be reported: ${success.content}")
+        assertTrue(fileA.readText().startsWith("package"), "file content should not be corrupted on conflict")
+
+        workspace.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `type hierarchy detects file additions after initial snapshot and switches to fallback when limit is crossed`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-fallback-update")
+        val engine = DefaultK2SemanticEngine()
+        try {
+            val fileA = workspace.resolve("ServiceA.kt").toFile()
+            fileA.writeText("package app\ninterface BaseService\nclass ImplA : BaseService\n")
+
+            // Initial query with 1 file
+            val initialStats = engine.workspaceStats(workspace.toString())
+            assertEquals(1, initialStats.totalKtFiles)
+
+            val cappedEngine = object : K2SemanticEngine by engine {
+                override fun workspaceStats(workspacePath: String?): WorkspaceStats {
+                    val raw = engine.workspaceStats(workspacePath)
+                    // If 2 or more files exist on disk, return total count > default limit (200)
+                    return if (raw.totalKtFiles >= 2) raw.copy(totalKtFiles = 250) else raw
+                }
+            }
+            val service = DefaultLspService(semanticEngine = cappedEngine)
+
+            val initialRes = service.execute(
+                LspAction.TYPE_HIERARCHY,
+                code = "package app\nclass MyService : BaseService",
+                symbol = "BaseService",
+                workspacePath = workspace.toString()
+            )
+            assertTrue(initialRes is KotlinMcpResult.Success)
+            val initialSuccess = initialRes as KotlinMcpResult.Success
+            assertFalse(initialSuccess.content.contains("Structural-index fallback"), "should not trigger fallback under limit")
+
+            // Add second file
+            val fileB = workspace.resolve("ServiceB.kt").toFile()
+            fileB.writeText("package app\nclass ImplB : BaseService\n")
+
+            val fallbackRes = service.execute(
+                LspAction.TYPE_HIERARCHY,
+                code = "package app\nclass MyService : BaseService",
+                symbol = "BaseService",
+                workspacePath = workspace.toString()
+            )
+            assertTrue(fallbackRes is KotlinMcpResult.Success)
+            val fallbackSuccess = fallbackRes as KotlinMcpResult.Success
+            assertTrue(fallbackSuccess.content.contains("Structural-index fallback"), "fallback must trigger after file addition crosses limit: ${fallbackSuccess.content}")
+            assertTrue(fallbackSuccess.content.contains("ImplB"), "fallback must discover implementation ImplB from ServiceB.kt: ${fallbackSuccess.content}")
+        } finally {
+            workspace.toFile().deleteRecursively()
+        }
+    }
 }
 
