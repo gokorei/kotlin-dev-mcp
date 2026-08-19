@@ -77,9 +77,14 @@ internal object K2ResolutionUtils {
         return (if (real.isNotEmpty()) real else candidates).distinct()
     }
 
-    /** Directories never walked as workspace sources (build output, VCS, tooling). */
+    private val EXCLUDED_DIR_NAMES = setOf(
+        "build", ".gradle", ".git", "out", "node_modules",
+        ".idea", ".agents", ".github", "target", ".kotlin", ".bsp"
+    )
+
+    /** Directories never walked as workspace sources (build output, VCS, tooling, IDE metadata). */
     fun isExcludedWorkspaceDir(dir: File): Boolean =
-        dir.name == "build" || dir.name == ".gradle" || dir.name == ".git" || dir.name == "out" || dir.name == "node_modules"
+        dir.name in EXCLUDED_DIR_NAMES
 
     fun declarationPsiFor(
         session: K2AnalysisSession,

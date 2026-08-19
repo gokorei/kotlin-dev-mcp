@@ -176,6 +176,27 @@ class K2SemanticEngineTest {
         assertTrue(engineToClose.projectClasspath(null).isEmpty())
     }
 
+    @Test
+    fun `workspaceStats reuses cached snapshot and renameEdits returns precise identifier ranges`() {
+        val ws = tempWorkspace("kmcp-engine-stats")
+        try {
+            ws.resolve("Model.kt").writeText("package com.example.model\nclass TargetItem(val value: Int)\n")
+            val session = engine.session(ws.absolutePath, "package com.example.app\nimport com.example.model.TargetItem\nfun use(t: TargetItem) = t.value")!!
+            val stats = engine.workspaceStats(ws.absolutePath)
+            assertEquals(1, stats.totalKtFiles)
+            assertEquals(1, stats.analyzedFiles)
+            assertFalse(stats.truncated)
+
+            val edits = engine.renameEditsForSymbol(session, "TargetItem", ws.absolutePath)
+            assertTrue(edits.isNotEmpty(), "expected rename edits for TargetItem")
+            edits.forEach { edit ->
+                assertEquals(10, edit.length, "edit length must match 'TargetItem' identifier length")
+            }
+        } finally {
+            ws.deleteRecursively()
+        }
+    }
+
     private fun findReference(session: K2AnalysisSession, symbol: String): KtReferenceExpression {
         var found: KtReferenceExpression? = null
         session.file.accept(object : KtTreeVisitorVoid() {

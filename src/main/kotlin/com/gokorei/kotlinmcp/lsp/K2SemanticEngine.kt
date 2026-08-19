@@ -315,9 +315,14 @@ class DefaultK2SemanticEngine(
         if (closed) return WorkspaceStats(0, 0, false)
         val root = if (workspacePath.isNullOrBlank()) null else File(workspacePath)
         if (root == null || !root.isDirectory) return WorkspaceStats(0, 0, false)
-        val total = ktFilesUnder(root).size
-        val analyzed = minOf(total, fileCap)
-        return WorkspaceStats(total, analyzed, total > fileCap)
+        val key = runCatching { root.canonicalFile }.getOrDefault(root)
+        synchronized(this) {
+            if (closed) return WorkspaceStats(0, 0, false)
+            val cached = snapshotCache[key]
+            val total = cached?.totalFiles ?: ktFilesUnder(root).size
+            val analyzed = minOf(total, fileCap)
+            return WorkspaceStats(total, analyzed, total > fileCap)
+        }
     }
 
     override fun projectClasspath(workspacePath: String?): List<String> =
@@ -337,6 +342,7 @@ class DefaultK2SemanticEngine(
         val key = runCatching { root.canonicalFile }.getOrDefault(root)
         synchronized(this) {
             if (closed) return emptyList()
+
             val allFiles = ktFilesUnder(root)
 
             val cached = snapshotCache[key]

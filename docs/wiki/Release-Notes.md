@@ -33,11 +33,21 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 - **References find snippet occurrences for previously-unresolved symbols** — symbols the semantic engine cannot bind still surface every matching use in the snippet.
 
+- **Rename AST safety guard on missing identifier tokens** — `K2RenameResolver` safely skips declarations where `nameIdentifier` is null rather than falling back to replacing the whole declaration body.
+
+- **Multi-file rename conflict detection** — renames validate expected tokens per edit and abort file modifications on conflict with an explicit report when file contents on disk have shifted since analysis.
+
 ### Improvements
 
 - **Hover docs are more accurate** — a symbol's own documentation is never replaced by unrelated Kotlin standard-library docs just because they share a name.
 
 - **Shared K2 resolution helpers, deduplicated** — moved symbol-occurrence collection (`collectSymbolOccurrences`), target selection (`pickTargets`), and workspace-directory exclusion into `K2ResolutionUtils`, and re-used them from `K2SemanticEngine`, `K2RenameResolver`, and `K2HierarchyResolver`. Hierarchy queries now memoize the transitive `inherits` walk per symbol, and completion caches stdlib extension names per receiver FQN (bounded, 512 entries), so repeated lookups stay fast on large workspaces. Rename edits now carry PSI-derived lengths instead of assuming the symbol name length, and member-scope enumeration failures are logged instead of silently swallowed.
+
+- **Deduplicated hierarchy disk traversal** — `LspService` hierarchy fallback checks now reuse `semanticEngine.workspaceStats()` total file counts rather than executing duplicate filesystem walks.
+
+- **Expanded workspace excluded directory filtering** — workspace traversal across search, references, and indexing ignores `.idea`, `.agents`, `.github`, `target`, `.kotlin`, and `.bsp` directories.
+
+- **Optimized semantic snapshot cache validation** — `DefaultK2SemanticEngine` applies a lightweight burst validation window and cached file counts to avoid redundant stat storms during consecutive queries.
 
 - **Modular K2 semantic engine decomposition** — decomposed the omnibus `K2SemanticEngine.kt` into dedicated, single-responsibility files: `K2SemanticModels.kt` (domain models and enums), `K2CompletionResolver.kt` (receiver member scopes and in-scope completions), `K2HierarchyResolver.kt` (type and call hierarchies), `K2RenameResolver.kt` (AST-bound rename edits), `K2HoverResolver.kt` (hover signatures, types, and KDocs), and `K2ResolutionUtils.kt` (shared descriptor and target resolution utilities). Streamlined whitespace signature formatting into `SourceUtils.collapseWhitespace` without regex.
 

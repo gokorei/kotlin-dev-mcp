@@ -715,5 +715,36 @@ class LspServiceTest {
 
         workspace.toFile().deleteRecursively()
     }
+
+    @Test
+    fun `renameSymbol reports conflict when file on disk has unexpected content at offset`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-rename-conflict")
+        val fileA = workspace.resolve("com/example/model/User.kt").toFile().apply {
+            parentFile.mkdirs()
+            writeText("package com.example.model\nclass User(val name: String)\n")
+        }
+
+        val customEngine = object : K2SemanticEngine by DefaultK2SemanticEngine() {
+            override fun renameEditsForSymbol(session: K2AnalysisSession, symbol: String, workspacePath: String?): List<ResolvedRenameEdit> {
+                // Return an edit with an offset pointing to something other than 'name'
+                return listOf(ResolvedRenameEdit("com/example/model/User.kt", offset = 0, length = 7))
+            }
+        }
+        val customService = DefaultLspService(semanticEngine = customEngine)
+
+        val result = customService.execute(
+            LspAction.RENAME_SYMBOL,
+            code = "package com.example.model\nfun get(u: User) = u.name",
+            symbol = "name",
+            newName = "fullName",
+            workspacePath = workspace.toString()
+        )
+        assertTrue(result is KotlinMcpResult.Success)
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("CONFLICT"), "conflict should be reported: ${success.content}")
+        assertTrue(fileA.readText().startsWith("package"), "file content should not be corrupted on conflict")
+
+        workspace.toFile().deleteRecursively()
+    }
 }
 

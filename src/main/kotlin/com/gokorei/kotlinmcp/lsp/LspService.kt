@@ -308,8 +308,9 @@ class DefaultLspService(
             }
             val edits = editsResult.getOrThrow()
             val snippetEdits = edits.filter { it.file == "Snippet.kt" }
-            val refactoredCode = applyRenameEdits(code, snippetEdits.map { it.offset to it.length }, new, old)
-            val snippetReplacementCount = snippetEdits.size
+            val snippetApply = applyRenameEdits(code, snippetEdits.map { it.offset to it.length }, new, old)
+            val refactoredCode = snippetApply.updatedText
+            val snippetReplacementCount = snippetApply.appliedCount
 
             val workspaceChanges = mutableListOf<String>()
             var isTruncated = false
@@ -328,10 +329,12 @@ class DefaultLspService(
                         try {
                             if (target.isFile) {
                                 val original = target.readText()
-                                val updated = applyRenameEdits(original, fileEdits.map { it.offset to it.length }, new, old)
-                                if (updated != original) {
-                                    target.writeText(updated)
-                                    workspaceChanges.add("$rel: ${fileEdits.size} replacements")
+                                val applyRes = applyRenameEdits(original, fileEdits.map { it.offset to it.length }, new, old)
+                                if (applyRes.conflictCount > 0) {
+                                    workspaceChanges.add("$rel: CONFLICT (${applyRes.conflictCount} edits skipped due to changed content)")
+                                } else if (applyRes.updatedText != original) {
+                                    target.writeText(applyRes.updatedText)
+                                    workspaceChanges.add("$rel: ${applyRes.appliedCount} replacements")
                                 }
                             }
                         } catch (e: Exception) {
@@ -383,20 +386,34 @@ class DefaultLspService(
         return renameSymbolLegacy(code, old, new, workspacePath, maxFiles)
     }
 
+    private data class RenameApplyResult(
+        val updatedText: String,
+        val appliedCount: Int,
+        val conflictCount: Int
+    )
+
     private fun applyRenameEdits(
         text: String,
         edits: List<Pair<Int, Int>>,
         replacement: String,
         expected: String? = null
-    ): String {
+    ): RenameApplyResult {
         var result = text
+        var applied = 0
+        var conflicts = 0
         edits.distinct().sortedByDescending { it.first }.forEach { (offset, length) ->
             if (offset in 0..result.length && length >= 0 && offset + length <= result.length) {
-                if (expected != null && result.substring(offset, offset + length).trim('`') != expected.trim('`')) return@forEach
+                if (expected != null && result.substring(offset, offset + length).trim('`') != expected.trim('`')) {
+                    conflicts++
+                    return@forEach
+                }
                 result = result.substring(0, offset) + replacement + result.substring(offset + length)
+                applied++
+            } else {
+                conflicts++
             }
         }
-        return result
+        return RenameApplyResult(result, applied, conflicts)
     }
 
     private fun renameSymbolLegacy(code: String, oldName: String?, newName: String?, workspacePath: String?, maxFiles: Int = 500): KotlinMcpResult {
@@ -435,10 +452,7 @@ class DefaultLspService(
                 val targetFqns = scopedTargetDecls.mapNotNull { it.fqn }.toSet()
 
                 val allFiles = root.walkTopDown()
-                    .onEnter { dir ->
-                        val name = dir.name
-                        name != "build" && name != ".gradle" && name != ".git" && name != "out" && name != "node_modules"
-                    }
+                    .onEnter { dir -> !K2ResolutionUtils.isExcludedWorkspaceDir(dir) }
                     .filter { it.isFile && (it.extension == "kt" || it.extension == "kts") }
                     .toList()
 
@@ -848,13 +862,8 @@ class DefaultLspService(
 
     private fun shouldUseIndexFallback(workspacePath: String?): Boolean {
         if (workspacePath.isNullOrBlank()) return false
-        val root = File(workspacePath)
-        if (!root.isDirectory) return false
-        val count = root.walkTopDown().onEnter { dir ->
-            val name = dir.name
-            name != "build" && name != ".gradle" && name != ".git" && name != "out" && name != "node_modules"
-        }.count { it.isFile && it.extension == "kt" }
-        return count > semanticHierarchyMaxFiles
+        val stats = runCatching { semanticEngine.workspaceStats(workspacePath) }.getOrNull()
+        return (stats?.totalKtFiles ?: 0) > semanticHierarchyMaxFiles
     }
 
 }
