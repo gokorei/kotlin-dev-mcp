@@ -318,8 +318,12 @@ class DefaultK2SemanticEngine(
         val key = runCatching { root.canonicalFile }.getOrDefault(root)
         synchronized(this) {
             if (closed) return WorkspaceStats(0, 0, false)
+            val allFiles = ktFilesUnder(root)
+            val total = allFiles.size
             val cached = snapshotCache[key]
-            val total = cached?.totalFiles ?: ktFilesUnder(root).size
+            if (cached != null && (cached.totalFiles != total || !allFiles.all { cached.lastModified[it] == it.lastModified() })) {
+                snapshotCache.remove(key)
+            }
             val analyzed = minOf(total, fileCap)
             return WorkspaceStats(total, analyzed, total > fileCap)
         }

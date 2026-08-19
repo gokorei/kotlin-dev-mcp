@@ -746,5 +746,54 @@ class LspServiceTest {
 
         workspace.toFile().deleteRecursively()
     }
+
+    @Test
+    fun `type hierarchy detects file additions after initial snapshot and switches to fallback when limit is crossed`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-lsp-fallback-update")
+        val engine = DefaultK2SemanticEngine()
+        try {
+            val fileA = workspace.resolve("ServiceA.kt").toFile()
+            fileA.writeText("package app\ninterface BaseService\nclass ImplA : BaseService\n")
+
+            // Initial query with 1 file
+            val initialStats = engine.workspaceStats(workspace.toString())
+            assertEquals(1, initialStats.totalKtFiles)
+
+            val cappedEngine = object : K2SemanticEngine by engine {
+                override fun workspaceStats(workspacePath: String?): WorkspaceStats {
+                    val raw = engine.workspaceStats(workspacePath)
+                    // If 2 or more files exist on disk, return total count > default limit (200)
+                    return if (raw.totalKtFiles >= 2) raw.copy(totalKtFiles = 250) else raw
+                }
+            }
+            val service = DefaultLspService(semanticEngine = cappedEngine)
+
+            val initialRes = service.execute(
+                LspAction.TYPE_HIERARCHY,
+                code = "package app\nclass MyService : BaseService",
+                symbol = "BaseService",
+                workspacePath = workspace.toString()
+            )
+            assertTrue(initialRes is KotlinMcpResult.Success)
+            val initialSuccess = initialRes as KotlinMcpResult.Success
+            assertFalse(initialSuccess.content.contains("Structural-index fallback"), "should not trigger fallback under limit")
+
+            // Add second file
+            val fileB = workspace.resolve("ServiceB.kt").toFile()
+            fileB.writeText("package app\nclass ImplB : BaseService\n")
+
+            val fallbackRes = service.execute(
+                LspAction.TYPE_HIERARCHY,
+                code = "package app\nclass MyService : BaseService",
+                symbol = "BaseService",
+                workspacePath = workspace.toString()
+            )
+            assertTrue(fallbackRes is KotlinMcpResult.Success)
+            val fallbackSuccess = fallbackRes as KotlinMcpResult.Success
+            assertTrue(fallbackSuccess.content.contains("Structural-index fallback"), "fallback must trigger after file addition crosses limit: ${fallbackSuccess.content}")
+        } finally {
+            workspace.toFile().deleteRecursively()
+        }
+    }
 }
 
