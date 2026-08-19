@@ -791,6 +791,7 @@ class LspServiceTest {
             assertTrue(fallbackRes is KotlinMcpResult.Success)
             val fallbackSuccess = fallbackRes as KotlinMcpResult.Success
             assertTrue(fallbackSuccess.content.contains("Structural-index fallback"), "fallback must trigger after file addition crosses limit: ${fallbackSuccess.content}")
+            assertTrue(fallbackSuccess.content.contains("ImplB"), "fallback must discover implementation ImplB from ServiceB.kt: ${fallbackSuccess.content}")
         } finally {
             workspace.toFile().deleteRecursively()
         }

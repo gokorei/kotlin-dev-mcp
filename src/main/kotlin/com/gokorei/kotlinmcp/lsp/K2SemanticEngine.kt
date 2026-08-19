@@ -136,6 +136,7 @@ class DefaultK2SemanticEngine(
         val root: File,
         val files: List<WorkspaceFile>,
         val lastModified: Map<File, Long>,
+        val dirLastModified: Map<File, Long>,
         val totalFiles: Int = files.size
     )
 
@@ -268,7 +269,9 @@ class DefaultK2SemanticEngine(
                     val decl = occ.node as KtNamedDeclaration
                     val d = descriptorOf(decl)
                     if (d != null && targets.any { K2ResolutionUtils.sameTarget(it, d) }) {
-                        val offset = decl.nameIdentifier?.textRange?.startOffset ?: decl.textRange.startOffset
+                        val nameIdent = decl.nameIdentifier ?: return@forEach
+                        val range = nameIdent.textRange
+                        val offset = range.startOffset
                         val fqn = if (!DescriptorUtils.isLocal(d)) {
                             K2ResolutionUtils.safeFqn(d)?.takeIf { K2ResolutionUtils.isRealFqn(it) }
                         } else {
@@ -318,12 +321,8 @@ class DefaultK2SemanticEngine(
         val key = runCatching { root.canonicalFile }.getOrDefault(root)
         synchronized(this) {
             if (closed) return WorkspaceStats(0, 0, false)
-            val allFiles = ktFilesUnder(root)
-            val total = allFiles.size
-            val cached = snapshotCache[key]
-            if (cached != null && (cached.totalFiles != total || !allFiles.all { cached.lastModified[it] == it.lastModified() })) {
-                snapshotCache.remove(key)
-            }
+            val snapshot = getOrRefreshSnapshot(root, key)
+            val total = snapshot.totalFiles
             val analyzed = minOf(total, fileCap)
             return WorkspaceStats(total, analyzed, total > fileCap)
         }
@@ -346,26 +345,48 @@ class DefaultK2SemanticEngine(
         val key = runCatching { root.canonicalFile }.getOrDefault(root)
         synchronized(this) {
             if (closed) return emptyList()
-
-            val allFiles = ktFilesUnder(root)
-
-            val cached = snapshotCache[key]
-            if (cached != null && cached.totalFiles == allFiles.size &&
-                allFiles.all { file -> cached.lastModified[file] == file.lastModified() }
-            ) {
-                return cached.files
-            }
-
-            val parsed = allFiles.take(fileCap).mapNotNull { file ->
-                val rel = try { root.toPath().relativize(file.toPath()).toString() } catch (_: Exception) { file.name }
-                val text = runCatching { file.readText() }.getOrNull() ?: return@mapNotNull null
-                val psi = runCatching { K2SnippetFrontend.psiFactory.createFile(rel, text) }.getOrNull() ?: return@mapNotNull null
-                WorkspaceFile(rel, file, psi)
-            }
-            snapshotCache[key] = WorkspaceSnapshot(key, parsed, allFiles.associateWith { it.lastModified() }, allFiles.size)
-            workspaceRebuilds++
-            return parsed
+            return getOrRefreshSnapshot(root, key).files
         }
+    }
+
+    private fun getOrRefreshSnapshot(root: File, key: File): WorkspaceSnapshot {
+        val cached = snapshotCache[key]
+        if (cached != null &&
+            cached.dirLastModified.all { (dir, lastM) -> dir.lastModified() == lastM } &&
+            cached.lastModified.all { (file, lastM) -> file.lastModified() == lastM }
+        ) {
+            return cached
+        }
+
+        val allDirs = root.walkTopDown().onEnter { dir -> !K2ResolutionUtils.isExcludedWorkspaceDir(dir) }
+            .filter { it.isDirectory }
+            .toList()
+        val allFiles = ktFilesUnder(root)
+
+        if (cached != null && cached.totalFiles == allFiles.size &&
+            allFiles.all { file -> cached.lastModified[file] == file.lastModified() }
+        ) {
+            val updated = cached.copy(dirLastModified = allDirs.associateWith { it.lastModified() })
+            snapshotCache[key] = updated
+            return updated
+        }
+
+        val parsed = allFiles.take(fileCap).mapNotNull { file ->
+            val rel = try { root.toPath().relativize(file.toPath()).toString() } catch (_: Exception) { file.name }
+            val text = runCatching { file.readText() }.getOrNull() ?: return@mapNotNull null
+            val psi = runCatching { K2SnippetFrontend.psiFactory.createFile(rel, text) }.getOrNull() ?: return@mapNotNull null
+            WorkspaceFile(rel, file, psi)
+        }
+        val newSnapshot = WorkspaceSnapshot(
+            key,
+            parsed,
+            allFiles.associateWith { it.lastModified() },
+            allDirs.associateWith { it.lastModified() },
+            allFiles.size
+        )
+        snapshotCache[key] = newSnapshot
+        workspaceRebuilds++
+        return newSnapshot
     }
 
     private fun ktFilesUnder(root: File): List<File> =
