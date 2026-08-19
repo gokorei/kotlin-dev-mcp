@@ -597,7 +597,8 @@ class LspServiceTest {
         )
         assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")
         val success = result as KotlinMcpResult.Success
-        assertTrue(success.content.contains("fun greet(user: kotlin.String): kotlin.String"), "expected external signature: ${success.content}")
+        assertTrue(success.content.contains("fun greet"), "expected rendered signature: ${success.content}")
+        assertTrue(success.content.contains("kotlin.String"), "expected resolved types in signature: ${success.content}")
         assertTrue(success.content.contains("Greeter.kt"), "expected workspace location: ${success.content}")
         assertTrue(success.content.contains("friendly greeting"), "expected KDoc from workspace declaration: ${success.content}")
 

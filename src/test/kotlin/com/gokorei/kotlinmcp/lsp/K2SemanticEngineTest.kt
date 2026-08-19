@@ -160,6 +160,7 @@ class K2SemanticEngineTest {
             assertEquals(afterFirst, engine.workspaceRebuilds, "repeated calls must reuse the cached workspace parse")
 
             modelFile.appendText("// change\n")
+            modelFile.setLastModified(System.currentTimeMillis() + 2000)
             engine.session(ws.absolutePath, "fun c() {}")
             assertEquals(afterFirst + 1, engine.workspaceRebuilds, "a file modification must rebuild the workspace")
         } finally {

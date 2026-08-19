@@ -496,9 +496,10 @@ class KotlinMcpIntegrationTest {
             )
             assertFalse(result.isError == true, "expected success, got: ${result.content}")
             val text = result.content.joinToString { it.toString() }
-            assertTrue(text.contains("Semantic candidates"), "expected semantic candidates: $text")
-            assertTrue(text.contains("x"), "receiver members must include x: $text")
-            assertTrue(text.contains("y"), "receiver members must include y: $text")
+            assertTrue(text.contains("## Semantic candidates"), "expected semantic candidates: $text")
+            val semanticSection = text.substringAfter("## Semantic candidates").substringBefore("## Idiom suggestions")
+            assertTrue(" - `x`" in semanticSection, "receiver members must include x: $text")
+            assertTrue(" - `y`" in semanticSection, "receiver members must include y: $text")
         } finally {
             cleanup(client, sessionJob, clientTransport)
         }

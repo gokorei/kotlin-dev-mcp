@@ -61,8 +61,10 @@ fun main() = runBlocking {
     // KotlinCoreEnvironment (native PSI resources) on exit so a long-running
     // stdio server never leaks them.
     Runtime.getRuntime().addShutdownHook(Thread {
-        kotlinServer.close()
-        K2SnippetFrontend.dispose()
+        runCatching { kotlinServer.close() }
+            .onFailure { logger.warn(it) { "Failed to close the LSP semantic engine during shutdown." } }
+        runCatching { K2SnippetFrontend.dispose() }
+            .onFailure { logger.warn(it) { "Failed to dispose the K2 environment during shutdown." } }
     })
     serverClosed.join()
 }

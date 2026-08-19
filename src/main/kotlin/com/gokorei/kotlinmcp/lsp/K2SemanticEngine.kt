@@ -231,21 +231,33 @@ class DefaultK2SemanticEngine(
         fun descriptorOf(decl: KtNamedDeclaration): DeclarationDescriptor? =
             ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, decl]
 
-        val realTargets = declOccurrences
-            .mapNotNull { descriptorOf(it.node as KtNamedDeclaration) }
-            .filter { !DescriptorUtils.isLocal(it) && K2ResolutionUtils.isRealFqn(K2ResolutionUtils.safeFqn(it)) }
-        val targets: List<DeclarationDescriptor> =
-            if (realTargets.isNotEmpty()) realTargets
-            else declOccurrences.mapNotNull { descriptorOf(it.node as KtNamedDeclaration) }
+        val declTargets = declOccurrences.mapNotNull { descriptorOf(it.node as KtNamedDeclaration) }
+        val refTargets = occurrences
+            .filter { it.kind == "ref" }
+            .mapNotNull { ctx[BindingContext.REFERENCE_TARGET, it.node as KtSimpleNameExpression] }
+        val targets: List<DeclarationDescriptor> = K2ResolutionUtils.pickTargets(declTargets.ifEmpty { refTargets })
 
-        val textCache = hashMapOf<KtFile, String>()
         fun toRow(occ: K2ResolutionUtils.SymbolOccurrence, offset: Int, fqn: String?): ResolvedReference {
-            val text = textCache.getOrPut(occ.file) { occ.file.text }
-            val line = SourceUtils.lineOf(text, offset)
-            val lineStart = text.lastIndexOf('\n', offset - 1) + 1
-            val column = offset - lineStart + 1
-            val end = text.indexOf('\n', offset).let { if (it == -1) text.length else it }
-            val lineText = text.substring(lineStart, end).trim()
+            val file = occ.file
+            val lineText: String
+            val line: Int
+            val column: Int
+            val document = file.viewProvider.document
+            if (document != null) {
+                val lineIndex = document.getLineNumber(offset)
+                line = lineIndex + 1
+                val lineStart = document.getLineStartOffset(lineIndex)
+                column = offset - lineStart + 1
+                val lineEnd = document.getLineEndOffset(lineIndex)
+                lineText = document.getText().substring(lineStart, lineEnd).trim()
+            } else {
+                val text = file.text
+                line = SourceUtils.lineOf(text, offset)
+                val lineStart = text.lastIndexOf('\n', offset - 1) + 1
+                column = offset - lineStart + 1
+                val end = text.indexOf('\n', offset).let { if (it == -1) text.length else it }
+                lineText = text.substring(lineStart, end).trim()
+            }
             return ResolvedReference(symbol, occ.rel, line, column, lineText, occ.kind, fqn)
         }
 
@@ -312,8 +324,10 @@ class DefaultK2SemanticEngine(
         if (closed) emptyList() else SnippetCompiler.detectProjectClasspath(workspacePath)
 
     override fun close() {
-        closed = true
-        snapshotCache.clear()
+        synchronized(this) {
+            closed = true
+            snapshotCache.clear()
+        }
     }
 
     private fun workspaceFiles(workspacePath: String?): List<WorkspaceFile> {
@@ -322,6 +336,7 @@ class DefaultK2SemanticEngine(
         if (!root.isDirectory) return emptyList()
         val key = runCatching { root.canonicalFile }.getOrDefault(root)
         synchronized(this) {
+            if (closed) return emptyList()
             val allFiles = ktFilesUnder(root)
 
             val cached = snapshotCache[key]

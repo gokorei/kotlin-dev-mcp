@@ -209,12 +209,10 @@ class DefaultLspService(
             }
         }
 
-        if (references.isEmpty() && session == null) {
-            val text = code
-            fun lineOf(offset: Int): Int = text.substring(0, minOf(offset, text.length)).count { '\n' == it } + 1
-
+        if (references.isEmpty()) {
             val psi = K2SnippetFrontend.parsePsi(code)
             if (psi != null) {
+                fun lineOf(offset: Int): Int = code.substring(0, minOf(offset, code.length)).count { '\n' == it } + 1
                 val offsets = mutableSetOf<Int>()
                 psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
                     override fun visitSimpleNameExpression(expression: org.jetbrains.kotlin.psi.KtSimpleNameExpression) {
@@ -232,14 +230,8 @@ class DefaultLspService(
                 })
                 offsets.sorted().forEach { offset ->
                     val snippetLine = lineOf(offset)
-                    val lineText = text.lines().getOrNull(snippetLine - 1)?.trim().orEmpty()
+                    val lineText = code.lines().getOrNull(snippetLine - 1)?.trim().orEmpty()
                     references.add("Snippet: Line $snippetLine: `$lineText`")
-                }
-            } else {
-                code.lines().forEachIndexed { index, line ->
-                    if (Regex("""\b${Regex.escape(s)}\b""").containsMatchIn(line)) {
-                        references.add("Snippet: Line ${index + 1}: `${line.trim()}`")
-                    }
                 }
             }
         }
@@ -310,9 +302,13 @@ class DefaultLspService(
 
         val session = runCatching { semanticEngine.session(workspacePath, code) }.getOrNull()
         if (session != null) {
-            val edits = runCatching { semanticEngine.renameEditsForSymbol(session, old, workspacePath) }.getOrNull().orEmpty()
+            val editsResult = runCatching { semanticEngine.renameEditsForSymbol(session, old, workspacePath) }
+            if (editsResult.isFailure) {
+                return renameSymbolLegacy(code, old, new, workspacePath, maxFiles)
+            }
+            val edits = editsResult.getOrThrow()
             val snippetEdits = edits.filter { it.file == "Snippet.kt" }
-            val refactoredCode = applyRenameEdits(code, snippetEdits.map { it.offset to it.length }, new)
+            val refactoredCode = applyRenameEdits(code, snippetEdits.map { it.offset to it.length }, new, old)
             val snippetReplacementCount = snippetEdits.size
 
             val workspaceChanges = mutableListOf<String>()
@@ -332,7 +328,7 @@ class DefaultLspService(
                         try {
                             if (target.isFile) {
                                 val original = target.readText()
-                                val updated = applyRenameEdits(original, fileEdits.map { it.offset to it.length }, new)
+                                val updated = applyRenameEdits(original, fileEdits.map { it.offset to it.length }, new, old)
                                 if (updated != original) {
                                     target.writeText(updated)
                                     workspaceChanges.add("$rel: ${fileEdits.size} replacements")
@@ -387,10 +383,16 @@ class DefaultLspService(
         return renameSymbolLegacy(code, old, new, workspacePath, maxFiles)
     }
 
-    private fun applyRenameEdits(text: String, edits: List<Pair<Int, Int>>, replacement: String): String {
+    private fun applyRenameEdits(
+        text: String,
+        edits: List<Pair<Int, Int>>,
+        replacement: String,
+        expected: String? = null
+    ): String {
         var result = text
         edits.distinct().sortedByDescending { it.first }.forEach { (offset, length) ->
             if (offset in 0..result.length && length >= 0 && offset + length <= result.length) {
+                if (expected != null && result.substring(offset, offset + length).trim('`') != expected.trim('`')) return@forEach
                 result = result.substring(0, offset) + replacement + result.substring(offset + length)
             }
         }
@@ -812,7 +814,8 @@ class DefaultLspService(
                 else -> info.file ?: "Unknown"
             }
             appendLine("- Location: $location")
-            val docs = (info.kdoc ?: stdlibDocFor(target))?.let { "- Documentation:\n```\n$it\n```" }
+            val fallbackDoc = if (info.source == ResolvedSource.EXTERNAL) stdlibDocFor(target) else null
+            val docs = (info.kdoc ?: fallbackDoc)?.let { "- Documentation:\n```\n$it\n```" }
             if (docs != null) {
                 appendLine()
                 appendLine(docs)

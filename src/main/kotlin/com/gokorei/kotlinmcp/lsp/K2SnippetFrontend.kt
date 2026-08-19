@@ -3,8 +3,10 @@
 package com.gokorei.kotlinmcp.lsp
 
 import com.gokorei.kotlinmcp.execution.SnippetCompiler
+import org.jetbrains.kotlin.cli.jvm.config.addJvmClasspathRoots
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.jetbrains.kotlin.com.intellij.openapi.Disposable
 import org.jetbrains.kotlin.com.intellij.openapi.util.Disposer
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
@@ -29,6 +31,8 @@ data class K2AnalysisSession(
  * and frontend compiler analyzer (`TopDownAnalyzerFacadeForJVM`).
  */
 object K2SnippetFrontend {
+
+    private val logger = KotlinLogging.logger {}
 
     @Volatile
     private var rootDisposable = Disposer.newDisposable("K2SnippetFrontend.root")
@@ -80,16 +84,15 @@ object K2SnippetFrontend {
     /**
      * Registers library jars (kotlin-stdlib etc.) as JVM classpath roots so the
      * analysis resolves stdlib symbols. `JvmContentRootsKt.addJvmClasspathRoots`
-     * is `internal` in the compiler, so it is invoked reflectively.
+     * is a public extension on `CompilerConfiguration`.
      */
     private fun addJvmClasspathRoots(configuration: CompilerConfiguration, roots: List<java.io.File>) {
         if (roots.isEmpty()) return
         try {
-            val cls = Class.forName("org.jetbrains.kotlin.cli.jvm.config.JvmContentRootsKt")
-            val method = cls.getMethod("addJvmClasspathRoots", CompilerConfiguration::class.java, List::class.java)
-            method.invoke(null, configuration, roots)
-        } catch (e: Throwable) {
-            System.err.println("K2SnippetFrontend could not register stdlib classpath roots: ${e.message}")
+            configuration.addJvmClasspathRoots(roots)
+        } catch (e: Exception) {
+            logger.warn(e) { "K2SnippetFrontend could not register stdlib classpath roots: ${e.message}" }
+            throw e
         }
     }
 

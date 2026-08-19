@@ -371,6 +371,7 @@ public final class com/gokorei/kotlinmcp/linting/LintService$DefaultImpls {
 }
 
 public final class com/gokorei/kotlinmcp/lsp/DefaultK2SemanticEngine : com/gokorei/kotlinmcp/lsp/K2SemanticEngine {
+	public static final field MAX_CACHED_WORKSPACES I
 	public fun <init> ()V
 	public fun <init> (I)V
 	public synthetic fun <init> (IILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -1136,6 +1137,7 @@ public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public final fun gradleRun (Ljava/lang/String;Ljava/lang/String;J)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun gradleRun$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;JILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun lspCallHierarchy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun lspFindDefinition (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun lspFindDefinition (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun lspFindDefinition$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun lspFindReferences (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
