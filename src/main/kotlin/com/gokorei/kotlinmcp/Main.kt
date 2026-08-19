@@ -32,7 +32,7 @@ fun main() = runBlocking {
 
     logger.info { "Starting Kotlin Developer MCP Server (kotlin-mcp)..." }
 
-    val serverInfo = Implementation(name = "kotlin-mcp", version = "1.0.0")
+    val serverInfo = Implementation(name = "kotlin-mcp", version = "1.1.0")
     val options = ServerOptions(
         capabilities = ServerCapabilities(
             tools = ServerCapabilities.Tools(listChanged = false),

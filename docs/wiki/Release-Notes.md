@@ -4,7 +4,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ---
 
-## Next
+## v1.1.0 — 2026-08-19
 
 ### New Features
 

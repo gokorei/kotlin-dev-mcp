@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-19
+
+### Added
+- **Workspace-aware K2 semantic engine**: Cross-file reference resolution, bound declaration jump (`definition`), semantic Find Usages (`findReferences` / `workspace_references`), type-aware completion (`get_completions`), AST-bound rename refactoring (`rename`), K2 call & type hierarchies (`call_hierarchy`, `type_hierarchy`), and symbol inspection (`hover`).
+- **MCP parity suite**: End-to-end integration tests proving IDE-grade semantic analysis over the MCP transport boundary.
+- **Snippet workspace visibility**: `kotlin_check_snippet` and `kotlin_run` resolve symbols against compiled project classes, generated sources, and jars automatically.
+- **Progressive discovery guidelines**: Kotlin Multiplatform Web storage (`kotlin://guidelines/kmp-storage.md`) and Backend resilience & error modeling (`kotlin://guidelines/resilience.md`).
+- **Tool doc generation & sync enforcement**: `McpDocGenerator` generates Markdown reference directly from tool definitions; verified via `DocumentationSyncTest`.
+- **Dokka & Binary Compatibility Validator**: Automated KDoc generation (`dokkaDocs`) and public API surface validation (`apiCheck`).
+
+### Changed
+- Refactored `K2SemanticEngine` into single-responsibility resolvers (`K2CompletionResolver`, `K2HierarchyResolver`, `K2RenameResolver`, `K2HoverResolver`, `K2ResolutionUtils`).
+- Deduplicated hierarchy disk walks by reusing semantic engine file statistics.
+- Expanded workspace directory exclusion filter to ignore `.idea`, `.agents`, `.github`, `target`, `.kotlin`, and `.bsp`.
+
+### Fixed
+- Host JVM runner joins output-drain threads to prevent dropped or truncated snippet stdout/stderr.
+- `K2RenameResolver` guards against whole-declaration replacement when `nameIdentifier` is null.
+- Multi-file rename conflict detection safely reports `CONFLICT` and aborts file writes if disk content shifted.
+- Built-in documentation entries corrected for JUnit 5 lifecycle, tailrec recursion, Channel semantics, and async barriers.
+- Standard library documentation lookup avoids spurious name shadowing.
+- Workspace snapshot cache invalidates on disk additions/removals and avoids stat storms.
+- Snippet imports resolve properly when launched via standalone fat JAR (`kotlin-mcp-all.jar`).
+
 ## [1.0.0] - 2026-08-16
 
 ### Added
@@ -38,5 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stdio transport safety: all logging routed to stderr (`kotlin-logging-jvm` + `slf4j-simple`), keeping stdout clean for JSON-RPC frames.
 - See [SECURITY.md](SECURITY.md) for the security policy and sandboxing notes in `docs/wiki/Security-And-Sandboxing.md`.
 
-[Unreleased]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/gokorei/kotlin-dev-mcp/releases/tag/v1.0.0

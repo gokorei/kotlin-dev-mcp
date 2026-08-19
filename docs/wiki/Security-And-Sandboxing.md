@@ -36,7 +36,7 @@ It is important to understand the boundary between **Process Isolation** and **C
 ### Strategy A: Trusted Local Pair Programming (Default)
 For single-user local IDE pair programming where the AI assistant works on your local repository:
 ```bash
-java -jar build/libs/kotlin-mcp-1.0.0-all.jar
+java -jar build/libs/kotlin-mcp-1.1.0-all.jar
 ```
 
 ### Strategy B: Containerized Execution with Docker (Recommended for Untrusted Code)
@@ -50,7 +50,7 @@ RUN adduser -D -u 1000 mcpuser
 USER mcpuser
 WORKDIR /workspace
 
-COPY build/libs/kotlin-mcp-1.0.0-all.jar /app/kotlin-mcp.jar
+COPY build/libs/kotlin-mcp-1.1.0-all.jar /app/kotlin-mcp.jar
 
 ENTRYPOINT ["java", "-jar", "/app/kotlin-mcp.jar"]
 ```
