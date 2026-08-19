@@ -35,9 +35,8 @@ fun main() = runBlocking {
     fun cleanup() {
         if (isDisposed.compareAndSet(false, true)) {
             runCatching { kotlinServer.close() }
-                .onFailure { logger.warn(it) { "Failed to close the LSP semantic engine during shutdown." } }
             runCatching { K2SnippetFrontend.dispose() }
-                .onFailure { logger.warn(it) { "Failed to dispose the K2 environment during shutdown." } }
+                .onFailure { logger.warn(it) { "Failed to dispose K2 environment during shutdown." } }
         }
     }
 

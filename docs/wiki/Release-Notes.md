@@ -10,11 +10,12 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Improvements
 
-- **Centralized dynamic version resolution** — added [Version](file:///Users/davymaddelein/Documents/kotlin-mcp/src/main/kotlin/com/gokorei/kotlinmcp/Version.kt) as the single source of truth for runtime version resolution (`Version.CURRENT`), backed by `build.gradle.kts` resource generation (`generateVersionResource`) and JAR manifest attributes (`Implementation-Title` / `Implementation-Version`), simplifying future version bumps across the project.
+- **Centralized dynamic version resolution** — added `Version` as the single source of truth for runtime version resolution (`Version.CURRENT`), backed by `build.gradle.kts` resource generation (`generateVersionResource`) and JAR manifest attributes (`Implementation-Title` / `Implementation-Version`), simplifying future version bumps across the project.
 - **Automated Changelog synchronization** — added `ChangelogGenerator` and `./gradlew generateChangelog` task to generate `CHANGELOG.md` directly from `docs/wiki/Release-Notes.md`, eliminating duplicate changelog maintenance.
 - **Automated version bump task** — added `./gradlew bumpVersion -Pto=X.Y.Z` to automate version updates across `build.gradle.kts`, `Release-Notes.md`, and `CHANGELOG.md` in one step.
 - **Stable fat JAR artifact naming** — configured `uberJar` to produce stable `build/libs/kotlin-mcp-all.jar` and updated documentation and client configuration references across `README.md`, skills, and wiki pages.
-- **Main entry point lifecycle & cleanup safety** — updated [Main.kt](file:///Users/davymaddelein/Documents/kotlin-mcp/src/main/kotlin/com/gokorei/kotlinmcp/Main.kt) with thread-safe idempotent shutdown cleanup (`AtomicBoolean`) and structured `try`/`finally` resource disposal on stdio session termination.
+- **Main entry point lifecycle & cleanup safety** — updated `Main.kt` with thread-safe idempotent shutdown cleanup (`AtomicBoolean`) and structured `try`/`finally` resource disposal on stdio session termination.
+- **Decoupled housekeeping doc generators** — moved repository build-time doc generators (`McpDocGenerator`, `ChangelogGenerator`) into dedicated `com.gokorei.kotlinmcp.doc.tooling` package, separating repo housekeeping tools from runtime domain doc services (`DocService`).
 
 ---
 

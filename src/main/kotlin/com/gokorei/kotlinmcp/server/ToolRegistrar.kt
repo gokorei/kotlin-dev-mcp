@@ -1,7 +1,7 @@
 package com.gokorei.kotlinmcp.server
 
-import com.gokorei.kotlinmcp.doc.ParamDocSpec
-import com.gokorei.kotlinmcp.doc.ToolDocSpec
+import com.gokorei.kotlinmcp.doc.tooling.ParamDocSpec
+import com.gokorei.kotlinmcp.doc.tooling.ToolDocSpec
 import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult

@@ -13,7 +13,7 @@ class VersionTest {
         assertNotNull(Version.CURRENT)
         assertTrue(Version.CURRENT.isNotEmpty())
         assertTrue(
-            Version.CURRENT.matches(Regex("""^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$""")),
+            Version.CURRENT.matches(Regex("""^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$""")),
             "Expected semantic version format, got: ${Version.CURRENT}"
         )
     }

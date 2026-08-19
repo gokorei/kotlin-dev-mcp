@@ -1,4 +1,4 @@
-package com.gokorei.kotlinmcp.doc
+package com.gokorei.kotlinmcp.doc.tooling
 
 /**
  * Parsed section entry representing changes under a category.
@@ -177,7 +177,6 @@ class DefaultChangelogGenerator : ChangelogGenerator {
             if (trimmed.startsWith("## v") || trimmed.startsWith("## [") || (trimmed.startsWith("## ") && trimmed.contains("—"))) {
                 flushEntry()
                 isNext = false
-                // Parse "## v1.1.0 — 2026-08-19" or "## [1.1.0] - 2026-08-19"
                 val clean = trimmed.removePrefix("## ").trim().removePrefix("v").removePrefix("[").removeSuffix("]")
                 if (clean.contains("—")) {
                     val parts = clean.split("—", limit = 2)
@@ -208,6 +207,7 @@ class DefaultChangelogGenerator : ChangelogGenerator {
             }
 
             if (trimmed.startsWith("---") || trimmed.startsWith("# Release Notes") || trimmed.startsWith("Overview of")) {
+                flushItem()
                 continue
             }
 
@@ -241,4 +241,3 @@ fun main(args: Array<String>) {
     changelogFile.writeText(content)
     println("Synchronized CHANGELOG.md from ${releaseNotesFile.name} -> ${changelogFile.absolutePath}")
 }
-

@@ -1,6 +1,5 @@
-package com.gokorei.kotlinmcp.doc
+package com.gokorei.kotlinmcp.doc.tooling
 
-import com.gokorei.kotlinmcp.server.ToolRegistrar
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test

@@ -9,6 +9,8 @@ import com.gokorei.kotlinmcp.lsp.*
 import com.gokorei.kotlinmcp.project.*
 import com.gokorei.kotlinmcp.refactoring.*
 
+import io.github.oshai.kotlinlogging.KotlinLogging
+
 /**
  * Main MCP Server class orchestrating all Kotlin developer tools.
  *
@@ -35,6 +37,7 @@ class KotlinMcpServer(
     private val lintService: LintService = DefaultLintService()
 ) {
 
+    private val logger = KotlinLogging.logger {}
     private val textService: LspService = lspService ?: DefaultLspService(docService, semanticEngine)
 
     init {
@@ -129,8 +132,10 @@ class KotlinMcpServer(
 
     /** Releases cached PSI / analysis state held by the embedded services (safe to call once at shutdown). */
     fun close() {
-        textService.close()
-        semanticEngine.close()
+        runCatching { textService.close() }
+            .onFailure { logger.warn(it) { "Failed to close LSP text service during shutdown." } }
+        runCatching { semanticEngine.close() }
+            .onFailure { logger.warn(it) { "Failed to close K2 semantic engine during shutdown." } }
     }
 
 

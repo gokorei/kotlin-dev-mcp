@@ -1,4 +1,4 @@
-package com.gokorei.kotlinmcp.doc
+package com.gokorei.kotlinmcp.doc.tooling
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -43,17 +43,18 @@ class DocumentationSyncTest {
     fun `verify committed CHANGELOG md matches Release-Notes md generated content`() {
         val releaseNotesFile = File("docs/wiki/Release-Notes.md")
         val changelogFile = File("CHANGELOG.md")
-        if (releaseNotesFile.exists() && changelogFile.exists()) {
-            val expected = changelogGenerator.generateFromReleaseNotes(releaseNotesFile.readText())
-                .replace("\r\n", "\n").trim()
-            val actual = changelogFile.readText()
-                .replace("\r\n", "\n").trim()
+        assertTrue(releaseNotesFile.exists(), "docs/wiki/Release-Notes.md must exist")
+        assertTrue(changelogFile.exists(), "CHANGELOG.md must exist! Run './gradlew generateChangelog' to create it.")
 
-            assertEquals(
-                expected,
-                actual,
-                "CHANGELOG.md is out of sync with docs/wiki/Release-Notes.md! Run './gradlew generateChangelog' to synchronize."
-            )
-        }
+        val expected = changelogGenerator.generateFromReleaseNotes(releaseNotesFile.readText())
+            .replace("\r\n", "\n").trim()
+        val actual = changelogFile.readText()
+            .replace("\r\n", "\n").trim()
+
+        assertEquals(
+            expected,
+            actual,
+            "CHANGELOG.md is out of sync with docs/wiki/Release-Notes.md! Run './gradlew generateChangelog' to synchronize."
+        )
     }
 }

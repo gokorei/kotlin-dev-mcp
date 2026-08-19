@@ -102,10 +102,15 @@ object K2SnippetFrontend {
     @Synchronized
     fun dispose() {
         if (disposed) return
-        disposed = true
-        runCatching { Disposer.dispose(rootDisposable) }
-        cachedEnvironment = null
-        cachedPsiFactory = null
+        try {
+            Disposer.dispose(rootDisposable)
+            disposed = true
+            cachedEnvironment = null
+            cachedPsiFactory = null
+        } catch (e: Throwable) {
+            logger.warn(e) { "Failed to dispose K2SnippetFrontend rootDisposable" }
+            throw e
+        }
     }
 
     @Synchronized

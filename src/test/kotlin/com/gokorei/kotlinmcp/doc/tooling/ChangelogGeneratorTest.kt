@@ -1,6 +1,5 @@
-package com.gokorei.kotlinmcp.doc
+package com.gokorei.kotlinmcp.doc.tooling
 
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -94,5 +93,29 @@ class ChangelogGeneratorTest {
 
         assertTrue(changelog.contains("## [Unreleased]\n\n## [1.0.0] - 2026-08-16"))
         assertTrue(changelog.contains("[1.0.0]: https://github.com/gokorei/kotlin-dev-mcp/releases/tag/v1.0.0"))
+    }
+
+    @Test
+    fun `flushes list items before separator line and footer text`() {
+        val releaseNotes = """
+            # Release Notes
+
+            ## v1.0.0 — 2026-08-16
+
+            ### New Features
+            - Initial feature
+              Additional line detail
+
+            ---
+            [← Home](Home)
+        """.trimIndent()
+
+        val changelog = generator.generateFromReleaseNotes(
+            releaseNotes,
+            repoUrl = "https://github.com/gokorei/kotlin-dev-mcp"
+        )
+
+        assertTrue(changelog.contains("### Added\n- Initial feature\n  Additional line detail"))
+        org.junit.jupiter.api.Assertions.assertFalse(changelog.contains("[← Home](Home)"))
     }
 }

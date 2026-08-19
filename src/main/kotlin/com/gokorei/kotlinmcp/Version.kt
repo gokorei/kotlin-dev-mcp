@@ -15,7 +15,7 @@ object Version {
      * 3. Fallback constant ("1.1.0")
      */
     val CURRENT: String by lazy {
-        Version::class.java.`package`?.implementationVersion
+        Version::class.java.`package`?.implementationVersion?.trim()?.takeIf { it.isNotEmpty() }
             ?: Version::class.java.classLoader
                 ?.getResourceAsStream("kotlin-mcp-version.txt")
                 ?.bufferedReader()

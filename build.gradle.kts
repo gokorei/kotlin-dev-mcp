@@ -117,6 +117,7 @@ val dumpSnippetClasspath = tasks.register("dumpSnippetClasspath") {
 val generateVersionResource = tasks.register("generateVersionResource") {
     group = "build"
     description = "Generates a version descriptor resource from project.version."
+    inputs.property("version", provider { project.version.toString() })
     val outDir = layout.buildDirectory.dir("generated/version")
     outputs.dir(outDir)
     doLast {
@@ -286,7 +287,7 @@ val generateMcpDocs = tasks.register<JavaExec>("generateMcpDocs") {
     group = "documentation"
     description = "Generates the Markdown MCP tool reference directly from in-code tool definitions."
     classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("com.gokorei.kotlinmcp.doc.McpDocGeneratorKt")
+    mainClass.set("com.gokorei.kotlinmcp.doc.tooling.McpDocGeneratorKt")
     val docFile = layout.projectDirectory.file("docs/wiki/Tool-Reference.md")
     args = listOf(docFile.asFile.absolutePath)
     outputs.file(docFile)
@@ -296,7 +297,7 @@ val generateChangelog = tasks.register<JavaExec>("generateChangelog") {
     group = "documentation"
     description = "Generates CHANGELOG.md directly from docs/wiki/Release-Notes.md."
     classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("com.gokorei.kotlinmcp.doc.ChangelogGeneratorKt")
+    mainClass.set("com.gokorei.kotlinmcp.doc.tooling.ChangelogGeneratorKt")
     val releaseNotesFile = layout.projectDirectory.file("docs/wiki/Release-Notes.md")
     val changelogFile = layout.projectDirectory.file("CHANGELOG.md")
     args = listOf(releaseNotesFile.asFile.absolutePath, changelogFile.asFile.absolutePath)
@@ -319,18 +320,21 @@ val bumpVersion = tasks.register("bumpVersion") {
         val buildGradle = file("build.gradle.kts")
         val releaseNotes = file("docs/wiki/Release-Notes.md")
 
-        // 1. Update build.gradle.kts
         val buildText = buildGradle.readText()
+        if (!buildText.contains(Regex("""version\s*=\s*"[^"]+""""))) {
+            throw GradleException("Could not find version declaration in build.gradle.kts")
+        }
         val updatedBuildText = buildText.replaceFirst(
             Regex("""version\s*=\s*"[^"]+""""),
             """version = "$newVersion""""
         )
-        buildGradle.writeText(updatedBuildText)
-        logger.lifecycle("Updated build.gradle.kts version -> $newVersion")
 
-        // 2. Promote ## Next in Release-Notes.md
+        var updatedNotesText: String? = null
         if (releaseNotes.exists()) {
             val notesText = releaseNotes.readText()
+            if (!notesText.contains("## Next")) {
+                throw GradleException("docs/wiki/Release-Notes.md does not contain a '## Next' heading to promote.")
+            }
             val nextSkeleton = """## Next
 
 ### New Features
@@ -342,7 +346,13 @@ val bumpVersion = tasks.register("bumpVersion") {
 ---
 
 ## v$newVersion — $today"""
-            val updatedNotesText = notesText.replaceFirst(Regex("""## Next"""), nextSkeleton)
+            updatedNotesText = notesText.replaceFirst(Regex("""## Next"""), nextSkeleton)
+        }
+
+        buildGradle.writeText(updatedBuildText)
+        logger.lifecycle("Updated build.gradle.kts version -> $newVersion")
+
+        if (updatedNotesText != null) {
             releaseNotes.writeText(updatedNotesText)
             logger.lifecycle("Promoted ## Next to ## v$newVersion — $today in docs/wiki/Release-Notes.md")
         }
