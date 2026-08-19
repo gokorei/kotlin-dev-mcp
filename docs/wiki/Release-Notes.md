@@ -29,13 +29,13 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 - **`kotlin_run` could silently truncate very large output** — the host-JVM runner now drains the subprocess output to completion instead of relying on a fixed-duration join, so large results are never reported partial-as-complete.
 
-- **Reference/rename flows no longer mask engine failures or produce stale-edit corruption** — `renameSymbol` now falls back to the legacy rename when the semantic engine raises, instead of reporting "0 replacements" as success; `applyRenameEdits` validates the expected old name at each offset (backtick-tolerant) before overwriting snippet or workspace files, so edits computed from cached PSI can never corrupt source that changed on disk; and reference-line numbers are now derived from the PSI document's line-range APIs rather than scanning source text.
+- **Renames are more reliable** — a rename that hits an internal resolution error now reports it instead of claiming success with zero replacements, and files that changed on disk since analysis are left untouched rather than overwritten with stale edits.
 
-- **`findReferences` now surfaces snippet occurrences for unresolved symbols** — the snippet fallback runs whenever the semantic engine returns no references (not only when no session exists), and the regex-based line scan was removed in favor of the PSI traversal, satisfying the no-regex coding rule.
+- **References find snippet occurrences for previously-unresolved symbols** — symbols the semantic engine cannot bind still surface every matching use in the snippet.
 
 ### Improvements
 
-- **Hover docs no longer show unrelated stdlib documentation** — the name-only stdlib documentation fallback is now applied only when the resolved symbol is external, so workspace/snippet symbols with common names keep their own declarations' docs.
+- **Hover docs are more accurate** — a symbol's own documentation is never replaced by unrelated Kotlin standard-library docs just because they share a name.
 
 - **Shared K2 resolution helpers, deduplicated** — moved symbol-occurrence collection (`collectSymbolOccurrences`), target selection (`pickTargets`), and workspace-directory exclusion into `K2ResolutionUtils`, and re-used them from `K2SemanticEngine`, `K2RenameResolver`, and `K2HierarchyResolver`. Hierarchy queries now memoize the transitive `inherits` walk per symbol, and completion caches stdlib extension names per receiver FQN (bounded, 512 entries), so repeated lookups stay fast on large workspaces. Rename edits now carry PSI-derived lengths instead of assuming the symbol name length, and member-scope enumeration failures are logged instead of silently swallowed.
 
