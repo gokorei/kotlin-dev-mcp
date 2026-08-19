@@ -99,6 +99,10 @@ class KotlinMcpServer(
     fun lspFindDefinition(code: String, symbol: String?, workspacePath: String? = null): KotlinMcpResult =
         textService.execute(LspAction.FIND_DEFINITION, code, symbol = symbol, workspacePath = workspacePath)
 
+    /** Legacy two-argument overload, retained for binary compatibility. */
+    fun lspFindDefinition(code: String, symbol: String?): KotlinMcpResult =
+        lspFindDefinition(code, symbol, null)
+
     fun lspFindReferences(code: String, symbol: String?, workspacePath: String?): KotlinMcpResult =
         textService.execute(LspAction.FIND_REFERENCES, code, symbol = symbol, workspacePath = workspacePath)
 
@@ -126,6 +130,7 @@ class KotlinMcpServer(
     /** Releases cached PSI / analysis state held by the embedded services (safe to call once at shutdown). */
     fun close() {
         textService.close()
+        semanticEngine.close()
     }
 
 

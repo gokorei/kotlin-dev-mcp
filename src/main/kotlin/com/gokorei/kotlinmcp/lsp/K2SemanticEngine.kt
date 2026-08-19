@@ -11,7 +11,6 @@ import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtNamedDeclaration
 import org.jetbrains.kotlin.psi.KtReferenceExpression
 import org.jetbrains.kotlin.psi.KtSimpleNameExpression
-import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.renderer.DescriptorRenderer
 import org.jetbrains.kotlin.resolve.BindingContext
@@ -41,7 +40,8 @@ interface K2SemanticEngine {
 
     /**
      * Resolves a reference expression to its declaration target (file, line,
-     * FQN, signature). Returns `null` when the element is not resolvable.
+     * FQN, signature). Returns a [ResolvedDeclaration] with
+     * [ResolvedSource.UNRESOLVED] when the reference has no resolvable target.
      */
     fun resolveReference(session: K2AnalysisSession, reference: KtReferenceExpression, workspaceRoot: String?): ResolvedDeclaration?
 
@@ -123,8 +123,10 @@ interface K2SemanticEngine {
 }
 
 class DefaultK2SemanticEngine(
-    private val fileCap: Int = System.getenv("WORKSPACE_SEMANTIC_MAX_FILES")?.toIntOrNull() ?: SEMANTIC_FILE_CAP
+    fileCap: Int = System.getenv("WORKSPACE_SEMANTIC_MAX_FILES")?.toIntOrNull()?.takeIf { it > 0 } ?: SEMANTIC_FILE_CAP
 ) : K2SemanticEngine {
+
+    private val fileCap: Int = fileCap.coerceAtLeast(1)
 
     override val workspaceFileCap: Int get() = fileCap
 
@@ -137,8 +139,15 @@ class DefaultK2SemanticEngine(
         val totalFiles: Int = files.size
     )
 
-    @Volatile
-    private var snapshot: WorkspaceSnapshot? = null
+    /** Bounded least-recently-used cache keyed by canonical workspace root. */
+    private val snapshotCache = object : LinkedHashMap<File, WorkspaceSnapshot>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<File, WorkspaceSnapshot>?): Boolean =
+            size > MAX_CACHED_WORKSPACES
+    }
+
+    private companion object {
+        const val MAX_CACHED_WORKSPACES = 4
+    }
 
     @Volatile
     private var closed = false
@@ -213,29 +222,10 @@ class DefaultK2SemanticEngine(
         if (closed) return emptyList()
         val ctx = session.bindingContext
 
-        data class Occurrence(val rel: String, val file: KtFile, val node: PsiElement, val kind: String)
-
-        val occurrences = mutableListOf<Occurrence>()
-        fun collect(rel: String, file: KtFile) {
-            file.accept(object : KtTreeVisitorVoid() {
-                override fun visitNamedDeclaration(declaration: KtNamedDeclaration) {
-                    if (declaration.name == symbol) {
-                        occurrences += Occurrence(rel, file, declaration, "decl")
-                    }
-                    super.visitNamedDeclaration(declaration)
-                }
-
-                override fun visitSimpleNameExpression(expression: KtSimpleNameExpression) {
-                    if (expression.getReferencedName() == symbol) {
-                        occurrences += Occurrence(rel, file, expression, "ref")
-                    }
-                    super.visitSimpleNameExpression(expression)
-                }
-            })
-        }
-
-        collect("Snippet.kt", session.file)
-        workspaceFiles(workspacePath).forEach { collect(it.rel, it.psi) }
+        val occurrences = K2ResolutionUtils.collectSymbolOccurrences(
+            symbol,
+            listOf("Snippet.kt" to session.file) + workspaceFiles(workspacePath).map { it.rel to it.psi }
+        )
 
         val declOccurrences = occurrences.filter { it.kind == "decl" }
         fun descriptorOf(decl: KtNamedDeclaration): DeclarationDescriptor? =
@@ -248,12 +238,14 @@ class DefaultK2SemanticEngine(
             if (realTargets.isNotEmpty()) realTargets
             else declOccurrences.mapNotNull { descriptorOf(it.node as KtNamedDeclaration) }
 
-        fun toRow(occ: Occurrence, offset: Int, fqn: String?): ResolvedReference {
-            val line = SourceUtils.lineOf(occ.file.text, offset)
-            val lineStart = occ.file.text.lastIndexOf('\n', offset - 1) + 1
+        val textCache = hashMapOf<KtFile, String>()
+        fun toRow(occ: K2ResolutionUtils.SymbolOccurrence, offset: Int, fqn: String?): ResolvedReference {
+            val text = textCache.getOrPut(occ.file) { occ.file.text }
+            val line = SourceUtils.lineOf(text, offset)
+            val lineStart = text.lastIndexOf('\n', offset - 1) + 1
             val column = offset - lineStart + 1
-            val end = occ.file.text.indexOf('\n', offset).let { if (it == -1) occ.file.text.length else it }
-            val lineText = occ.file.text.substring(lineStart, end).trim()
+            val end = text.indexOf('\n', offset).let { if (it == -1) text.length else it }
+            val lineText = text.substring(lineStart, end).trim()
             return ResolvedReference(symbol, occ.rel, line, column, lineText, occ.kind, fqn)
         }
 
@@ -311,9 +303,7 @@ class DefaultK2SemanticEngine(
         if (closed) return WorkspaceStats(0, 0, false)
         val root = if (workspacePath.isNullOrBlank()) null else File(workspacePath)
         if (root == null || !root.isDirectory) return WorkspaceStats(0, 0, false)
-        val total = root.walkTopDown().onEnter { dir ->
-            dir.name != "build" && dir.name != ".gradle" && dir.name != ".git" && dir.name != "out" && dir.name != "node_modules"
-        }.count { it.isFile && it.extension == "kt" }
+        val total = ktFilesUnder(root).size
         val analyzed = minOf(total, fileCap)
         return WorkspaceStats(total, analyzed, total > fileCap)
     }
@@ -323,37 +313,41 @@ class DefaultK2SemanticEngine(
 
     override fun close() {
         closed = true
-        snapshot = null
+        snapshotCache.clear()
     }
 
     private fun workspaceFiles(workspacePath: String?): List<WorkspaceFile> {
         if (workspacePath.isNullOrBlank()) return emptyList()
         val root = File(workspacePath)
         if (!root.isDirectory) return emptyList()
+        val key = runCatching { root.canonicalFile }.getOrDefault(root)
         synchronized(this) {
-            val allFiles = root.walkTopDown().onEnter { dir ->
-                val name = dir.name
-                name != "build" && name != ".gradle" && name != ".git" && name != "out" && name != "node_modules"
-            }.filter { it.isFile && it.extension == "kt" }.sortedBy { it.absolutePath }.toList()
+            val allFiles = ktFilesUnder(root)
 
-            val cached = snapshot
-            if (cached != null && cached.root == root && cached.totalFiles == allFiles.size &&
+            val cached = snapshotCache[key]
+            if (cached != null && cached.totalFiles == allFiles.size &&
                 allFiles.all { file -> cached.lastModified[file] == file.lastModified() }
             ) {
                 return cached.files
             }
 
             val parsed = allFiles.take(fileCap).mapNotNull { file ->
-                val rel = try { root.toPath().relativize(file.toPath()).toString() } catch (e: Exception) { file.name }
+                val rel = try { root.toPath().relativize(file.toPath()).toString() } catch (_: Exception) { file.name }
                 val text = runCatching { file.readText() }.getOrNull() ?: return@mapNotNull null
                 val psi = runCatching { K2SnippetFrontend.psiFactory.createFile(rel, text) }.getOrNull() ?: return@mapNotNull null
                 WorkspaceFile(rel, file, psi)
             }
-            snapshot = WorkspaceSnapshot(root, parsed, allFiles.associateWith { it.lastModified() }, allFiles.size)
+            snapshotCache[key] = WorkspaceSnapshot(key, parsed, allFiles.associateWith { it.lastModified() }, allFiles.size)
             workspaceRebuilds++
             return parsed
         }
     }
+
+    private fun ktFilesUnder(root: File): List<File> =
+        root.walkTopDown().onEnter { dir -> !K2ResolutionUtils.isExcludedWorkspaceDir(dir) }
+            .filter { it.isFile && it.extension == "kt" }
+            .sortedBy { it.absolutePath }
+            .toList()
 
     private fun signatureOf(psi: PsiElement): String =
         SourceUtils.collapseWhitespace(psi.text, maxLength = 140)

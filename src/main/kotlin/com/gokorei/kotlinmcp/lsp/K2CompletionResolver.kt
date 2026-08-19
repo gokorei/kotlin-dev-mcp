@@ -2,24 +2,31 @@
 @file:OptIn(org.jetbrains.kotlin.K1Deprecation::class)
 package com.gokorei.kotlinmcp.lsp
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.jetbrains.kotlin.descriptors.ClassDescriptor
-import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.descriptors.MemberDescriptor
 import org.jetbrains.kotlin.descriptors.ModuleDescriptor
+import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtNamedDeclaration
 import org.jetbrains.kotlin.psi.KtParameter
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.DescriptorUtils
 import org.jetbrains.kotlin.resolve.scopes.DescriptorKindFilter
 import org.jetbrains.kotlin.resolve.scopes.MemberScope
 import org.jetbrains.kotlin.types.KotlinType
 
 internal object K2CompletionResolver {
+
+    private val logger = KotlinLogging.logger {}
+
+    /** Receiver-FQN → stdlib extension names, computed once per distinct receiver (bounded). */
+    private val stdlibExtensionNames = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
+
+    private const val MAX_CACHED_RECEIVERS = 512
 
     fun completionCandidates(session: K2AnalysisSession, prefix: String): KotlinCompletionCandidates {
         val dot = prefix.lastIndexOf('.')
@@ -75,28 +82,44 @@ internal object K2CompletionResolver {
                     if (prefix.isBlank() || n.startsWith(prefix, ignoreCase = true)) names.add(n)
                 }
             }
+        }.onFailure { failure ->
+            logger.warn(failure) { "Failed to enumerate members of ${K2ResolutionUtils.safeFqn(cls) ?: cls.name.asString()} for completion" }
         }
         if (module != null) {
+            val receiverFqn = K2ResolutionUtils.safeFqn(cls).orEmpty()
+            if (receiverFqn.isNotEmpty()) {
+                names.addAll(extensionNamesFor(receiverFqn, module)
+                    .filter { prefix.isBlank() || it.startsWith(prefix, ignoreCase = true) })
+            }
+        }
+        return names.sorted()
+    }
+
+    /** Stdlib extension names for a receiver, cached per receiver FQN (stdlib is constant per JVM). */
+    private fun extensionNamesFor(receiverFqn: String, module: ModuleDescriptor): List<String> {
+        stdlibExtensionNames[receiverFqn]?.let { return it }
+        val computed = buildSet {
             for (pkgName in listOf("kotlin.text", "kotlin.collections", "kotlin")) {
                 runCatching {
-                    val pkg = module.getPackage(org.jetbrains.kotlin.name.FqName(pkgName))
+                    val pkg = module.getPackage(FqName(pkgName))
                     pkg.memberScope.getContributedDescriptors(DescriptorKindFilter.CALLABLES, MemberScope.ALL_NAME_FILTER)
                         .filterIsInstance<FunctionDescriptor>()
                         .forEach { fn ->
                             val n = fn.name.asString()
                             if (!n.startsWith("<")) {
                                 val recv = fn.extensionReceiverParameter?.type
-                                if (recv != null && safeFqn(recv.constructor.declarationDescriptor) == safeFqn(cls) &&
-                                    (prefix.isBlank() || n.startsWith(prefix, ignoreCase = true))
-                                ) {
-                                    names.add(n)
+                                if (recv != null && K2ResolutionUtils.safeFqn(recv.constructor.declarationDescriptor) == receiverFqn) {
+                                    add(n)
                                 }
                             }
                         }
                 }
             }
+        }.sorted()
+        if (stdlibExtensionNames.size < MAX_CACHED_RECEIVERS) {
+            stdlibExtensionNames.putIfAbsent(receiverFqn, computed)
         }
-        return names.sorted()
+        return stdlibExtensionNames[receiverFqn] ?: computed
     }
 
     /** In-scope names: declarations, parameters and imported names matching [prefix]. */
@@ -124,7 +147,4 @@ internal object K2CompletionResolver {
             .sortedBy { it.lowercase() }
             .distinct()
     }
-
-    private fun safeFqn(descriptor: DeclarationDescriptor?): String? =
-        if (descriptor == null) null else runCatching { DescriptorUtils.getFqNameSafe(descriptor).asString() }.getOrNull()
 }

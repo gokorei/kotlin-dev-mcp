@@ -14,7 +14,6 @@ import org.jetbrains.kotlin.psi.KtSimpleNameExpression
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.renderer.DescriptorRenderer
 import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.DescriptorUtils
 
 internal object K2HierarchyResolver {
 
@@ -49,7 +48,8 @@ internal object K2HierarchyResolver {
             .mapNotNull { runCatching { DescriptorRenderer.FQ_NAMES_IN_TYPES.renderType(it) }.getOrNull() }
             .distinct()
 
-        fun inherits(d: ClassDescriptor): Boolean {
+        val inheritsCache = hashMapOf<ClassDescriptor, Boolean>()
+        fun inherits(d: ClassDescriptor): Boolean = inheritsCache.getOrPut(d) {
             val queue = ArrayDeque<ClassDescriptor>()
             val seen = hashSetOf<DeclarationDescriptor>()
             queue.add(d)
@@ -58,11 +58,11 @@ internal object K2HierarchyResolver {
                 if (!seen.add(cur)) continue
                 for (superType in cur.typeConstructor.supertypes) {
                     val dd = superType.constructor.declarationDescriptor as? ClassDescriptor ?: continue
-                    if (K2ResolutionUtils.sameTarget(dd, target)) return true
+                    if (K2ResolutionUtils.sameTarget(dd, target)) return@getOrPut true
                     queue.add(dd)
                 }
             }
-            return false
+            false
         }
 
         val subtypes = mutableListOf<KtTypeOccurrence>()
@@ -92,10 +92,8 @@ internal object K2HierarchyResolver {
     ): KtCallHierarchyResult {
         val ctx = session.bindingContext
 
-        fun pickTargets(candidates: List<DeclarationDescriptor>): List<DeclarationDescriptor> {
-            val real = candidates.filter { !DescriptorUtils.isLocal(it) && K2ResolutionUtils.isRealFqn(K2ResolutionUtils.safeFqn(it)) }
-            return (if (real.isNotEmpty()) real else candidates).distinct()
-        }
+        fun pickTargets(candidates: List<DeclarationDescriptor>): List<DeclarationDescriptor> =
+            K2ResolutionUtils.pickTargets(candidates)
 
         val functionDecls = mutableListOf<Pair<String, KtNamedDeclaration>>()
         val snippetCallTargets = mutableListOf<DeclarationDescriptor>()
