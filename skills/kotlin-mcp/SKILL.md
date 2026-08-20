@@ -25,7 +25,7 @@ By default, `kotlin-mcp` tools should be registered **eagerly** (`"eager": true`
   "mcpServers": {
     "kotlin-mcp": {
       "command": "java",
-      "args": ["-jar", "/path/to/kotlin-mcp-1.1.0-all.jar"],
+      "args": ["-jar", "/path/to/kotlin-mcp-all.jar"],
       "eager": true
     }
   }

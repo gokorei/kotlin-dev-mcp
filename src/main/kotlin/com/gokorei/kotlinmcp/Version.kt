@@ -1,0 +1,27 @@
+package com.gokorei.kotlinmcp
+
+/**
+ * Single source of truth for runtime version and server identity resolution.
+ */
+object Version {
+    const val NAME: String = "kotlin-mcp"
+    const val FALLBACK_VERSION: String = "0.0.0-dev"
+
+    /**
+     * Dynamically resolved server version.
+     *
+     * Resolution order:
+     * 1. JAR Manifest (`Package.implementationVersion`)
+     * 2. Build-generated classpath resource (`kotlin-mcp-version.txt`)
+     * 3. Non-release fallback constant ("0.0.0-dev")
+     */
+    val CURRENT: String by lazy {
+        Version::class.java.`package`?.implementationVersion?.trim()?.takeIf { it.isNotEmpty() }
+            ?: Version::class.java.classLoader
+                ?.getResourceAsStream("kotlin-mcp-version.txt")
+                ?.bufferedReader()
+                ?.use { it.readText().trim() }
+                ?.takeIf { it.isNotEmpty() }
+            ?: FALLBACK_VERSION
+    }
+}

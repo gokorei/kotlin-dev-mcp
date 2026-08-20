@@ -71,7 +71,7 @@ To package all application classes, service action models, and dependencies into
 ```bash
 ./gradlew uberJar --no-daemon
 ```
-The self-contained Fat JAR will be created at: `./build/libs/kotlin-mcp-1.1.0-all.jar`
+The self-contained Fat JAR will be created at: `./build/libs/kotlin-mcp-all.jar`
 
 ### Run Tests
 ```bash
@@ -107,7 +107,7 @@ By default, we recommend registering `kotlin-mcp` with `"eager": true`.
 
 #### Claude Code CLI:
 ```bash
-claude mcp add kotlin-mcp java -- -jar /path/to/kotlin-mcp/build/libs/kotlin-mcp-1.1.0-all.jar
+claude mcp add kotlin-mcp java -- -jar /path/to/kotlin-mcp/build/libs/kotlin-mcp-all.jar
 ```
 
 #### Claude Desktop / Antigravity Configuration:
@@ -118,7 +118,7 @@ claude mcp add kotlin-mcp java -- -jar /path/to/kotlin-mcp/build/libs/kotlin-mcp
       "command": "java",
       "args": [
         "-jar",
-        "/path/to/kotlin-mcp/build/libs/kotlin-mcp-1.1.0-all.jar"
+        "/path/to/kotlin-mcp/build/libs/kotlin-mcp-all.jar"
       ],
       "eager": true
     }
@@ -138,7 +138,7 @@ Add to your Codex configuration file (`~/.codex/config.json` or project-local `c
       "command": "java",
       "args": [
         "-jar",
-        "/absolute/path/to/kotlin-mcp/build/libs/kotlin-mcp-1.1.0-all.jar"
+        "/absolute/path/to/kotlin-mcp/build/libs/kotlin-mcp-all.jar"
       ],
       "eager": true,
       "env": {
@@ -161,7 +161,7 @@ Add to `.opencode/mcp.json` or `opencode.json` in your workspace:
       "command": "java",
       "args": [
         "-jar",
-        "/absolute/path/to/kotlin-mcp/build/libs/kotlin-mcp-1.1.0-all.jar"
+        "/absolute/path/to/kotlin-mcp/build/libs/kotlin-mcp-all.jar"
       ],
       "eager": true,
       "enabled": true,
@@ -179,7 +179,7 @@ Add to `.opencode/mcp.json` or `opencode.json` in your workspace:
 #### Option A: Pi CLI
 Register `kotlin-mcp` with the Pi agent CLI:
 ```bash
-pi mcp add kotlin-mcp java -jar /absolute/path/to/kotlin-mcp/build/libs/kotlin-mcp-1.1.0-all.jar
+pi mcp add kotlin-mcp java -jar /absolute/path/to/kotlin-mcp/build/libs/kotlin-mcp-all.jar
 ```
 
 #### Option B: Pi Configuration File
@@ -191,7 +191,7 @@ Add to `~/.pi/agent/mcp.json`:
       "command": "java",
       "args": [
         "-jar",
-        "/absolute/path/to/kotlin-mcp/build/libs/kotlin-mcp-1.1.0-all.jar"
+        "/absolute/path/to/kotlin-mcp/build/libs/kotlin-mcp-all.jar"
       ],
       "eager": true
     }
@@ -212,7 +212,7 @@ Add to `~/.config/crush/crush.json` or project-local `crush.json`:
         "command": "java",
         "args": [
           "-jar",
-          "/absolute/path/to/kotlin-mcp/build/libs/kotlin-mcp-1.1.0-all.jar"
+          "/absolute/path/to/kotlin-mcp/build/libs/kotlin-mcp-all.jar"
         ],
         "eager": true
       }

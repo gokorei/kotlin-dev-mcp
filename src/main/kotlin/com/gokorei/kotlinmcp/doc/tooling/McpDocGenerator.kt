@@ -1,4 +1,4 @@
-package com.gokorei.kotlinmcp.doc
+package com.gokorei.kotlinmcp.doc.tooling
 
 import com.gokorei.kotlinmcp.server.ToolRegistrar
 import java.io.File

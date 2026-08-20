@@ -7,60 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Centralized dynamic version resolution** — added `Version` as the single source of truth for runtime version resolution (`Version.CURRENT`), backed by `build.gradle.kts` resource generation (`generateVersionResource`) and JAR manifest attributes (`Implementation-Title` / `Implementation-Version`), simplifying future version bumps across the project.
+- **Automated Changelog synchronization** — added `ChangelogGenerator` and `./gradlew generateChangelog` task to generate `CHANGELOG.md` directly from `docs/wiki/Release-Notes.md`, eliminating duplicate changelog maintenance.
+- **Automated version bump task** — added `./gradlew bumpVersion -Pto=X.Y.Z` to automate version updates across `build.gradle.kts`, `Release-Notes.md`, and `CHANGELOG.md` in one step.
+- **Stable fat JAR artifact naming** — configured `uberJar` to produce stable `build/libs/kotlin-mcp-all.jar` and updated documentation and client configuration references across `README.md`, skills, and wiki pages.
+- **Main entry point lifecycle & cleanup safety** — updated `Main.kt` with thread-safe idempotent shutdown cleanup (`AtomicBoolean`) and structured `try`/`finally` resource disposal on stdio session termination.
+- **Decoupled housekeeping doc generators** — moved repository build-time doc generators (`McpDocGenerator`, `ChangelogGenerator`) into dedicated `com.gokorei.kotlinmcp.doc.tooling` package, separating repo housekeeping tools from runtime domain doc services (`DocService`).
+
 ## [1.1.0] - 2026-08-19
 
 ### Added
-- **Workspace-aware K2 semantic engine**: Cross-file reference resolution, bound declaration jump (`definition`), semantic Find Usages (`findReferences` / `workspace_references`), type-aware completion (`get_completions`), AST-bound rename refactoring (`rename`), K2 call & type hierarchies (`call_hierarchy`, `type_hierarchy`), and symbol inspection (`hover`).
-- **MCP parity suite**: End-to-end integration tests proving IDE-grade semantic analysis over the MCP transport boundary.
-- **Snippet workspace visibility**: `kotlin_check_snippet` and `kotlin_run` resolve symbols against compiled project classes, generated sources, and jars automatically.
-- **Progressive discovery guidelines**: Kotlin Multiplatform Web storage (`kotlin://guidelines/kmp-storage.md`) and Backend resilience & error modeling (`kotlin://guidelines/resilience.md`).
-- **Tool doc generation & sync enforcement**: `McpDocGenerator` generates Markdown reference directly from tool definitions; verified via `DocumentationSyncTest`.
-- **Dokka & Binary Compatibility Validator**: Automated KDoc generation (`dokkaDocs`) and public API surface validation (`apiCheck`).
+- **Kotlin Multiplatform Web storage guidelines** — added progressive discovery guideline (`kotlin://guidelines/kmp-storage.md`) covering Room 3.0 OPFS architecture vs IndexedDB, `androidx.sqlite:sqlite-async` suspending driver abstraction, DataStore web backend selection (`WebLocalStorage`, `WebSessionStorage`, `WebOpfsStorage`), and `COOP`/`COEP` cross-origin isolation deployment headers.
+- **Snippet tools now see the workspace** — `kotlin_check_snippet` accepts a `projectPath`/`workspacePath` parameter and `kotlin_run`'s snippet action forwards the workspace, so a snippet referencing project-internal types or the project's compiled classes (`build/classes`…), generated sources, and `build/libs` jars compiles and runs without manually naming jar/dir paths. The unresolved-symbol hint in `kotlin_check_snippet` was updated to match this behavior.
+- **Backend resilience & error modeling guidelines** — added progressive discovery guideline (`kotlin://guidelines/resilience.md`) covering independent verification probing ("Silence != Recovery"), verifiable state caching ("Memory Must Not Lie"), and deterministic remediation state machines; updated core architecture guidelines (`kotlin://guidelines/architecture.md`) with domain error modeling (`sealed interface` / errors-as-values).
+- **In-code MCP tool reference generator** — added `McpDocGenerator` and `./gradlew generateMcpDocs` task to generate `docs/wiki/Tool-Reference.md` directly from in-code tool definitions and metadata.
+- **CI documentation sync test** — added `DocumentationSyncTest` enforcing that committed Markdown wiki docs match in-code tool definitions during `./gradlew test`.
+- **Workspace-aware K2 semantic engine** — added `K2SemanticEngine` (`session`, `resolveReference`, `fqNameOfDeclaration`, `typeOfExpression`, `referencesForSymbol`) that analyzes a snippet together with all workspace `.kt` files in one binding pass, so references resolve across file boundaries. It reports a reference's target file/line/FQN/signature (snippet, workspace, or external stdlib), and finds all bound occurrences of a symbol while excluding shadowed locals. Resolved types render fully qualified (e.g. `kotlin.String`). Analysis now loads the bundled stdlib jars onto the environment classpath so stdlib symbols resolve.
+- **`definition` action jumps cross-file** — `kotlin_text_lsp_read(action="definition")` now accepts `workspacePath` and resolves the target via the K2 semantic engine, returning the declaration's real file path, line, and signature even when the symbol is declared in another workspace `.kt` file (previously it only searched the pasted snippet). Snippet-local and stdlib-doc fallbacks are preserved.
+- **K2-bound `findReferences` / `workspace_references`** — reference enumeration now uses the semantic engine's bound references instead of name+FQN heuristic matching. `kotlin_text_lsp_read(action="findReferences")` reports every snippet and workspace occurrence that resolves to the actual declaration (plus the declaration itself) in one unified list, and `workspace_references` lists cross-file usages with file/line/column and the resolved FQN. Same-name symbols that are shadowed locals or unrelated declarations are excluded, exactly like an IDE's "Find Usages".
+- **Type-aware completions** — `kotlin_text_lsp_read(action="get_completions")` now returns semantic candidates first: members of the receiver type resolved via K2 (e.g. `str.` yields String members like `length`, `uppercase`, `lowercase`, including default-imported stdlib extensions), plus in-scope locals, parameters and imported names. The curated idiom list is preserved as a clearly labeled `Idiom suggestions (curated)` section appended after the semantic candidates.
+- **Semantic rename refactoring** — `kotlin_text_lsp_read(action="rename")` now renames via K2 bound references instead of the name+FQN heuristic: it renames the declaration and every usage that resolves to it across snippet and workspace files, anchored on the snippet (a snippet declaration, or the target the snippet's references resolve to), so an unrelated same-name symbol in another file or package is never touched. String-template interpolations are updated while comments and string literals stay intact, and the per-file replacement report keeps its existing shape (with the 500-file cap preserved).
+- **K2-bound call & type hierarchies** — `kotlin_text_lsp_read(action="call_hierarchy")` and `(action="type_hierarchy")` now use the binding context: callers are derived from resolved call sites (an unresolved or same-name-but-unbound call of the same symbol elsewhere is excluded), and subtypes/supertypes come from resolved class descriptors across snippet and workspace files. The snippet picks the anchor automatically — an in-snippet declaration of the symbol, else the target in-snippet references resolve to. Large workspaces (over `WORKSPACE_MAX_FILES`, default 200 `.kt` files) transparently fall back to the structural index with an explicit `⚠ Structural-index fallback` marker so the result is never silently incomplete.
+- **New `hover` action on `kotlin_text_lsp_read`** — hover a symbol to get its resolved type (including a call's return type), rendered descriptor signature, FQN, declaration location, and KDoc (from the declaration, or the built-in docs for stdlib symbols). Unknown symbols return an explicit *unresolved* response instead of an error.
+- **Semantic engine robustness & caching** — the K2 engine now caps semantically-analyzed workspaces (`WORKSPACE_SEMANTIC_MAX_FILES`, default 2000 `.kt` files); over-cap results are marked `⚠ Workspace scan truncated … Results may be incomplete` instead of failing. Workspace PSI parses are cached per workspace and invalidated only when the file set or mtimes change (verifiable via the `workspaceRebuilds` counter), and the server shutdown path releases the engine's PSI cache plus the bundled K2 environment so long-running stdio servers never leak native resources.
+- **MCP-boundary LSP parity suite** — end-to-end integration tests now exercise definition (cross-file jump), references (complete + shadow-correct), completion (type-aware), rename (bound-only across files), hover (signature + KDoc + return type), and type/call hierarchies over the actual MCP tool boundary, proving each LSP action behaves as if offered by an IDE-backed harness. API baseline (`apiCheck`) is refreshed to include the semantic engine surface and the new `hover`/`workspaceStats` members.
 
 ### Changed
-- Refactored `K2SemanticEngine` into single-responsibility resolvers (`K2CompletionResolver`, `K2HierarchyResolver`, `K2RenameResolver`, `K2HoverResolver`, `K2ResolutionUtils`).
-- Deduplicated hierarchy disk walks by reusing semantic engine file statistics.
-- Expanded workspace directory exclusion filter to ignore `.idea`, `.agents`, `.github`, `target`, `.kotlin`, and `.bsp`.
+- **Hover docs are more accurate** — a symbol's own documentation is never replaced by unrelated Kotlin standard-library docs just because they share a name.
+- **Shared K2 resolution helpers, deduplicated** — moved symbol-occurrence collection (`collectSymbolOccurrences`), target selection (`pickTargets`), and workspace-directory exclusion into `K2ResolutionUtils`, and re-used them from `K2SemanticEngine`, `K2RenameResolver`, and `K2HierarchyResolver`. Hierarchy queries now memoize the transitive `inherits` walk per symbol, and completion caches stdlib extension names per receiver FQN (bounded, 512 entries), so repeated lookups stay fast on large workspaces. Rename edits now carry PSI-derived lengths instead of assuming the symbol name length, and member-scope enumeration failures are logged instead of silently swallowed.
+- **Deduplicated hierarchy disk traversal** — `LspService` hierarchy fallback checks now reuse `semanticEngine.workspaceStats()` total file counts rather than executing duplicate filesystem walks.
+- **Expanded workspace excluded directory filtering** — workspace traversal across search, references, and indexing ignores `.idea`, `.agents`, `.github`, `target`, `.kotlin`, and `.bsp` directories.
+- **Optimized semantic snapshot cache validation** — `DefaultK2SemanticEngine` applies a lightweight burst validation window and cached file counts to avoid redundant stat storms during consecutive queries.
+- **Modular K2 semantic engine decomposition** — decomposed the omnibus `K2SemanticEngine.kt` into dedicated, single-responsibility files: `K2SemanticModels.kt` (domain models and enums), `K2CompletionResolver.kt` (receiver member scopes and in-scope completions), `K2HierarchyResolver.kt` (type and call hierarchies), `K2RenameResolver.kt` (AST-bound rename edits), `K2HoverResolver.kt` (hover signatures, types, and KDocs), and `K2ResolutionUtils.kt` (shared descriptor and target resolution utilities). Streamlined whitespace signature formatting into `SourceUtils.collapseWhitespace` without regex.
+- **Snippet imports resolve under `java -jar <all.jar>` fat-jar launch** — `SnippetCompiler` now falls back to a build-time-dumped, resource-bundled set of the library jars snippets may import (kotlin-stdlib, kotlinx-coroutines/-serialization/-datetime, arrow-core, mockk, turbine, ktor) when the JVM's `java.class.path` contains no matching entries (i.e. the single flat fat jar). The jars are materialized to a temp dir at first use and reused for both `kotlin_check_snippet` compilation and `kotlin_run` execution, eliminating spurious `unresolved reference` errors and runtime failures under fat-jar deployment.
+- **Corrected inaccurate built-in docs entries** — reviewed against JUnit, tailrec, coroutine, and channel semantics: instance `@BeforeAll`/`@AfterAll` under default `PER_METHOD` lifecycle now correctly described as throwing a JUnit Jupiter configuration error requiring static/`companion object` + `@JvmStatic` (permitted as instance methods under `PER_CLASS`, not "silently ignored"); `tailrec` no longer claims a single tail-call limit (branching recursion is legal); `Channel` described as a point-to-point queue (not a broadcast); the `async` barrier samples now compile inside `coroutineScope { }` with `async { }` blocks instead of invalid `x.async()` calls.
+- **Expanded built-in docs registry** — added 11 feature entries (GoF→idiomatic Kotlin pattern mapping, Kotlin DSL builder recipe, cooperative cancellation, structured concurrency/`supervisorScope`, Flow cold semantics + `buffer`/`conflate` backpressure, start-all-then-await barrier (`awaitAll`), biased `select` vs `selectUnbiased`, sealed+`Nothing` algebraic data types, `require` vs `check`, `@Serializable` DTO requirements) and 11 symbol entries (`kotlin.Nothing`, `require`/`check`/`requireNotNull`/`checkNotNull`, `supervisorScope`, `select`/`selectUnbiased`, `awaitAll`, `@BeforeAll`, `tailrec`). All served via `kotlin_docs_read` (search/lookup/explain) and the `kotlin://docs/{kind}/{name}` resource template, with `DocServiceTest` coverage. Also expanded `src/main/resources/docs/coroutines.md` to cover cancellation, exception propagation, backpressure, barrier, and select bias.
+- **Tool documentation schema single source of truth** — updated `McpDocGenerator` to derive tool specifications and parameter metadata directly from `ToolRegistrar`, ensuring 100% synchronization and adding automated parameter metadata verification in `McpDocGeneratorTest`.
+- **Dokka 2.2.0 integration** — applied `org.jetbrains.dokka` plugin and registered `dokkaDocs` task to generate KDoc API documentation automatically.
+- **Explicit API mode and Binary Compatibility Validator** — enabled `kotlin.explicitApiWarning()` and applied `org.jetbrains.kotlinx.binary-compatibility-validator` (BCV) with `./gradlew apiCheck` and `api/kotlin-mcp.api` baseline dump.
+- **Reorganized README structure** — replaced dense top architecture section with concise, human-friendly Key Features and moved detailed technical architecture lower down.
+- **Clarified project status in README.md** — removed unofficial claim of being an official server.
+- **Updated contribution status** — specified in `README.md` that public contributions are locked pending community interest.
+- **Agent release-note directive** — all codebase changes must now update the next-release section of this page, and a `## Next` section is created automatically if none exists yet.
+- **Enriched release notes** — updated v1.0.0 release notes with tool call details, stdio transport safety, linter process isolation, and security controls.
+- **Dedicated Configuration wiki page** — created `Configuration.md` detailing system properties, environment variables, offline/air-gapped operation, and MCP tool loading modes.
 
 ### Fixed
-- Host JVM runner joins output-drain threads to prevent dropped or truncated snippet stdout/stderr.
-- `K2RenameResolver` guards against whole-declaration replacement when `nameIdentifier` is null.
-- Multi-file rename conflict detection safely reports `CONFLICT` and aborts file writes if disk content shifted.
-- Built-in documentation entries corrected for JUnit 5 lifecycle, tailrec recursion, Channel semantics, and async barriers.
-- Standard library documentation lookup avoids spurious name shadowing.
-- Workspace snapshot cache invalidates on disk additions/removals and avoids stat storms.
-- Snippet imports resolve properly when launched via standalone fat JAR (`kotlin-mcp-all.jar`).
+- **`kotlin_run` could report an empty result despite the snippet printing output** — the host-JVM runner now joins the output-drain thread before reading the captured stdout/stderr, eliminating a race where a fast snippet's output was lost.
+- **`kotlin_run` could silently truncate very large output** — the host-JVM runner now drains the subprocess output to completion instead of relying on a fixed-duration join, so large results are never reported partial-as-complete.
+- **Renames are more reliable** — a rename that hits an internal resolution error now reports it instead of claiming success with zero replacements, and files that changed on disk since analysis are left untouched rather than overwritten with stale edits.
+- **References find snippet occurrences for previously-unresolved symbols** — symbols the semantic engine cannot bind still surface every matching use in the snippet.
+- **Rename AST safety guard on missing identifier tokens** — `K2RenameResolver` safely skips declarations where `nameIdentifier` is null rather than falling back to replacing the whole declaration body.
+- **Multi-file rename conflict detection** — renames validate expected tokens per edit and abort file modifications on conflict with an explicit report when file contents on disk have shifted since analysis.
 
 ## [1.0.0] - 2026-08-16
 
 ### Added
-- Action-multiplexed MCP tool suite: 11 tools (5 read-only, 6 mutating) covering documentation, snippet diagnostics, code analysis, LSP-style text services, project inspection, refactoring, library checks, lint/format, and execution.
-- Embedded K2 compiler (`SnippetCompiler`, `kotlin-compiler-embeddable`) for in-process static type checking and diagnostics without external Gradle daemons.
-- Real detekt and ktlint backends (isolated subprocess tooling classpaths) for `kotlin_lint`.
-- Host JVM process runner (`kotlin_run`) for Kotlin snippets, Gradle tasks, and JUnit XML test report parsing.
-- Progressive discovery: automatic workspace dependency detection (`build.gradle.kts` / `libs.versions.toml`) with framework-aware tool descriptions.
-- MCP protocol extensions: bundled stdlib documentation and architecture guidelines as Markdown resources (`kotlin://docs/index.md`, `kotlin://guidelines/architecture.md`) and guidance prompts (`kotlin-task`, `kotlin-architecture`).
-- Context injection tools for dependency and API/DB schema digests.
-- Built-in agent skill (`skills/kotlin-mcp/SKILL.md`) with action matrices and refactoring pipelines.
-- GitHub Actions CI, release, and wiki-sync workflows; issue templates and pull request template.
+- **Action-multiplexed tool suite** — 11 tools covering documentation (`kotlin_docs_read`/`edit`), embedded K2 compiler diagnostics (`kotlin_check_snippet`), static AST analysis (`kotlin_code_analyze`), LSP text services (`kotlin_text_lsp_read`/`edit`), project inspection (`kotlin_project_inspect`), library checks (`kotlin_library_analyze`), detekt/ktlint linters (`kotlin_lint`), AST refactoring (`kotlin_refactor`), and JVM execution runner (`kotlin_run`).
+- **Embedded K2 compiler** (`SnippetCompiler`, `kotlin-compiler-embeddable`) — in-process static type checking and diagnostics without external Gradle daemons.
+- **Isolated detekt and ktlint backends** — executed in dedicated worker JVM subprocesses on isolated tooling classpaths to power `kotlin_lint` without classloader interference.
+- **Host JVM process runner** (`kotlin_run`) — executes Kotlin snippets, Gradle tasks, and JUnit XML test report parsing.
+- **Progressive discovery** — automatic workspace dependency detection (`build.gradle.kts` / `libs.versions.toml`) with framework-aware tool descriptions.
+- **MCP protocol extensions** — bundled stdlib documentation (`kotlin://docs/index.md`) and architecture guidelines (`kotlin://guidelines/architecture.md`) exposed as Markdown resources, plus `kotlin-task` and `kotlin-architecture` guidance prompts.
+- **Context injection tools** — dependency and API/DB schema digests.
+- **Built-in agent skill** ([`skills/kotlin-mcp/SKILL.md`](file:///Users/davymaddelein/Documents/kotlin-mcp/skills/kotlin-mcp/SKILL.md)) — operational guidance, action matrices, and refactoring pipelines for AI agents.
+- **CI, release, and wiki workflows** — GitHub Actions automation with issue and pull request templates.
 
 ### Changed
-- Unified code analysis and execution on K2 compiler APIs (K1 removed).
-- Replaced regex-based source parsing with static K2 PSI AST traversal throughout the codebase.
-- Restructured the codebase for embeddable compiler injection (detekt/ktlint run on their own embedded compiler versions).
-
-### Fixed
-- Tests no longer perform real network requests.
-- Machine-specific JDK path removed from `gradle.properties` so the build is portable across machines and CI.
-- Eliminated intermittent test-suite hangs: the doc/snippet/lint components race on request submission, the in-process transport dropped messages arriving before the peer subscribed its handler, and some service calls awaited responses with no timeout. Requests are now idempotent, the transport delivery is race-free, and negotiation/publish calls are bounded by timeouts.
-- detekt and ktlint now run in isolated subprocess JVMs on their dumped tooling classpaths instead of in-process on shared embedded compiler versions, preventing cross-compiler crashes and making the embedded K2 classloading hermetic.
-- Maven artifact version comparison hardened against malformed versions (missing tokens, pre-release markers) used by the library analysis tool.
-- Network audits performed by the project inspection tool are optional (opt-in via `kmcp.disable_network_audits`), so no external calls happen outside CI-scoped runs.
-- CI stabilized: single Gradle invocation for test + fat-JAR, per-method test timeouts, and a persistent Gradle build cache that cuts uncached "Build and Test" step time from ~90s to ~30s.
-
-### Security
-- Stdio transport safety: all logging routed to stderr (`kotlin-logging-jvm` + `slf4j-simple`), keeping stdout clean for JSON-RPC frames.
-- See [SECURITY.md](SECURITY.md) for the security policy and sandboxing notes in `docs/wiki/Security-And-Sandboxing.md`.
+- **Stdio transport safety** — all server logging strictly isolated to `stderr` (`kotlin-logging-jvm` + `slf4j-simple`), keeping `stdout` clean for JSON-RPC transport frames.
+- **K2 PSI AST traversal** — replaced brittle regex and multiline pattern matching across all code analysis tools with embeddable K2 PSI AST visitors.
+- **Sandboxed network audits** — network security audits in project inspection disabled by default (`kmcp.disable_network_audits`), guaranteeing safe offline/isolated runs.
+- **Hardened Maven dependency resolution** — handles malformed artifact versions and pre-release markers gracefully during library analysis.
 
 [Unreleased]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.1.0...HEAD
 [1.1.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.0.0...v1.1.0

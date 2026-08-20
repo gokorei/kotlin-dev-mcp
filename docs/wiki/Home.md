@@ -2,7 +2,7 @@
 
 `kotlin-mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server that brings a full Kotlin development toolkit into MCP-capable AI assistants (Claude Code, Cursor, OpenCode, and other MCP hosts). It exposes documentation lookup, snippet diagnostics, static analysis, linting, refactoring, project inspection, and snippet execution as MCP tools.
 
-The server is distributed as a self-contained JVM uber-JAR (`kotlin-mcp-1.1.0-all.jar`) that requires no Gradle daemons or external services. Kotlin type checking and PSI/AST analysis run through the embedded K2 compiler.
+The server is distributed as a self-contained JVM uber-JAR (`kotlin-mcp-all.jar`) that requires no Gradle daemons or external services. Kotlin type checking and PSI/AST analysis run through the embedded K2 compiler.
 
 ---
 
@@ -15,7 +15,7 @@ Download the uber-JAR from the [latest release](https://github.com/gokorei/kotli
   "mcpServers": {
     "kotlin-mcp": {
       "command": "java",
-      "args": ["-jar", "/absolute/path/to/kotlin-mcp-1.1.0-all.jar"]
+      "args": ["-jar", "/absolute/path/to/kotlin-mcp-all.jar"]
     }
   }
 }
