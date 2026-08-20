@@ -17,4 +17,9 @@ class VersionTest {
             "Expected semantic version format, got: ${Version.CURRENT}"
         )
     }
+
+    @Test
+    fun `FALLBACK_VERSION uses non-release development version identifier`() {
+        assertEquals("0.0.0-dev", Version.FALLBACK_VERSION)
+    }
 }

@@ -5,6 +5,7 @@ package com.gokorei.kotlinmcp
  */
 object Version {
     const val NAME: String = "kotlin-mcp"
+    const val FALLBACK_VERSION: String = "0.0.0-dev"
 
     /**
      * Dynamically resolved server version.
@@ -12,7 +13,7 @@ object Version {
      * Resolution order:
      * 1. JAR Manifest (`Package.implementationVersion`)
      * 2. Build-generated classpath resource (`kotlin-mcp-version.txt`)
-     * 3. Fallback constant ("1.1.0")
+     * 3. Non-release fallback constant ("0.0.0-dev")
      */
     val CURRENT: String by lazy {
         Version::class.java.`package`?.implementationVersion?.trim()?.takeIf { it.isNotEmpty() }
@@ -21,6 +22,6 @@ object Version {
                 ?.bufferedReader()
                 ?.use { it.readText().trim() }
                 ?.takeIf { it.isNotEmpty() }
-            ?: "1.1.0"
+            ?: FALLBACK_VERSION
     }
 }
