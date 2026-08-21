@@ -1000,7 +1000,257 @@ class ProductionCodebaseMutationTest {
             "Mutation score for DiffUtils.kt (${report.score}%) must be at least 80%"
         )
     }
+
+    @Test
+    fun `mutation test production CoverageReporter source file`() {
+        val resultFile = File("src/main/kotlin/com/gokorei/kotlinmcp/models/KotlinMcpResult.kt")
+        val reporterFile = File("src/main/kotlin/com/gokorei/kotlinmcp/project/CoverageReporter.kt")
+        assertTrue(resultFile.exists(), "Target file must exist: ${resultFile.absolutePath}")
+        assertTrue(reporterFile.exists(), "Target file must exist: ${reporterFile.absolutePath}")
+
+        val resultSource = resultFile.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import ") }
+            .filterNot { it.trim() == "@Serializable" }
+            .joinToString("\n")
+
+        val reporterSource = reporterFile.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import ") }
+            .joinToString("\n")
+
+        val productionCode = "import java.io.File\n\n" + resultSource + "\n\n" + reporterSource
+
+        val testSuiteCode = """
+            fun main() {
+                val reporter = CoverageReporter()
+
+                // Result envelope verification
+                val testErr = KotlinMcpResult.Error("msg", "CODE", mapOf("k" to "v"), true)
+                check(testErr.isError && !testErr.isSuccess) { "testErr error flags" }
+                check(testErr.toFormattedText().contains("Error [CODE]: msg\nDetails:\n - k: v\nrequireAnotherCall: true")) { "testErr text" }
+                val testSucc = KotlinMcpResult.Success("ok", mapOf("x" to "y"), true)
+                check(testSucc.isSuccess && !testSucc.isError) { "testSucc success flags" }
+                check(testSucc.toFormattedText().contains("ok\n\n--- Metadata ---\nx: y\n\nrequireAnotherCall: true")) { "testSucc text" }
+
+                // 1. Missing coverage directory
+                val notFoundResult = reporter.coverageReport("non_existent_directory_12345")
+                check(notFoundResult is KotlinMcpResult.Error) { "not found must be Error" }
+                check(notFoundResult.code == "NOT_FOUND") { "error code NOT_FOUND" }
+
+                // 2. Directory with XML report
+                val tmpDir = java.io.File.createTempFile("jacoco_test_", "")
+                tmpDir.delete()
+                val reportDir = java.io.File(tmpDir, "build/reports/jacoco/test")
+                reportDir.mkdirs()
+
+                val xmlFile = java.io.File(reportDir, "jacocoTestReport.xml")
+                xmlFile.writeText(""${'"'}
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <report name="test">
+                        <counter type="INSTRUCTION" missed="20" covered="80"/>
+                        <counter type="LINE" missed="10" covered="90"/>
+                        <counter type="BRANCH" missed="5" covered="15"/>
+                    </report>
+                ""${'"'}.trimIndent())
+
+                val successResult = reporter.coverageReport(tmpDir.path)
+                check(successResult is KotlinMcpResult.Success) { "xml parsed must be Success" }
+                val content = successResult.content
+                check(content.contains("# JaCoCo Code Coverage Report")) { "report title" }
+                check(content.contains("- Line Coverage: 90% (90 / 100 lines)")) { "line coverage format" }
+                check(content.contains("- Branch Coverage: 75% (15 / 20 branches)")) { "branch coverage format" }
+
+                // Check 0 total lines/branches coverage
+                xmlFile.writeText(""${'"'}
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <report name="test">
+                        <counter type="LINE" missed="0" covered="0"/>
+                        <counter type="BRANCH" missed="0" covered="0"/>
+                    </report>
+                ""${'"'}.trimIndent())
+                val zeroResult = reporter.coverageReport(tmpDir.path)
+                check(zeroResult is KotlinMcpResult.Success && zeroResult.content.contains("Line Coverage: 0% (0 / 0 lines)")) { "zero lines" }
+
+                // Also check reportCoverage alias
+                val aliasResult = reporter.reportCoverage("plugins { kotlin }", tmpDir.path)
+                check(aliasResult is KotlinMcpResult.Success) { "reportCoverage alias" }
+
+                // 3. Directory exists but XML is missing (HTML only notice)
+                xmlFile.delete()
+                val htmlOnlyResult = reporter.coverageReport(tmpDir.path)
+                check(htmlOnlyResult is KotlinMcpResult.Success) { "html only is Success" }
+                check(htmlOnlyResult.content.contains("HTML report directory exists at")) { "html notice" }
+
+                tmpDir.deleteRecursively()
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: CoverageReporter.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+        if (report.totalMutants == 0) {
+            println("   BASELINE ERROR: ${report.results.firstOrNull()?.details}")
+        }
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN CoverageReporter.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for CoverageReporter.kt")
+        assertTrue(
+            report.score >= 85.0,
+            "Mutation score for CoverageReporter.kt (${report.score}%) must be at least 85%"
+        )
+    }
+
+    @Test
+    fun `mutation test production ProjectLayeringAnalyzer source file`() {
+        val resultFile = File("src/main/kotlin/com/gokorei/kotlinmcp/models/KotlinMcpResult.kt")
+        val analyzerFile = File("src/main/kotlin/com/gokorei/kotlinmcp/project/ProjectLayeringAnalyzer.kt")
+        assertTrue(resultFile.exists(), "Target file must exist: ${resultFile.absolutePath}")
+        assertTrue(analyzerFile.exists(), "Target file must exist: ${analyzerFile.absolutePath}")
+
+        val resultSource = resultFile.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import ") }
+            .filterNot { it.trim() == "@Serializable" }
+            .joinToString("\n")
+
+        val analyzerSource = analyzerFile.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import ") }
+            .joinToString("\n")
+
+        val productionCode = "import java.io.File\n\n" + resultSource + "\n\n" + analyzerSource
+
+        val testSuiteCode = """
+            fun main() {
+                val analyzer = ProjectLayeringAnalyzer()
+
+                // Result envelope verification
+                val testErr = KotlinMcpResult.Error("msg", "CODE", mapOf("k" to "v"), true)
+                check(testErr.isError && !testErr.isSuccess) { "testErr error flags" }
+                check(testErr.toFormattedText().contains("Error [CODE]: msg\nDetails:\n - k: v\nrequireAnotherCall: true")) { "testErr text" }
+                val defaultErr = KotlinMcpResult.Error("msg")
+                check(!defaultErr.requireAnotherCall) { "default requireAnotherCall false" }
+
+                val testSucc = KotlinMcpResult.Success("ok", mapOf("x" to "y"), true)
+                check(testSucc.isSuccess && !testSucc.isError) { "testSucc success flags" }
+                check(testSucc.toFormattedText().contains("ok\n\n--- Metadata ---\nx: y\n\nrequireAnotherCall: true")) { "testSucc text" }
+                val defaultSucc = KotlinMcpResult.Success("ok")
+                check(!defaultSucc.requireAnotherCall) { "default requireAnotherCall false" }
+
+                // 1. Full 3-tier architecture project
+                val tmpDir = java.io.File.createTempFile("layering_test_", "")
+                tmpDir.delete()
+                tmpDir.mkdirs()
+
+                val domainFile = java.io.File(tmpDir, "domain/User.kt")
+                domainFile.parentFile.mkdirs()
+                domainFile.writeText("package com.example.domain\nclass User(val id: Int)")
+
+                val dataFile = java.io.File(tmpDir, "data/UserRepo.kt")
+                dataFile.parentFile.mkdirs()
+                dataFile.writeText("package com.example.data\nclass UserRepo")
+
+                val uiFile = java.io.File(tmpDir, "ui/UserScreen.kt")
+                uiFile.parentFile.mkdirs()
+                uiFile.writeText("package com.example.ui\nfun render()")
+
+                val fullResult = analyzer.analyzeProjectLayering("", tmpDir.path)
+                check(fullResult is KotlinMcpResult.Success) { "full project is Success" }
+                check(fullResult.metadata["ktFileCount"] == "3") { "3 files counted" }
+                check(fullResult.metadata["packageCount"] == "3") { "3 packages counted" }
+                val content = fullResult.content
+                check(content.contains("# Project Package Layering Analysis")) { "report title" }
+                check(content.contains("Analyzed 3 Kotlin source file(s) across 3 package(s).")) { "analyzed summary line" }
+                check(content.contains("## Detected Packages")) { "detected packages section" }
+                check(content.contains("## Architectural Layer Health")) { "layer health section" }
+                check(content.contains("Domain Layer: ✅ Detected")) { "domain detected" }
+                check(content.contains("Data Layer: ✅ Detected")) { "data detected" }
+                check(content.contains("UI Layer: ✅ Detected")) { "ui detected" }
+                check(content.contains("- `com.example.domain`")) { "package list domain" }
+                check(content.contains("- `com.example.data`")) { "package list data" }
+                check(content.contains("- `com.example.ui`")) { "package list ui" }
+
+                // 2. Empty project
+                val emptyDir = java.io.File.createTempFile("empty_project_", "")
+                emptyDir.delete()
+                emptyDir.mkdirs()
+
+                val emptyResult = analyzer.analyzeProjectLayering("", emptyDir.path)
+                check(emptyResult is KotlinMcpResult.Success) { "empty project is Success" }
+                check(emptyResult.metadata["ktFileCount"] == "0") { "0 files counted" }
+                check(emptyResult.metadata["packageCount"] == "0") { "0 packages counted" }
+                check(emptyResult.content.contains("Analyzed 0 Kotlin source file(s) across 0 package(s).")) { "empty summary" }
+                check(emptyResult.content.contains("Missing explicit .domain")) { "missing domain advisory" }
+                check(emptyResult.content.contains("Missing explicit .data")) { "missing data advisory" }
+                check(emptyResult.content.contains("Missing explicit .ui")) { "missing ui advisory" }
+                check(emptyResult.content.contains("(no explicit package declarations found)")) { "no packages notice" }
+
+                // 3. Null path fallback
+                val nullResult = analyzer.analyzeProjectLayering("", null)
+                check(nullResult is KotlinMcpResult.Success) { "null path is Success" }
+
+                tmpDir.deleteRecursively()
+                emptyDir.deleteRecursively()
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: ProjectLayeringAnalyzer.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+        if (report.totalMutants == 0) {
+            println("   BASELINE ERROR: ${report.results.firstOrNull()?.details}")
+        }
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN ProjectLayeringAnalyzer.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for ProjectLayeringAnalyzer.kt")
+        assertTrue(
+            report.score >= 85.0,
+            "Mutation score for ProjectLayeringAnalyzer.kt (${report.score}%) must be at least 85%"
+        )
+    }
 }
+
 
 
 
