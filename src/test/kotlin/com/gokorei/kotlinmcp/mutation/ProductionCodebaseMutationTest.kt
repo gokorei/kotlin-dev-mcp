@@ -1249,7 +1249,216 @@ class ProductionCodebaseMutationTest {
             "Mutation score for ProjectLayeringAnalyzer.kt (${report.score}%) must be at least 85%"
         )
     }
+
+    @Test
+    fun `mutation test production Version source file`() {
+        val file = File("src/main/kotlin/com/gokorei/kotlinmcp/Version.kt")
+        assertTrue(file.exists(), "Target file must exist: ${file.absolutePath}")
+
+        val productionCode = file.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .joinToString("\n")
+
+        val testSuiteCode = """
+            fun main() {
+                check(Version.NAME == "kotlin-mcp") { "version name" }
+                check(Version.FALLBACK_VERSION == "0.0.0-dev") { "fallback version" }
+                check(Version.CURRENT.isNotBlank()) { "version current not blank" }
+                check(Version.CURRENT.isNotEmpty()) { "version current not empty" }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: Version.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+        if (report.totalMutants == 0) {
+            println("   BASELINE ERROR: ${report.results.firstOrNull()?.details}")
+        }
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN Version.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for Version.kt")
+        assertEquals(0, report.survivedCount, "All Version mutants must be killed")
+        assertEquals(100.0, report.score)
+    }
+
+    @Test
+    fun `mutation test production VulnerabilityAuditor source file`() {
+        val resultFile = File("src/main/kotlin/com/gokorei/kotlinmcp/models/KotlinMcpResult.kt")
+        val auditorFile = File("src/main/kotlin/com/gokorei/kotlinmcp/project/VulnerabilityAuditor.kt")
+        assertTrue(resultFile.exists(), "Target file must exist: ${resultFile.absolutePath}")
+        assertTrue(auditorFile.exists(), "Target file must exist: ${auditorFile.absolutePath}")
+
+        val resultSource = resultFile.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import ") }
+            .filterNot { it.trim() == "@Serializable" }
+            .joinToString("\n")
+
+        val auditorSource = auditorFile.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import ") }
+            .joinToString("\n")
+
+        val imports = """
+            import java.io.File
+            import kotlinx.serialization.json.Json
+            import kotlinx.serialization.json.JsonArray
+            import kotlinx.serialization.json.JsonObject
+            import kotlinx.serialization.json.JsonPrimitive
+        """.trimIndent()
+
+        val productionCode = imports + "\n\n" + resultSource + "\n\n" + auditorSource
+
+        val testSuiteCode = """
+            fun main() {
+                val auditor = VulnerabilityAuditor()
+
+                // Result envelope verification
+                val testErr = KotlinMcpResult.Error("msg", "CODE", mapOf("k" to "v"), true)
+                check(testErr.isError && !testErr.isSuccess) { "testErr error flags" }
+                val errText = testErr.toFormattedText()
+                check(errText.contains("Error [CODE]: msg") && errText.contains(" - k: v") && errText.contains("requireAnotherCall: true")) { "err formatted text" }
+                val defaultErr = KotlinMcpResult.Error("msg")
+                check(!defaultErr.requireAnotherCall) { "default requireAnotherCall false" }
+
+                val testSucc = KotlinMcpResult.Success("ok", mapOf("x" to "y"), true)
+                check(testSucc.isSuccess && !testSucc.isError) { "testSucc success flags" }
+                check(testSucc.toFormattedText().contains("ok\n\n--- Metadata ---\nx: y\n\nrequireAnotherCall: true")) { "testSucc text" }
+                val defaultSucc = KotlinMcpResult.Success("ok")
+                check(!defaultSucc.requireAnotherCall) { "default requireAnotherCall false" }
+
+                // 1. Version comparator verification
+                check(VulnerabilityAuditor.mavenVersionCompare("1.0.0", "1.0.0") == 0) { "equal version" }
+                check(VulnerabilityAuditor.mavenVersionCompare("1.26.0", "1.26.0.Final") == 0) { "equal final release" }
+                check(VulnerabilityAuditor.mavenVersionCompare("1.0.0-alpha", "1.0.0-beta") < 0) { "alpha < beta" }
+                check(VulnerabilityAuditor.mavenVersionCompare("1.0.0-beta", "1.0.0-rc1") < 0) { "beta < rc" }
+                check(VulnerabilityAuditor.mavenVersionCompare("1.0.0-rc1", "1.0.0") < 0) { "rc < release" }
+                check(VulnerabilityAuditor.mavenVersionCompare("1.0.0-SNAPSHOT", "1.0.0") < 0) { "snapshot < release" }
+                check(VulnerabilityAuditor.mavenVersionCompare("2.0.0", "1.9.9") > 0) { "2.0 > 1.9" }
+                check(VulnerabilityAuditor.mavenVersionCompare("1.0.0", "2.0.0") < 0) { "1.0 < 2.0" }
+                check(VulnerabilityAuditor.mavenVersionCompare("1.0.0.1", "1.0.0") > 0) { "1.0.0.1 > 1.0.0" }
+                check(VulnerabilityAuditor.mavenVersionCompare("1.0.0", "1.0.0.1") < 0) { "1.0.0 < 1.0.0.1" }
+
+                // 2. Unparseable build script error
+                val emptyResult = auditor.checkVulnerabilities("", null)
+                check(emptyResult is KotlinMcpResult.Error) { "empty script must be Error" }
+                check(emptyResult.code == "TOOL_UNAVAILABLE") { "empty code TOOL_UNAVAILABLE" }
+                check(emptyResult.details["parsedCoordinateCount"] == "0") { "0 parsed coordinates" }
+
+                // 3. Mixed scan (Vulnerable Log4j + Clean OkHttp in single project)
+                val mixedScript = ""${'"'}
+                    dependencies {
+                        implementation("org.apache.logging.log4j:log4j-core:2.14.0")
+                        api("com.squareup.okhttp3:okhttp:4.12.0")
+                        kapt(platform("org.yaml:snakeyaml:1.30"))
+                    }
+                ""${'"'}.trimIndent()
+                val mixedResult = auditor.checkVulnerabilities(mixedScript, null)
+                check(mixedResult is KotlinMcpResult.Success) { "mixed result must be Success" }
+                check(mixedResult.metadata["source"] == "local-baseline (offline fallback)") { "offline fallback source" }
+                check(mixedResult.metadata["scannedCoordinateCount"] == "3") { "3 coordinates scanned" }
+                check(mixedResult.metadata["advisoryCount"] == "2") { "2 advisories found" }
+                val mContent = mixedResult.content
+                check(mContent.contains("Scanned 3 dependency coordinate(s). (source: local-baseline (offline fallback))")) { "scan summary" }
+                check(mContent.contains("## 🚨 Flagged Security Advisories (2)")) { "flagged section" }
+                check(mContent.contains("CVE-2021-44228")) { "log4shell cve" }
+                check(mContent.contains("CVE-2022-1471")) { "snakeyaml cve" }
+                check(mContent.contains("## Scanned Clean Dependencies (1)")) { "clean count" }
+                check(mContent.contains(" - `com.squareup.okhttp3:okhttp:4.12.0`")) { "clean okhttp" }
+
+                // 4. File-based scan with projectPath (libs.versions.toml + lockfile + plugins)
+                val tmpDir = java.io.File.createTempFile("audit_proj_", "")
+                tmpDir.delete()
+                tmpDir.mkdirs()
+
+                val gradleDir = java.io.File(tmpDir, "gradle")
+                gradleDir.mkdirs()
+                val libsFile = java.io.File(gradleDir, "libs.versions.toml")
+                libsFile.writeText(""${'"'}
+                    [versions]
+                    jackson = "2.14.0"
+                    [libraries]
+                    jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+                ""${'"'}.trimIndent())
+
+                val lockFile = java.io.File(tmpDir, "gradle.lockfile")
+                lockFile.writeText("io.netty:netty-codec-http:4.1.100.Final=classpath\n")
+
+                val bgFile = java.io.File(tmpDir, "build.gradle.kts")
+                bgFile.writeText(""${'"'}
+                    plugins {
+                        id("org.jetbrains.kotlin.jvm") version "1.9.20"
+                        kotlin("multiplatform") version "1.9.20"
+                    }
+                    dependencies {
+                        implementation(libs.jackson.databind)
+                    }
+                ""${'"'}.trimIndent())
+
+                val projectResult = auditor.checkVulnerabilities("", tmpDir.path)
+                check(projectResult is KotlinMcpResult.Success) { "projectResult must be Success" }
+                val pContent = projectResult.content
+                check(pContent.contains("CVE-2023-35116") || pContent.contains("CVE-2024-29025")) { "project vulnerabilities caught" }
+
+                tmpDir.deleteRecursively()
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: VulnerabilityAuditor.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+        if (report.totalMutants == 0) {
+            println("   BASELINE ERROR: ${report.results.firstOrNull()?.details}")
+        }
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN VulnerabilityAuditor.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for VulnerabilityAuditor.kt")
+        assertTrue(
+            report.score >= 75.0,
+            "Mutation score for VulnerabilityAuditor.kt (${report.score}%) must be at least 75% (offline baseline mode)"
+        )
+    }
 }
+
 
 
 
