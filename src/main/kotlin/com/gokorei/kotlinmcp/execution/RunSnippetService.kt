@@ -30,7 +30,8 @@ interface RunSnippetService {
 
 
 class DefaultRunSnippetService(
-    private val javaResolver: JavaResolver = DefaultJavaResolver()
+    private val javaResolver: JavaResolver = DefaultJavaResolver(),
+    private val fastSnippetRunner: FastSnippetRunner = DefaultFastSnippetRunner()
 ) : RunSnippetService {
 
     override fun execute(
@@ -101,7 +102,9 @@ class DefaultRunSnippetService(
         // runtime with ClassNotFoundError.
         val projectClasspath = SnippetCompiler.detectProjectClasspath(projectPath)
         val executionClasspath = (extraClasspath + projectClasspath).distinct().filter { it.isNotBlank() }
-        return if (runner.equals("host_jvm", ignoreCase = true)) {
+        return if (runner.equals("in_memory", ignoreCase = true) || (runner.equals("fast", ignoreCase = true) && jvmArgs.isEmpty() && javaPath == null)) {
+            fastSnippetRunner.run(compiled.outDir, timeoutMillis, executionClasspath)
+        } else if (runner.equals("host_jvm", ignoreCase = true)) {
             runHostJvm(compiled.outDir, timeoutMillis, executionClasspath, jvmArgs, javaPath)
         } else {
             runCompiled(compiled.outDir, timeoutMillis, executionClasspath)

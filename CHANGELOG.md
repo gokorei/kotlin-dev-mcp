@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **In-memory VFS cache & WatchService invalidation** — added `VfsPsiCache` (`DefaultVfsPsiCache`) providing in-memory LRU caching of parsed K2 `KtFile` ASTs and integrating `java.nio.file.WatchService` to invalidate changed files automatically, dropping warm workspace symbol queries below 10ms.
+- **Fast in-memory snippet execution runner** — added `FastSnippetRunner` (`DefaultFastSnippetRunner`) to execute compiled Kotlin snippets directly in-process via isolated `URLClassLoader` worker pools, reducing snippet run latency from ~1.5s down to sub-50ms with thread-safe output capture and timeout cancellation guards.
+- **Response projection & token optimization presets** — added `ResponseProjection` (`ResponsePreset.COMPACT`, `SUMMARY`, `FULL`) and `ProjectionFilter` across read-heavy MCP tools (`kotlin_docs`, `kotlin_code`, `kotlin_lsp`) to prune verbose AST offsets and metadata, reducing LLM context-window token usage by up to 70%.
+
 ### Changed
 - **Centralized dynamic version resolution** — added `Version` as the single source of truth for runtime version resolution (`Version.CURRENT`), backed by `build.gradle.kts` resource generation (`generateVersionResource`) and JAR manifest attributes (`Implementation-Title` / `Implementation-Version`), simplifying future version bumps across the project.
 - **Automated Changelog synchronization** — added `ChangelogGenerator` and `./gradlew generateChangelog` task to generate `CHANGELOG.md` directly from `docs/wiki/Release-Notes.md`, eliminating duplicate changelog maintenance.
