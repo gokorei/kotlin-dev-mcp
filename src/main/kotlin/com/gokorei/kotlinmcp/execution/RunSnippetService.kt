@@ -102,9 +102,11 @@ class DefaultRunSnippetService(
         // runtime with ClassNotFoundError.
         val projectClasspath = SnippetCompiler.detectProjectClasspath(projectPath)
         val executionClasspath = (extraClasspath + projectClasspath).distinct().filter { it.isNotBlank() }
-        return if (runner.equals("in_memory", ignoreCase = true) || (runner.equals("fast", ignoreCase = true) && jvmArgs.isEmpty() && javaPath == null)) {
+        val hasDangerousCalls = SnippetAstSafetyChecker.containsHostTerminatingCalls(trimmed)
+
+        return if (!hasDangerousCalls && (runner.equals("in_memory", ignoreCase = true) || (runner.equals("fast", ignoreCase = true) && jvmArgs.isEmpty() && javaPath == null))) {
             fastSnippetRunner.run(compiled.outDir, timeoutMillis, executionClasspath)
-        } else if (runner.equals("host_jvm", ignoreCase = true)) {
+        } else if (runner.equals("host_jvm", ignoreCase = true) || hasDangerousCalls) {
             runHostJvm(compiled.outDir, timeoutMillis, executionClasspath, jvmArgs, javaPath)
         } else {
             runCompiled(compiled.outDir, timeoutMillis, executionClasspath)

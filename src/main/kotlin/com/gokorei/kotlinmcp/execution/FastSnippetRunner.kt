@@ -5,12 +5,63 @@ import com.gokorei.kotlinmcp.shared.LogTruncator
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.OutputStream
 import java.io.PrintStream
 import java.lang.reflect.InvocationTargetException
-import java.net.URL
 import java.net.URLClassLoader
 import java.nio.file.Path
 import java.util.concurrent.*
+
+/**
+ * Thread-safe PrintStream interceptor that routes printed output to a thread-local
+ * stream when registered, or delegates to the underlying root stream (stdout/stderr).
+ * This eliminates concurrency cross-talk and race conditions during in-process snippet runs.
+ */
+class ThreadLocalPrintStream(private val defaultStream: PrintStream) : PrintStream(object : OutputStream() {
+    override fun write(b: Int) {
+        val target = activeTarget.get() ?: defaultStream
+        target.write(b)
+    }
+
+    override fun write(b: ByteArray, off: Int, len: Int) {
+        val target = activeTarget.get() ?: defaultStream
+        target.write(b, off, len)
+    }
+
+    override fun flush() {
+        val target = activeTarget.get() ?: defaultStream
+        target.flush()
+    }
+}, true, Charsets.UTF_8.name()) {
+
+    companion object {
+        private val activeTarget = ThreadLocal<PrintStream?>()
+
+        fun <T> withCapture(stream: PrintStream, block: () -> T): T {
+            val prev = activeTarget.get()
+            activeTarget.set(stream)
+            return try {
+                block()
+            } finally {
+                activeTarget.set(prev)
+            }
+        }
+
+        @Volatile
+        private var installed = false
+
+        @Synchronized
+        fun install() {
+            if (!installed) {
+                val outInterceptor = ThreadLocalPrintStream(System.out)
+                val errInterceptor = ThreadLocalPrintStream(System.err)
+                System.setOut(outInterceptor)
+                System.setErr(errInterceptor)
+                installed = true
+            }
+        }
+    }
+}
 
 /**
  * High-performance, in-memory snippet execution runner.
@@ -32,6 +83,10 @@ class DefaultFastSnippetRunner(
     private val logger = KotlinLogging.logger {}
     private val executor: ExecutorService = Executors.newFixedThreadPool(threadPoolSize) { r ->
         Thread(r, "FastSnippetRunner-Worker").apply { isDaemon = true }
+    }
+
+    init {
+        ThreadLocalPrintStream.install()
     }
 
     override fun run(
@@ -63,21 +118,13 @@ class DefaultFastSnippetRunner(
                     mainClass.getMethod("main")
                 }
 
-                // Intercept stdout/stderr during the snippet invocation
-                val originalOut = System.out
-                val originalErr = System.err
-                try {
-                    System.setOut(customPrintStream)
-                    System.setErr(customPrintStream)
-
+                // Intercept stdout/stderr thread-safely via ThreadLocalPrintStream
+                ThreadLocalPrintStream.withCapture(customPrintStream) {
                     if (mainMethod.parameterCount == 1) {
                         mainMethod.invoke(null, emptyArray<String>())
                     } else {
                         mainMethod.invoke(null)
                     }
-                } finally {
-                    System.setOut(originalOut)
-                    System.setErr(originalErr)
                 }
             } finally {
                 runCatching { classLoader.close() }

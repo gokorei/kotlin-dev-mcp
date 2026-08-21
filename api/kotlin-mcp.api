@@ -391,6 +391,21 @@ public final class com/gokorei/kotlinmcp/execution/RunSnippetService$DefaultImpl
 	public static synthetic fun execute$default (Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
+public final class com/gokorei/kotlinmcp/execution/SnippetAstSafetyChecker {
+	public static final field INSTANCE Lcom/gokorei/kotlinmcp/execution/SnippetAstSafetyChecker;
+	public final fun containsHostTerminatingCalls (Ljava/lang/String;)Z
+}
+
+public final class com/gokorei/kotlinmcp/execution/ThreadLocalPrintStream : java/io/PrintStream {
+	public static final field Companion Lcom/gokorei/kotlinmcp/execution/ThreadLocalPrintStream$Companion;
+	public fun <init> (Ljava/io/PrintStream;)V
+}
+
+public final class com/gokorei/kotlinmcp/execution/ThreadLocalPrintStream$Companion {
+	public final fun install ()V
+	public final fun withCapture (Ljava/io/PrintStream;Lkotlin/jvm/functions/Function0;)Ljava/lang/Object;
+}
+
 public final class com/gokorei/kotlinmcp/linting/ChildFirstClassLoader : java/net/URLClassLoader {
 	public fun <init> ([Ljava/net/URL;Ljava/lang/ClassLoader;)V
 	public final fun shouldPreferChild (Ljava/lang/String;)Z
