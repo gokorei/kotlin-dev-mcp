@@ -60,7 +60,7 @@ class ExtremeMutationStressTest {
     }
 
     @Test
-    fun `higher-order 2nd-order compound mutation stress test`() {
+    fun `higher-order 2nd-order compound mutation stress test with fully hardened assertions`() {
         val targetCode = """
             fun scoreAssessment(accuracy: Int, speed: Int): String {
                 if (accuracy < 0 || speed < 0) return "INVALID"
@@ -70,29 +70,43 @@ class ExtremeMutationStressTest {
             }
         """.trimIndent()
 
-        val comprehensiveSuite = """
+        val fullyHardenedSuite = """
             fun main() {
+                // Invalid branch
                 check(scoreAssessment(-1, 50) == "INVALID")
                 check(scoreAssessment(50, -1) == "INVALID")
+                check(scoreAssessment(-1, -1) == "INVALID")
+                
+                // EXCELLENT boundaries (90 accuracy, 80 speed)
                 check(scoreAssessment(90, 80) == "EXCELLENT")
-                check(scoreAssessment(95, 85) == "EXCELLENT")
+                check(scoreAssessment(100, 100) == "EXCELLENT")
+                check(scoreAssessment(90, 79) == "PASS") { "90 accuracy but 79 speed is PASS" }
+                check(scoreAssessment(89, 80) == "PASS") { "89 accuracy with 80 speed is PASS" }
                 check(scoreAssessment(89, 85) == "PASS")
+                
+                // PASS boundaries (70 accuracy OR 90 speed)
+                check(scoreAssessment(70, 0) == "PASS")
                 check(scoreAssessment(70, 50) == "PASS")
-                check(scoreAssessment(50, 90) == "PASS")
+                check(scoreAssessment(69, 90) == "PASS")
+                check(scoreAssessment(0, 90) == "PASS")
+                
+                // FAIL boundaries (below 70 accuracy AND below 90 speed)
                 check(scoreAssessment(69, 89) == "FAIL")
+                check(scoreAssessment(69, 0) == "FAIL")
+                check(scoreAssessment(0, 89) == "FAIL")
                 check(scoreAssessment(0, 0) == "FAIL")
             }
         """.trimIndent()
 
         val report = pipeline.run(
             code = targetCode,
-            testCode = comprehensiveSuite,
+            testCode = fullyHardenedSuite,
             includeExtremeOperators = true,
             maxOrder = 2
         )
 
         println("\n=======================================================")
-        println("💥 HIGHER-ORDER (2ND-ORDER COMPOUND) MUTATION TEST")
+        println("💥 HIGHER-ORDER (2ND-ORDER COMPOUND) MUTATION TEST (HARDENED)")
         println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
         println("   Total 1st & 2nd-Order Mutants: ${report.totalMutants}")
         
@@ -104,11 +118,12 @@ class ExtremeMutationStressTest {
         println("=======================================================\n")
 
         assertTrue(homResults.isNotEmpty(), "Expected compound 2nd-order mutants")
-        assertTrue(report.score >= 90.0, "Test suite should achieve >=90% kill rate against 2nd-order compound distortions")
+        assertEquals(0, report.survivedCount, "All 1st and 2nd-order mutants must be killed by hardened suite")
+        assertEquals(100.0, report.score)
     }
 
     @Test
-    fun `breaking point analysis - discovers subtle compounding masking defects`() {
+    fun `addressing survived mutants by hardening orthogonal boundary assertions`() {
         val targetCode = """
             fun calculateDiscount(items: Int, isMember: Boolean): Int {
                 var discount = 0
@@ -118,36 +133,57 @@ class ExtremeMutationStressTest {
             }
         """.trimIndent()
 
-        // Incomplete test suite: tests combined case (items=12, member=true -> 15) and (items=2, member=false -> 0),
-        // but omits individual orthogonal branches (items=12, member=false) and (items=2, member=true)
-        val coupledTestSuite = """
+        // 1. Weak/coupled test suite where 3 mutants survive
+        val weakCoupledTestSuite = """
             fun main() {
                 check(calculateDiscount(12, isMember = true) == 15) { "both discounts apply" }
                 check(calculateDiscount(5, isMember = false) == 0) { "no discount" }
             }
         """.trimIndent()
 
-        val report = pipeline.run(
+        val weakReport = pipeline.run(
             code = targetCode,
-            testCode = coupledTestSuite,
+            testCode = weakCoupledTestSuite,
             includeExtremeOperators = true,
             maxOrder = 2
         )
 
-        println("\n=======================================================")
-        println("🚨 BREAKING POINT DISCOVERY (Compounding Masking Mutants)")
-        println("   Score on Coupled Test Suite: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
-        
-        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
-        println("   Identified ${survived.size} Surviving Mutants:")
-        survived.forEach {
-            println("   ⚠️ SURVIVED (Order ${it.mutant.order}): ${it.mutant.description}")
-            println("      Original: ${it.mutant.originalSnippet}")
-            println("      Mutated:  ${it.mutant.mutatedSnippet}")
-        }
-        println("=======================================================\n")
+        println("\n--- Step 1: Weak Test Suite with Surviving Mutants ---")
+        println("Score: ${weakReport.score}%, Survived: ${weakReport.survivedCount}")
+        assertTrue(weakReport.survivedCount >= 3, "Weak suite must have surviving mutants")
 
-        assertTrue(report.survivedCount >= 3, "Coupled tests should break under extreme higher-order mutations")
-        assertTrue(report.score < 95.0, "Score should drop under surviving extreme mutants")
+        // 2. Hardened test suite explicitly addressing every survived boundary mutant
+        val hardenedTestSuite = """
+            fun main() {
+                // Exact boundary assertions for items > 10
+                check(calculateDiscount(10, isMember = false) == 0) { "exact boundary 10 items: 0 discount" }
+                check(calculateDiscount(11, isMember = false) == 10) { "first tier 11 items: 10 discount" }
+                check(calculateDiscount(9, isMember = false) == 0) { "below boundary 9 items: 0 discount" }
+                
+                // Member only assertions (independent of item count)
+                check(calculateDiscount(0, isMember = true) == 5) { "member only 0 items: 5 discount" }
+                check(calculateDiscount(5, isMember = true) == 5) { "member only 5 items: 5 discount" }
+                check(calculateDiscount(10, isMember = true) == 5) { "member only 10 items: 5 discount" }
+                
+                // Combined assertions
+                check(calculateDiscount(11, isMember = true) == 15) { "both: 11 items + member: 15 discount" }
+                check(calculateDiscount(0, isMember = false) == 0) { "neither: 0 items non-member: 0 discount" }
+            }
+        """.trimIndent()
+
+        val hardenedReport = pipeline.run(
+            code = targetCode,
+            testCode = hardenedTestSuite,
+            includeExtremeOperators = true,
+            maxOrder = 2
+        )
+
+        println("\n--- Step 2: Hardened Test Suite Addressing All Mutants ---")
+        println("Hardened Score: ${hardenedReport.score}% (${hardenedReport.killedCount}/${hardenedReport.effectiveMutants} killed, ${hardenedReport.survivedCount} survived)")
+        println("All previously survived mutants are now 100% killed!\n")
+
+        assertEquals(0, hardenedReport.survivedCount, "All survived mutants must be killed by the hardened suite")
+        assertEquals(100.0, hardenedReport.score)
+        assertTrue(hardenedReport.isStrong)
     }
 }
