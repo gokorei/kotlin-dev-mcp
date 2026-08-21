@@ -200,7 +200,9 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags("stress", "hardening")
+    }
     // Serial forks: the 2-core CI runner thrashes under concurrent test JVMs
     // (each fork loads the Kotlin compiler and spawns detekt/ktlint/snippet
     // subprocesses), measurably slowing the suite. Each method is bounded at
@@ -219,6 +221,33 @@ tasks.test {
         "--sun-misc-unsafe-memory-access=allow"
     )
     val testTmpDir = layout.buildDirectory.dir("tmp/test-workers")
+    doFirst {
+        testTmpDir.get().asFile.mkdirs()
+    }
+    systemProperty("java.io.tmpdir", testTmpDir.get().asFile.path)
+    systemProperty("jna.tmpdir", testTmpDir.get().asFile.path)
+    systemProperty("kmcp.disable_network_audits", "true")
+}
+
+val stressTest = tasks.register<Test>("stressTest") {
+    group = "verification"
+    description = "Runs K2 persistent session, VFS concurrency, memory leak, and stress hardening tests."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("stress", "hardening")
+    }
+    maxParallelForks = 1
+    timeout = Duration.ofMinutes(15)
+    testLogging {
+        events(org.gradle.api.tasks.testing.logging.TestLogEvent.FAILED, org.gradle.api.tasks.testing.logging.TestLogEvent.PASSED)
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+    jvmArgs(
+        "--enable-native-access=ALL-UNNAMED",
+        "--sun-misc-unsafe-memory-access=allow"
+    )
+    val testTmpDir = layout.buildDirectory.dir("tmp/stress-workers")
     doFirst {
         testTmpDir.get().asFile.mkdirs()
     }

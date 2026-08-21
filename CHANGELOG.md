@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Response projection & token optimization presets** — added `ResponseProjection` (`ResponsePreset.COMPACT`, `SUMMARY`, `FULL`) and `ProjectionFilter` across read-heavy MCP tools (`kotlin_docs`, `kotlin_code`, `kotlin_lsp`) to prune verbose AST offsets and metadata, reducing LLM context-window token usage by up to 70%.
 
 ### Changed
+- **Dedicated K2 VFS & compiler session stress test suite** — separated high-concurrency, atomic file-replacement, cross-file incremental invalidation, and GC memory leak verification into a dedicated `./gradlew stressTest` task using JUnit 5 tags (`@Tag("stress")`, `@Tag("hardening")`), keeping standard `./gradlew test` runs fast and lightweight.
 - **Centralized dynamic version resolution** — added `Version` as the single source of truth for runtime version resolution (`Version.CURRENT`), backed by `build.gradle.kts` resource generation (`generateVersionResource`) and JAR manifest attributes (`Implementation-Title` / `Implementation-Version`), simplifying future version bumps across the project.
 - **Automated Changelog synchronization** — added `ChangelogGenerator` and `./gradlew generateChangelog` task to generate `CHANGELOG.md` directly from `docs/wiki/Release-Notes.md`, eliminating duplicate changelog maintenance.
 - **Automated version bump task** — added `./gradlew bumpVersion -Pto=X.Y.Z` to automate version updates across `build.gradle.kts`, `Release-Notes.md`, and `CHANGELOG.md` in one step.
