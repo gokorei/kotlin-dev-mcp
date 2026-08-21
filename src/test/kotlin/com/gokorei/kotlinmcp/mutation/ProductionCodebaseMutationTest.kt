@@ -425,6 +425,81 @@ class ProductionCodebaseMutationTest {
             "Mutation score for JavaResolver.kt (${report.score}%) must be at least 80%"
         )
     }
+
+    @Test
+    fun `mutation test production ToonUtils source file`() {
+        val file = File("src/main/kotlin/com/gokorei/kotlinmcp/shared/ToonUtils.kt")
+        assertTrue(file.exists(), "Target production file must exist: ${file.absolutePath}")
+
+        val rawSource = file.readText()
+        val productionCode = rawSource
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .joinToString("\n")
+
+        val testSuiteCode = """
+            data class RowItem(val name: String?, val score: Int, val notes: String?)
+
+            fun main() {
+                val items = listOf(
+                    RowItem("Alice", 100, "Clean|Passed"),
+                    RowItem("Bob", 85, null),
+                    RowItem(null, 0, "Failed|Timeout|Retry")
+                )
+
+                val toon = ToonUtils.encodeToonTable(
+                    headerName = "TestResults",
+                    columns = listOf("Name", "Score", "Notes"),
+                    items = items
+                ) { item ->
+                    listOf(item.name, item.score, item.notes)
+                }
+
+                check(toon.startsWith("[TestResults: Name|Score|Notes]\n")) { "header format check" }
+                check(toon.contains("Alice|100|Clean/Passed")) { "escaped delimiter check row 1" }
+                check(toon.contains("Bob|85|")) { "null field check row 2" }
+                check(toon.contains("|0|Failed/Timeout/Retry")) { "null name and escaped notes check row 3" }
+                check(!toon.endsWith("\n")) { "trailing newline trimmed" }
+
+                // Empty items list test
+                val emptyToon = ToonUtils.encodeToonTable(
+                    headerName = "EmptyTable",
+                    columns = listOf("ColA", "ColB"),
+                    items = emptyList<RowItem>()
+                ) { listOf(it.name, it.score) }
+
+                check(emptyToon == "[EmptyTable: ColA|ColB]") { "empty table format check" }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: ToonUtils.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN ToonUtils.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for ToonUtils.kt")
+        assertEquals(0, report.survivedCount, "All ToonUtils mutants must be killed")
+        assertEquals(100.0, report.score)
+    }
 }
+
 
 
