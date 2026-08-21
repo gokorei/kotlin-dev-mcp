@@ -183,4 +183,150 @@ class ProductionCodebaseMutationTest {
             "Mutation score for ChangelogGenerator.kt (${report.score}%) must be at least 90%"
         )
     }
+
+    @Test
+    fun `mutation test production ResponseProjection source file`() {
+        val file = File("src/main/kotlin/com/gokorei/kotlinmcp/models/ResponseProjection.kt")
+        assertTrue(file.exists(), "Target production file must exist: ${file.absolutePath}")
+
+        val rawSource = file.readText()
+        val productionCode = rawSource
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .joinToString("\n")
+
+        // Include standalone Result model definition for in-memory execution
+        val resultModelSnippet = """
+            sealed class KotlinMcpResult {
+                abstract val isSuccess: Boolean
+                abstract val isError: Boolean
+                
+                data class Success(
+                    val content: String,
+                    val metadata: Map<String, String> = emptyMap()
+                ) : KotlinMcpResult() {
+                    override val isSuccess: Boolean = true
+                    override val isError: Boolean = false
+                }
+
+                data class Error(
+                    val code: String,
+                    val message: String,
+                    val details: Map<String, String> = emptyMap()
+                ) : KotlinMcpResult() {
+                    override val isSuccess: Boolean = false
+                    override val isError: Boolean = true
+                }
+            }
+        """.trimIndent()
+
+        val fullProductionSnippet = "$resultModelSnippet\n\n$productionCode"
+
+        val testSuiteCode = """
+            fun main() {
+                // 1. Preset parsing assertions
+                check(ResponsePreset.fromString("compact") == ResponsePreset.COMPACT)
+                check(ResponsePreset.fromString("COMPACT") == ResponsePreset.COMPACT)
+                check(ResponsePreset.fromString("summary") == ResponsePreset.SUMMARY)
+                check(ResponsePreset.fromString("SUMMARY") == ResponsePreset.SUMMARY)
+                check(ResponsePreset.fromString("full") == ResponsePreset.FULL)
+                check(ResponsePreset.fromString(null) == ResponsePreset.FULL)
+                check(ResponsePreset.fromString("unknown") == ResponsePreset.FULL)
+                check(ResponsePreset.fromString("") == ResponsePreset.FULL)
+
+                // 2. Default Full projection identity check
+                val origSuccess = KotlinMcpResult.Success("content", mapOf("k" to "v"))
+                val fullProj = ResponseProjection(ResponsePreset.FULL, emptySet())
+                val res1 = ProjectionFilter.apply(origSuccess, fullProj)
+                check(res1 == origSuccess)
+
+                // 3. Field filtering on Success and Error
+                val richSuccess = KotlinMcpResult.Success("data", mapOf("a" to "1", "b" to "2", "c" to "3"))
+                val fieldsProj = ResponseProjection(ResponsePreset.FULL, setOf("a", "c"))
+                val filteredSuccess = ProjectionFilter.apply(richSuccess, fieldsProj) as KotlinMcpResult.Success
+                check(filteredSuccess.isSuccess)
+                check(!filteredSuccess.isError)
+                check(filteredSuccess.metadata == mapOf("a" to "1", "c" to "3"))
+
+                val richError = KotlinMcpResult.Error("ERR", "msg", mapOf("debug" to "trace", "code" to "404"))
+                val errorProj = ResponseProjection(ResponsePreset.FULL, setOf("code"))
+                val filteredError = ProjectionFilter.apply(richError, errorProj) as KotlinMcpResult.Error
+                check(filteredError.isError)
+                check(!filteredError.isSuccess)
+                check(filteredError.details == mapOf("code" to "404"))
+
+                // 4. Compact preset metadata pruning
+                val metaSuccess = KotlinMcpResult.Success(
+                    "data",
+                    mapOf(
+                        "raw" to "val1",
+                        "rawAst" to "val2",
+                        "internalAstOffset" to "val3",
+                        "debug" to "val4",
+                        "verboseDebugInfo" to "val5",
+                        "astDump" to "val6",
+                        "preservedKey" to "keep"
+                    )
+                )
+                val compactProj = ResponseProjection(ResponsePreset.COMPACT)
+                val compactRes = ProjectionFilter.apply(metaSuccess, compactProj) as KotlinMcpResult.Success
+                check(compactRes.metadata == mapOf("preservedKey" to "keep"))
+
+                // 5. Compact content stripping
+                val verboseContent = ""${'"'}
+                    Header Info
+                    --- Internal AST Dump ---
+                    Raw AST line 1
+                    Raw AST line 2
+                    --- Next Section ---
+                    Main summary results
+                    --- Debug Trace (verbose)
+                    Debug stack line
+                    --- Final Section ---
+                    End note
+                ""${'"'}.trimIndent()
+
+                val contentSuccess = KotlinMcpResult.Success(verboseContent, emptyMap())
+                val compactedContent = (ProjectionFilter.apply(contentSuccess, compactProj) as KotlinMcpResult.Success).content
+
+                check(compactedContent.contains("Header Info"))
+                check(compactedContent.contains("--- Next Section ---"))
+                check(compactedContent.contains("Main summary results"))
+                check(compactedContent.contains("--- Final Section ---"))
+                check(compactedContent.contains("End note"))
+                check(!compactedContent.contains("Raw AST line 1"))
+                check(!compactedContent.contains("Debug stack line"))
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = fullProductionSnippet,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: ResponseProjection.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN ResponseProjection.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for ResponseProjection.kt")
+        assertTrue(
+            report.score >= 85.0,
+            "Mutation score for ResponseProjection.kt (${report.score}%) must be at least 85%"
+        )
+    }
 }
+
