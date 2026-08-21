@@ -161,4 +161,13 @@ class KotlinMcpServerTest {
         val parsedFromString = ToolRegistrar.parseClasspathElement(jsonString)
         assertEquals(listOf("/lib/c.jar", "/lib/d.jar"), parsedFromString)
     }
+
+    @Test
+    fun `mutationTest executes in-memory mutation testing and returns score`() {
+        val code = "fun doubleVal(x: Int): Int = x * 2"
+        val testCode = "fun main() { check(doubleVal(3) == 6); check(doubleVal(0) == 0) }"
+        val result = server.mutationTest(code, testCode)
+        assertSuccess(result, "Mutation Testing Report")
+    }
 }
+
