@@ -18,13 +18,40 @@ object SnippetAstSafetyChecker {
 
         // Check imports
         val imports = psi.importDirectives
-        val exitProcessAlias = imports.firstOrNull {
-            val fqn = it.importedFqName?.asString()
-            fqn == "kotlin.system.exitProcess"
-        }?.aliasName ?: "exitProcess"
+        val exitProcessAliases = mutableSetOf("exitProcess")
+        val systemAliases = mutableSetOf("System", "java.lang.System")
+        val runtimeAliases = mutableSetOf("Runtime", "java.lang.Runtime")
+        val directExitAliases = mutableSetOf<String>()
 
-        val hasWildcardKotlinSystem = imports.any { it.importedFqName?.asString() == "kotlin.system" && it.isAllUnder }
-        val hasExplicitExitProcessImport = imports.any { it.importedFqName?.asString() == "kotlin.system.exitProcess" }
+        var hasWildcardKotlinSystem = false
+        var hasWildcardJavaLang = false
+
+        for (imp in imports) {
+            val fqn = imp.importedFqName?.asString() ?: continue
+            val alias = imp.aliasName
+
+            if (imp.isAllUnder) {
+                if (fqn == "kotlin.system") hasWildcardKotlinSystem = true
+                if (fqn == "java.lang") hasWildcardJavaLang = true
+            } else {
+                when (fqn) {
+                    "kotlin.system.exitProcess" -> {
+                        if (alias != null) exitProcessAliases.add(alias)
+                        else exitProcessAliases.add("exitProcess")
+                    }
+                    "java.lang.System.exit" -> {
+                        if (alias != null) directExitAliases.add(alias)
+                        else directExitAliases.add("exit")
+                    }
+                    "java.lang.System", "System" -> {
+                        if (alias != null) systemAliases.add(alias)
+                    }
+                    "java.lang.Runtime", "Runtime" -> {
+                        if (alias != null) runtimeAliases.add(alias)
+                    }
+                }
+            }
+        }
 
         // Find user-declared functions/classes/variables in the snippet
         val userDeclaredFunctionNames = mutableSetOf<String>()
@@ -55,10 +82,17 @@ object SnippetAstSafetyChecker {
                 val callee = expression.calleeExpression
                 val calleeName = callee?.text?.trim()
 
-                // Check for exitProcess or its alias
                 if (calleeName != null) {
-                    if (calleeName == exitProcessAlias || (hasWildcardKotlinSystem && calleeName == "exitProcess")) {
-                        if (hasExplicitExitProcessImport || hasWildcardKotlinSystem || calleeName !in userDeclaredFunctionNames) {
+                    // Check direct exitProcess calls or aliases
+                    if (calleeName in exitProcessAliases || (hasWildcardKotlinSystem && calleeName == "exitProcess")) {
+                        if (calleeName !in userDeclaredFunctionNames || imports.any { it.importedFqName?.asString() == "kotlin.system.exitProcess" }) {
+                            foundDangerous = true
+                        }
+                    }
+
+                    // Check direct java.lang.System.exit import aliases
+                    if (calleeName in directExitAliases) {
+                        if (calleeName !in userDeclaredFunctionNames) {
                             foundDangerous = true
                         }
                     }
@@ -69,15 +103,26 @@ object SnippetAstSafetyChecker {
                     val receiver = parent.receiverExpression.text.trim()
                     val selector = calleeName
 
-                    if (selector == "exit" && (receiver == "System" || receiver == "java.lang.System")) {
+                    // Check System.exit or aliased System
+                    if (selector == "exit" && (receiver in systemAliases || receiver == "kotlin.system")) {
                         if (receiver !in userDeclaredClassNames && receiver !in userDeclaredVarNames) {
                             foundDangerous = true
                         }
                     }
 
-                    if ((selector == "halt" || selector == "exit") &&
-                        (receiver == "Runtime.getRuntime()" || receiver == "java.lang.Runtime.getRuntime()")) {
+                    // Check kotlin.system.exitProcess
+                    if ((selector == "exitProcess" || selector in exitProcessAliases) && receiver == "kotlin.system") {
                         foundDangerous = true
+                    }
+
+                    // Check Runtime.getRuntime().halt / exit
+                    if ((selector == "halt" || selector == "exit")) {
+                        val isRuntimeReceiver = runtimeAliases.any { r ->
+                            receiver == "$r.getRuntime()" || receiver == "$r.getRuntime()." || receiver.endsWith("$r.getRuntime()")
+                        }
+                        if (isRuntimeReceiver && "Runtime" !in userDeclaredClassNames && "Runtime" !in userDeclaredVarNames) {
+                            foundDangerous = true
+                        }
                     }
                 }
 

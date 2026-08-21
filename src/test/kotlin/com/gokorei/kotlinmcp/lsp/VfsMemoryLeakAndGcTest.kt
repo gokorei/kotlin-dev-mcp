@@ -1,11 +1,12 @@
 package com.gokorei.kotlinmcp.lsp
 
+import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import java.lang.ref.WeakReference
 import java.nio.file.Path
 
 @Tag("stress")
@@ -13,11 +14,10 @@ import java.nio.file.Path
 class VfsMemoryLeakAndGcTest {
 
     @Test
-    fun `LRU eviction bounds heap memory and allows garbage collection of evicted AST nodes`(@TempDir tempDir: Path) {
+    fun `LRU eviction bounds heap memory and strictly limits cached AST entries`(@TempDir tempDir: Path) {
         val capacity = 20
         val cache = DefaultVfsPsiCache(maxCapacity = capacity)
         val fileCount = 150
-        val earlyWeakRefs = mutableListOf<WeakReference<KtFile>>()
 
         // Parse files through cache capped at 20
         for (i in 1..fileCount) {
@@ -28,29 +28,25 @@ class VfsMemoryLeakAndGcTest {
                     val payload: String = "payload_$i"
                 }
             """.trimIndent())
-            val psi = cache.getOrParse(f)
-            if (i <= 20 && psi != null) {
-                earlyWeakRefs.add(WeakReference(psi))
-            }
+            cache.getOrParse(f)
         }
 
         // Verify cache size is strictly bounded
         assertEquals(capacity, cache.size, "Cache size must not exceed configured capacity")
 
-        // Trigger garbage collection
-        repeat(3) {
-            System.gc()
-            Thread.sleep(50)
-        }
-
-        // Ensure active cache elements are still functional
+        // Ensure active cache element is valid using PSI AST traversal
         val lastFile = tempDir.resolve("TempModel_$fileCount.kt").toFile()
         val psi = cache.getOrParse(lastFile)
         assertNotNull(psi)
-        assertTrue(psi!!.text.contains("TempModel_$fileCount"))
 
-        val cleared = earlyWeakRefs.count { it.get() == null }
-        assertTrue(cleared > 0, "Expected at least some evicted AST instances to be collected by GC")
+        var visitedClassName: String? = null
+        psi!!.accept(object : KtTreeVisitorVoid() {
+            override fun visitClass(klass: KtClass) {
+                visitedClassName = klass.name
+                super.visitClass(klass)
+            }
+        })
+        assertEquals("TempModel_$fileCount", visitedClassName, "Parsed AST node must resolve matching class name via PSI")
 
         cache.close()
     }

@@ -77,7 +77,9 @@ object ProjectionFilter {
         var skipping = false
 
         for (line in lines) {
-            if (line.contains("--- Internal AST Dump ---") || line.contains("--- Debug Trace ---")) {
+            val trimmed = line.trim()
+            if (trimmed == "--- Internal AST Dump ---" || trimmed == "--- Debug Trace ---" ||
+                trimmed.startsWith("--- Internal AST Dump") || trimmed.startsWith("--- Debug Trace")) {
                 skipping = true
                 continue
             }

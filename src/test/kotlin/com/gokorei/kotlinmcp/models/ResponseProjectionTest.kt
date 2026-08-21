@@ -60,6 +60,21 @@ class ResponseProjectionTest {
     }
 
     @Test
+    fun `ProjectionFilter compact preset preserves embedded phrases in body paragraphs`() {
+        val original = KotlinMcpResult.Success(
+            content = "This document describes the Internal AST Dump feature in Kotlin compiler.\nIt explains the syntax.",
+            metadata = emptyMap()
+        )
+
+        val projection = ResponseProjection(preset = ResponsePreset.COMPACT)
+        val filtered = ProjectionFilter.apply(original, projection)
+
+        assertTrue(filtered.isSuccess)
+        val success = filtered as KotlinMcpResult.Success
+        assertTrue(success.content.contains("This document describes the Internal AST Dump feature"))
+    }
+
+    @Test
     fun `ProjectionFilter summary preset preserves main content and applies field masks`() {
         val original = KotlinMcpResult.Success(
             content = "Summary content for caller",

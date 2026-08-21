@@ -17,9 +17,45 @@ class SnippetAstSafetyCheckerTest {
     }
 
     @Test
+    fun `detects aliased System import exit calls`() {
+        val snippet = """
+            import java.lang.System as Sys
+            fun main() {
+                Sys.exit(0)
+            }
+        """.trimIndent()
+
+        assertTrue(SnippetAstSafetyChecker.containsHostTerminatingCalls(snippet))
+    }
+
+    @Test
+    fun `detects direct aliased System exit method import`() {
+        val snippet = """
+            import java.lang.System.exit as terminateVm
+            fun main() {
+                terminateVm(0)
+            }
+        """.trimIndent()
+
+        assertTrue(SnippetAstSafetyChecker.containsHostTerminatingCalls(snippet))
+    }
+
+    @Test
     fun `detects kotlin system exitProcess calls`() {
         val snippet = """
             import kotlin.system.exitProcess
+            fun main() {
+                exitProcess(1)
+            }
+        """.trimIndent()
+
+        assertTrue(SnippetAstSafetyChecker.containsHostTerminatingCalls(snippet))
+    }
+
+    @Test
+    fun `detects wildcard kotlin system exitProcess calls`() {
+        val snippet = """
+            import kotlin.system.*
             fun main() {
                 exitProcess(1)
             }
@@ -45,6 +81,18 @@ class SnippetAstSafetyCheckerTest {
         val snippet = """
             fun main() {
                 Runtime.getRuntime().halt(1)
+            }
+        """.trimIndent()
+
+        assertTrue(SnippetAstSafetyChecker.containsHostTerminatingCalls(snippet))
+    }
+
+    @Test
+    fun `detects aliased Runtime halt calls`() {
+        val snippet = """
+            import java.lang.Runtime as SysRuntime
+            fun main() {
+                SysRuntime.getRuntime().halt(1)
             }
         """.trimIndent()
 

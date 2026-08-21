@@ -3,19 +3,16 @@ package com.gokorei.kotlinmcp.lsp
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.jetbrains.kotlin.psi.KtFile
 import java.io.File
-import java.nio.file.FileSystems
-import java.nio.file.Path
+import java.nio.file.*
 import java.nio.file.StandardWatchEventKinds.*
-import java.nio.file.WatchKey
-import java.nio.file.WatchService
 import java.util.Collections
 import java.util.LinkedHashMap
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * In-memory Virtual File System (VFS) cache for parsed K2 [KtFile] ASTs.
- * Prevents repetitive disk I/O and PSI parsing across LSP and analysis queries,
- * with WatchService file-modification invalidation support.
+ * In-memory Virtual File System (VFS) and AST cache.
+ * Provides LRU-bounded caching of parsed KtFile ASTs, background file invalidation via
+ * WatchService, and sub-millisecond AST re-use across MCP tool invocations.
  */
 interface VfsPsiCache : AutoCloseable {
     fun getOrParse(file: File): KtFile?
@@ -36,10 +33,11 @@ class DefaultVfsPsiCache(
     private data class CachedEntry(
         val file: KtFile,
         val lastModified: Long,
-        val contentHash: Int
+        val contentHash: Int,
+        val content: String? = null
     )
 
-    // Bounded LRU cache map
+    // Bounded LRU cache for parsed KtFiles
     private val cache: MutableMap<String, CachedEntry> = Collections.synchronizedMap(
         object : LinkedHashMap<String, CachedEntry>(maxCapacity, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedEntry>?): Boolean {
@@ -48,9 +46,9 @@ class DefaultVfsPsiCache(
         }
     )
 
+    private val watchKeys = ConcurrentHashMap<WatchKey, Path>()
     @Volatile
     private var watchService: WatchService? = null
-    private val watchKeys = ConcurrentHashMap<WatchKey, Path>()
     @Volatile
     private var watchThread: Thread? = null
     @Volatile
@@ -60,6 +58,7 @@ class DefaultVfsPsiCache(
         get() = cache.size
 
     override fun getOrParse(file: File): KtFile? {
+        if (!file.exists() || !file.isFile) return null
         val normalizedPath = file.absoluteFile.normalize().invariantSeparatorsPath
         val lastMod = file.lastModified()
 
@@ -71,15 +70,15 @@ class DefaultVfsPsiCache(
         val text = runCatching { file.readText() }.getOrNull() ?: return null
         val hash = text.hashCode()
 
-        if (existing != null && existing.contentHash == hash) {
+        if (existing != null && existing.contentHash == hash && (existing.content == null || existing.content == text || existing.file.text == text)) {
             // Content didn't change even if timestamp bumped
-            val updated = existing.copy(lastModified = lastMod)
+            val updated = existing.copy(lastModified = lastMod, content = text)
             cache[normalizedPath] = updated
             return updated.file
         }
 
         val parsed = K2SnippetFrontend.parsePsi(text) ?: return null
-        cache[normalizedPath] = CachedEntry(parsed, lastMod, hash)
+        cache[normalizedPath] = CachedEntry(parsed, lastMod, hash, text)
         return parsed
     }
 
@@ -88,12 +87,12 @@ class DefaultVfsPsiCache(
         val hash = content.hashCode()
 
         val existing = cache[normalizedPath]
-        if (existing != null && existing.contentHash == hash) {
+        if (existing != null && existing.contentHash == hash && (existing.content == null || existing.content == content || existing.file.text == content)) {
             return existing.file
         }
 
         val parsed = K2SnippetFrontend.parsePsi(content) ?: return null
-        cache[normalizedPath] = CachedEntry(parsed, System.currentTimeMillis(), hash)
+        cache[normalizedPath] = CachedEntry(parsed, System.currentTimeMillis(), hash, content)
         return parsed
     }
 
@@ -119,13 +118,24 @@ class DefaultVfsPsiCache(
             val ws = FileSystems.getDefault().newWatchService()
             this.watchService = ws
 
+            val sensitivityModifier = runCatching {
+                val clazz = Class.forName("com.sun.nio.file.SensitivityWatchEventModifier")
+                clazz.getField("HIGH").get(null) as? WatchEvent.Modifier
+            }.getOrNull()
+
+            val modifiers = if (sensitivityModifier != null) arrayOf(sensitivityModifier) else emptyArray()
+
             // Register root and subdirectories
             rootDir.walkTopDown().onEnter { dir ->
                 !K2ResolutionUtils.isExcludedWorkspaceDir(dir)
             }.filter { it.isDirectory }.forEach { dir ->
                 runCatching {
                     val path = dir.toPath()
-                    val key = path.register(ws, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY)
+                    val key = if (modifiers.isNotEmpty()) {
+                        path.register(ws, arrayOf(ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY), *modifiers)
+                    } else {
+                        path.register(ws, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY)
+                    }
                     watchKeys[key] = path
                 }
             }
@@ -165,13 +175,18 @@ class DefaultVfsPsiCache(
             this.watchThread = thread
         } catch (e: Exception) {
             logger.warn(e) { "Could not initialize VfsPsiCache WatchService for root '$rootPath': ${e.message}" }
+            runCatching { this.watchService?.close() }
+            this.watchService = null
+            this.watchKeys.clear()
         }
     }
 
+    @Synchronized
     override fun close() {
         closed = true
         watchThread?.interrupt()
         runCatching { watchService?.close() }
+        watchService = null
         watchKeys.clear()
         cache.clear()
     }
