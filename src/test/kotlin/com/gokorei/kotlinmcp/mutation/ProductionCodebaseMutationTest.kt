@@ -328,5 +328,103 @@ class ProductionCodebaseMutationTest {
             "Mutation score for ResponseProjection.kt (${report.score}%) must be at least 85%"
         )
     }
+
+    @Test
+    fun `mutation test production JavaResolver source file`() {
+        val file = File("src/main/kotlin/com/gokorei/kotlinmcp/execution/JavaResolver.kt")
+        assertTrue(file.exists(), "Target production file must exist: ${file.absolutePath}")
+
+        val rawSource = file.readText()
+        val productionCode = rawSource
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .joinToString("\n")
+
+        val testSuiteCode = """
+            fun main() {
+                val resolver = DefaultJavaResolver()
+
+                // 1. validateJvmArgs checks all forbidden prefixes and self-attach vectors (case-insensitive)
+                val forbidden = listOf(
+                    "-JAVAAGENT:/path/agent.jar",
+                    "-AgentLib:jdwp=transport=dt_socket",
+                    "-agentpath:/path/lib.so",
+                    "-Xbootclasspath/a:/path",
+                    "--ADD-OPENS=java.base/java.lang=ALL-UNNAMED",
+                    "--add-exports=java.base/sun.security.util=ALL-UNNAMED",
+                    "--add-reads=m1=m2",
+                    "--patch-module=java.base=patch.jar",
+                    "--Allow-Attach-Self",
+                    "-Djdk.attach.allowAttachSelf=true"
+                )
+
+                val violations = resolver.validateJvmArgs(forbidden)
+                check(violations.size == forbidden.size) { "all forbidden flags caught" }
+                forbidden.forEach { flag ->
+                    check(violations.contains(flag)) { "violation contains flag: " + flag }
+                }
+
+                // Safe arguments must not be flagged
+                val safeArgs = listOf("-Xmx512m", "-Xms128m", "-Dfile.encoding=UTF-8", "-ea")
+                val safeViolations = resolver.validateJvmArgs(safeArgs)
+                check(safeViolations.isEmpty()) { "safe args produce no violations" }
+
+                // 2. resolve with explicit path
+                val validJava = System.getProperty("java.home") + File.separator + "bin" + File.separator + "java"
+                val resolvedExplicit = resolver.resolve(validJava)
+                check(resolvedExplicit != null) { "explicit valid java resolved" }
+
+                val nonExistent = "/non/existent/path/to/java_binary_dummy"
+                check(resolver.resolve(nonExistent) == null) { "non-existent path returns null" }
+
+                // 3. resolve with null / blank falling back to java.home (must match java.home location, not just random PATH)
+                val expectedHome = System.getProperty("java.home") ?: System.getenv("JAVA_HOME")
+                val fallbackResolved = resolver.resolve(null)
+                check(fallbackResolved != null && fallbackResolved.exists()) { "null fallback resolves java home binary" }
+                if (!expectedHome.isNullOrBlank()) {
+                    check(fallbackResolved!!.absolutePath.startsWith(expectedHome)) { "resolved binary must originate from java.home" }
+                }
+
+                val blankResolved = resolver.resolve("   ")
+                check(blankResolved != null && blankResolved.exists()) { "blank fallback resolves java home binary" }
+                if (!expectedHome.isNullOrBlank()) {
+                    check(blankResolved!!.absolutePath.startsWith(expectedHome)) { "blank fallback binary must originate from java.home" }
+                }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: JavaResolver.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+        if (report.totalMutants == 0) {
+            println("   BASELINE ERROR: ${report.results.firstOrNull()?.details}")
+        }
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN JavaResolver.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for JavaResolver.kt")
+        assertTrue(
+            report.score >= 80.0,
+            "Mutation score for JavaResolver.kt (${report.score}%) must be at least 80%"
+        )
+    }
 }
+
 
