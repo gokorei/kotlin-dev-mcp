@@ -14,6 +14,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Improvements
 
+- **Standardized logging across all server modules** — eliminated residual direct `System.err.println` calls in `K2SnippetFrontend` and `DocService`, standardizing 100% of runtime logging on `KotlinLogging` (`io.github.oshai:kotlin-logging-jvm`) backed by `slf4j-simple`.
 - **Thread-isolated snippet output routing & host termination guards** — introduced `ThreadLocalPrintStream` preventing concurrent stdout/stderr stream cross-talk during in-process snippet executions, and implemented `SnippetAstSafetyChecker` using K2 PSI to detect `System.exit`, `exitProcess`, and `Runtime.halt` calls, automatically routing dangerous snippets to isolated subprocess execution to guard the host MCP server.
 - **Dedicated K2 VFS & snippet runner stress test suite** — expanded `./gradlew stressTest` with concurrent output isolation verification, Metaspace and ClassLoader GC reclamation checks, and host termination interception tests.
 - **Centralized dynamic version resolution** — added `Version` as the single source of truth for runtime version resolution (`Version.CURRENT`), backed by `build.gradle.kts` resource generation (`generateVersionResource`) and JAR manifest attributes (`Implementation-Title` / `Implementation-Version`), simplifying future version bumps across the project.

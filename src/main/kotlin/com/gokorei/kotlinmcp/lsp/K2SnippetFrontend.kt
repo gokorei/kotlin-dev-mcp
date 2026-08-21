@@ -143,7 +143,7 @@ object K2SnippetFrontend {
                 ktFile
             }
         } catch (e: Throwable) {
-            System.err.println("K2SnippetFrontend.parsePsi FAILED for code:\n$code\nError: ${e.message}")
+            logger.warn(e) { "K2SnippetFrontend.parsePsi FAILED for code:\n$code\nError: ${e.message}" }
             null
         }
     }
@@ -188,7 +188,7 @@ object K2SnippetFrontend {
                 moduleDescriptor = result.moduleDescriptor
             )
         } catch (e: Throwable) {
-            System.err.println("K2SnippetFrontend.analyzeSession fallback: ${e.message}")
+            logger.warn(e) { "K2SnippetFrontend.analyzeSession fallback: ${e.message}" }
             K2AnalysisSession(file)
         }
     }

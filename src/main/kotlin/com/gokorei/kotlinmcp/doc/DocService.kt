@@ -3,6 +3,7 @@ package com.gokorei.kotlinmcp.doc
 import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import com.gokorei.kotlinmcp.shared.CommandService
 import com.gokorei.kotlinmcp.shared.ToonUtils
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.File
 import java.net.URLDecoder
 import java.util.concurrent.ConcurrentHashMap
@@ -39,6 +40,8 @@ interface DocService : CommandService<DocAction> {
 }
 
 class DefaultDocService(private val persistencePath: String? = null) : DocService {
+
+    private val logger = KotlinLogging.logger {}
 
     private val symbolAppliesToMap: ConcurrentHashMap<String, List<String>> =
         ConcurrentHashMap(mapOf(
@@ -936,7 +939,7 @@ class DefaultDocService(private val persistencePath: String? = null) : DocServic
                 ?: Thread.currentThread().contextClassLoader?.getResourceAsStream("stdlib-index.json")
         }.getOrNull()
         if (stream == null) {
-            System.err.println("DefaultDocService warning: packaged stdlib-index.json resource not found; using built-in documentation fallback.")
+            logger.warn { "DefaultDocService warning: packaged stdlib-index.json resource not found; using built-in documentation fallback." }
             return
         }
 
