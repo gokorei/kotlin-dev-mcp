@@ -654,7 +654,111 @@ class ProductionCodebaseMutationTest {
         assertEquals(0, report.survivedCount, "All ProjectEnvironmentProfile mutants must be killed")
         assertEquals(100.0, report.score)
     }
+
+    @Test
+    fun `mutation test production FrameworkFeatureCatalog source file`() {
+        val featureFile = File("src/main/kotlin/com/gokorei/kotlinmcp/models/ProjectEnvironmentProfile.kt")
+        val catalogFile = File("src/main/kotlin/com/gokorei/kotlinmcp/doc/FrameworkFeatureCatalog.kt")
+        assertTrue(featureFile.exists(), "Target file must exist: ${featureFile.absolutePath}")
+        assertTrue(catalogFile.exists(), "Target file must exist: ${catalogFile.absolutePath}")
+
+        val featureSource = featureFile.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .joinToString("\n")
+
+        val catalogSource = catalogFile.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import com.gokorei.kotlinmcp.models.FrameworkFeature") }
+            .joinToString("\n")
+
+        val productionCode = featureSource + "\n\n" + catalogSource
+
+        val testSuiteCode = """
+            fun main() {
+                val defaultProfile = ProjectEnvironmentProfile()
+                check(!defaultProfile.isKmp) { "default isKmp false" }
+
+                // 1. featureAppliesTo mapping verification
+                val applies = FrameworkFeatureCatalog.featureAppliesTo
+                check(applies[FrameworkFeature.ARROW] == listOf("arrow")) { "arrow mapping" }
+                check(applies[FrameworkFeature.DATETIME] == listOf("kotlinx-datetime")) { "datetime mapping" }
+                check(applies[FrameworkFeature.KTOR] == listOf("ktor")) { "ktor mapping" }
+                check(applies[FrameworkFeature.TURBINE] == listOf("turbine")) { "turbine mapping" }
+                check(applies[FrameworkFeature.MOCKK] == listOf("mockk")) { "mockk mapping" }
+
+                // 2. featureDocs verification
+                val docs = FrameworkFeatureCatalog.featureDocs
+                val coroutinesDoc = docs[FrameworkFeature.COROUTINES].orEmpty()
+                check(coroutinesDoc.contains("# Kotlin Coroutines Guide")) { "coroutines title" }
+                check(coroutinesDoc.contains("suspend fun")) { "coroutines suspend fun" }
+                check(coroutinesDoc.contains("CoroutineScope")) { "coroutines scope" }
+                check(coroutinesDoc.contains("Dispatchers.IO")) { "coroutines dispatchers" }
+                check(coroutinesDoc.contains("Flow<T>")) { "coroutines flow" }
+                check(coroutinesDoc.contains("runTest")) { "coroutines runTest" }
+
+                val serializationDoc = docs[FrameworkFeature.SERIALIZATION].orEmpty()
+                check(serializationDoc.contains("# `kotlinx.serialization` Guide")) { "serialization title" }
+                check(serializationDoc.contains("@Serializable")) { "serialization annotation" }
+                check(serializationDoc.contains("data class User")) { "serialization sample" }
+
+                val arrowDoc = docs[FrameworkFeature.ARROW].orEmpty()
+                check(arrowDoc.contains("arrow.core.Either")) { "arrow Either" }
+                check(arrowDoc.contains("arrow.core.raise.Raise")) { "arrow Raise" }
+                check(arrowDoc.contains("arrow.fx.coroutines")) { "arrow fx" }
+
+                val datetimeDoc = docs[FrameworkFeature.DATETIME].orEmpty()
+                check(datetimeDoc.contains("Instant")) { "datetime Instant" }
+                check(datetimeDoc.contains("LocalDate")) { "datetime LocalDate" }
+                check(datetimeDoc.contains("Clock.System.now()")) { "datetime Clock" }
+
+                val ktorDoc = docs[FrameworkFeature.KTOR].orEmpty()
+                check(ktorDoc.contains("HttpClient(CIO)")) { "ktor HttpClient" }
+                check(ktorDoc.contains("ContentNegotiation")) { "ktor ContentNegotiation" }
+
+                val turbineDoc = docs[FrameworkFeature.TURBINE].orEmpty()
+                check(turbineDoc.contains("flow.test")) { "turbine flow.test" }
+                check(turbineDoc.contains("awaitItem()")) { "turbine awaitItem" }
+                check(turbineDoc.contains("awaitComplete()")) { "turbine awaitComplete" }
+
+                val mockkDoc = docs[FrameworkFeature.MOCKK].orEmpty()
+                check(mockkDoc.contains("mockk<Repository>()")) { "mockk repo" }
+                check(mockkDoc.contains("every { repo.findUser(1) } returns User(1, \"Alice\")")) { "mockk every" }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: FrameworkFeatureCatalog.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN FrameworkFeatureCatalog.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for FrameworkFeatureCatalog.kt")
+        assertEquals(0, report.survivedCount, "All FrameworkFeatureCatalog mutants must be killed")
+        assertEquals(100.0, report.score)
+    }
 }
+
+
+
 
 
 
