@@ -755,7 +755,254 @@ class ProductionCodebaseMutationTest {
         assertEquals(0, report.survivedCount, "All FrameworkFeatureCatalog mutants must be killed")
         assertEquals(100.0, report.score)
     }
+
+    @Test
+    fun `mutation test production LogTruncator source file`() {
+        val file = File("src/main/kotlin/com/gokorei/kotlinmcp/shared/LogTruncator.kt")
+        assertTrue(file.exists(), "Target file must exist: ${file.absolutePath}")
+
+        val productionCode = file.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .joinToString("\n")
+
+        val testSuiteCode = """
+            fun main() {
+                // 1. Blank and small input
+                check(LogTruncator.truncate("") == "") { "blank string untouched" }
+                check(LogTruncator.truncate("   ") == "   ") { "whitespace untouched" }
+                check(LogTruncator.truncate("Line 1\nLine 2") == "Line 1\nLine 2") { "small text untouched" }
+
+                // 2. Line count truncation & exact boundary
+                val exactLines = "Line 1\nLine 2\nLine 3"
+                check(!LogTruncator.truncate(exactLines, maxLines = 3, maxBytes = 1000).contains("truncated")) { "exact line boundary" }
+
+                val multiLine = (1..10).joinToString("\n") { "Line " + it }
+                val lineTruncated = LogTruncator.truncate(multiLine, maxLines = 3, maxBytes = 10000)
+                check(lineTruncated.startsWith("[... truncated 7 preceding lines ...]\n")) { "line truncation header" }
+                check(lineTruncated.contains("Line 8\nLine 9\nLine 10")) { "retains last 3 lines" }
+                check(!lineTruncated.contains("Line 1\n")) { "omits earlier lines" }
+
+                // 3. Byte count truncation & exact boundary
+                val exactBytes = "1234567890"
+                check(!LogTruncator.truncate(exactBytes, maxLines = 100, maxBytes = 10).contains("truncated")) { "exact byte boundary" }
+
+                val largeText = "A".repeat(50) + "\n" + "B".repeat(50) + "\n" + "C".repeat(50)
+                val byteTruncated = LogTruncator.truncate(largeText, maxLines = 100, maxBytes = 60)
+                check(byteTruncated.startsWith("[... truncated output to last 60 bytes ...]\n")) { "byte truncation header" }
+                check(byteTruncated.contains("C".repeat(50))) { "retains trailing bytes" }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: LogTruncator.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN LogTruncator.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for LogTruncator.kt")
+        assertEquals(0, report.survivedCount, "All LogTruncator mutants must be killed")
+        assertEquals(100.0, report.score)
+    }
+
+    @Test
+    fun `mutation test production SourceUtils source file`() {
+        val file = File("src/main/kotlin/com/gokorei/kotlinmcp/shared/SourceUtils.kt")
+        assertTrue(file.exists(), "Target file must exist: ${file.absolutePath}")
+
+        val productionCode = file.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .joinToString("\n")
+
+        val testSuiteCode = """
+            fun main() {
+                val sample = "fun hello() {\n    val x = 42\n    println(x)\n}"
+
+                // 1. lineOf & lineAndColumnOf
+                check(SourceUtils.lineOf("", 0) == 1) { "empty lineOf" }
+                check(SourceUtils.lineOf(sample, -5) == 1) { "negative lineOf" }
+                check(SourceUtils.lineOf(sample, 0) == 1) { "lineOf offset 0" }
+                check(SourceUtils.lineOf(sample, 14) == 2) { "lineOf offset line 2" }
+                check(SourceUtils.lineOf(sample, 30) == 3) { "lineOf offset line 3" }
+
+                check(SourceUtils.lineAndColumnOf("", 0) == Pair(1, 1)) { "empty lineAndColumnOf" }
+                check(SourceUtils.lineAndColumnOf(sample, -1) == Pair(1, 1)) { "negative lineAndColumnOf" }
+                val pair = SourceUtils.lineAndColumnOf(sample, 18)
+                check(pair.first == 2 && pair.second == 5) { "line 2 col 5 check" }
+
+                // 2. lineSnippet
+                check(SourceUtils.lineSnippet("", 0) == "") { "empty lineSnippet" }
+                check(SourceUtils.lineSnippet(sample, -1) == "") { "negative lineSnippet" }
+                check(SourceUtils.lineSnippet(sample, 0) == "fun hello() {") { "snippet line 1" }
+                check(SourceUtils.lineSnippet(sample, 18) == "val x = 42") { "snippet line 2 trimmed" }
+
+                // 3. extractBalancedBraces
+                val codeWithBraces = "class Foo { val msg = \"{nested}\"; fun bar() { return 1 } }"
+                val extracted = SourceUtils.extractBalancedBraces(codeWithBraces, codeWithBraces.indexOf('{'))
+                check(extracted == "val msg = \"{nested}\"; fun bar() { return 1 }") { "extract balanced with string literal" }
+                check(SourceUtils.extractBalancedBraces(codeWithBraces, 0) == null) { "extract non-brace index null" }
+                check(SourceUtils.extractBalancedBraces("{ unclosed", 0) == null) { "extract unclosed null" }
+
+                // 4. isSyntacticallyBalanced
+                check(SourceUtils.isSyntacticallyBalanced("val x = (1 + [2, 3] * { 4 })")) { "balanced valid" }
+                check(SourceUtils.isSyntacticallyBalanced("val s = \"( { [ \"")) { "balanced with delimiters inside strings" }
+                check(!SourceUtils.isSyntacticallyBalanced("val x = (1 + 2")) { "unclosed paren" }
+                check(!SourceUtils.isSyntacticallyBalanced("val x = 1 + 2)")) { "unexpected closing paren" }
+                check(!SourceUtils.isSyntacticallyBalanced("val x = { 1 + 2")) { "unclosed brace" }
+                check(!SourceUtils.isSyntacticallyBalanced("val x = [ 1, 2")) { "unclosed bracket" }
+
+                // 5. collapseWhitespace
+                check(SourceUtils.collapseWhitespace("   hello    world  \n\n  test  ") == "hello world test") { "collapse basic" }
+                check(SourceUtils.collapseWhitespace("abcdef", maxLength = 3) == "abc") { "collapse bounded" }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: SourceUtils.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+        if (report.totalMutants == 0) {
+            println("   BASELINE ERROR: ${report.results.firstOrNull()?.details}")
+        }
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN SourceUtils.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for SourceUtils.kt")
+        assertTrue(
+            report.score >= 85.0,
+            "Mutation score for SourceUtils.kt (${report.score}%) must be at least 85%"
+        )
+    }
+
+    @Test
+    fun `mutation test production DiffUtils source file`() {
+        val toonFile = File("src/main/kotlin/com/gokorei/kotlinmcp/shared/ToonUtils.kt")
+        val diffFile = File("src/main/kotlin/com/gokorei/kotlinmcp/shared/DiffUtils.kt")
+        assertTrue(toonFile.exists(), "Target file must exist: ${toonFile.absolutePath}")
+        assertTrue(diffFile.exists(), "Target file must exist: ${diffFile.absolutePath}")
+
+        val toonSource = toonFile.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .joinToString("\n")
+
+        val diffSource = diffFile.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .joinToString("\n")
+
+        val productionCode = toonSource + "\n\n" + diffSource
+
+        val testSuiteCode = """
+            fun main() {
+                val orig = ""${'"'}
+                    fun compute(): Int {
+                        val a = 1
+                        val b = 2
+                        return a + b
+                    }
+                ""${'"'}.trimIndent()
+
+                val mod = ""${'"'}
+                    fun compute(): Int {
+                        val a = 10
+                        val b = 2
+                        val c = 3
+                        return a + b + c
+                    }
+                ""${'"'}.trimIndent()
+
+                // 1. Identical comparison
+                val noDiff = DiffUtils.generateUnifiedDiff(orig, orig)
+                check(noDiff == "No changes (original and modified snippets are identical).") { "identical text detection" }
+
+                // 2. TOON format
+                val toonDiff = DiffUtils.generateUnifiedDiff(orig, mod, format = DiffUtils.Format.TOON)
+                check(toonDiff.startsWith("[diff: line|op|text]\n")) { "toon header" }
+                check(toonDiff.contains("2|-|    val a = 1")) { "toon delete row" }
+                check(toonDiff.contains("2|+|    val a = 10")) { "toon insert row" }
+                check(toonDiff.contains("4|+|    val c = 3")) { "toon insert row 4" }
+                check(toonDiff.contains("4|-|    return a + b")) { "toon return delete" }
+                check(toonDiff.contains("5|+|    return a + b + c")) { "toon return insert" }
+
+                // 3. UNIFIED diff format with symbol context
+                val uniDiff = DiffUtils.generateUnifiedDiff(orig, mod, fileName = "TestFile.kt", format = DiffUtils.Format.UNIFIED)
+                check(uniDiff.startsWith("--- a/TestFile.kt\n+++ b/TestFile.kt\n@@ ")) { "unified header" }
+                check(uniDiff.contains("-    val a = 1")) { "unified deleted line" }
+                check(uniDiff.contains("+    val a = 10")) { "unified added line" }
+                check(uniDiff.contains("+    val c = 3")) { "unified added line c" }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: DiffUtils.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+        if (report.totalMutants == 0) {
+            println("   BASELINE ERROR: ${report.results.firstOrNull()?.details}")
+        }
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN DiffUtils.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for DiffUtils.kt")
+        assertTrue(
+            report.score >= 80.0,
+            "Mutation score for DiffUtils.kt (${report.score}%) must be at least 80%"
+        )
+    }
 }
+
+
 
 
 
