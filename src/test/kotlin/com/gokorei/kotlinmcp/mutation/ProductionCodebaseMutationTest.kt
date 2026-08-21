@@ -499,7 +499,163 @@ class ProductionCodebaseMutationTest {
         assertEquals(0, report.survivedCount, "All ToonUtils mutants must be killed")
         assertEquals(100.0, report.score)
     }
+
+    @Test
+    fun `mutation test production KotlinMcpResult source file`() {
+        val file = File("src/main/kotlin/com/gokorei/kotlinmcp/models/KotlinMcpResult.kt")
+        assertTrue(file.exists(), "Target production file must exist: ${file.absolutePath}")
+
+        val rawSource = file.readText()
+        val productionCode = rawSource
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import kotlinx.serialization") }
+            .filterNot { it.trim() == "@Serializable" }
+            .joinToString("\n")
+
+        val testSuiteCode = """
+            fun main() {
+                // 1. Success without metadata
+                val s1 = KotlinMcpResult.Success(content = "Plain text output")
+                check(s1.isSuccess) { "s1 isSuccess" }
+                check(!s1.isError) { "s1 !isError" }
+                check(s1.toFormattedText() == "Plain text output") { "s1 formatting" }
+
+                // 2. Success with metadata
+                val s2 = KotlinMcpResult.Success(
+                    content = "Header",
+                    metadata = mapOf("total" to "42", "duration" to "15ms")
+                )
+                val s2Text = s2.toFormattedText()
+                check(s2Text.startsWith("Header\n\n--- Metadata ---\n")) { "s2 header and metadata separator" }
+                check(s2Text.contains("total: 42")) { "s2 total key" }
+                check(s2Text.contains("duration: 15ms")) { "s2 duration key" }
+
+                // 3. Success with requireAnotherCall
+                val s3 = KotlinMcpResult.Success(content = "Need fix", requireAnotherCall = true)
+                check(s3.toFormattedText().contains("requireAnotherCall: true — apply the diagnostics above and re-run this tool until it reports no issues.")) { "s3 retry banner" }
+
+                // 4. Error with default code
+                val e1 = KotlinMcpResult.Error(message = "Something failed")
+                check(!e1.isSuccess) { "e1 !isSuccess" }
+                check(e1.isError) { "e1 isError" }
+                check(e1.code == "GENERIC_ERROR") { "e1 default code" }
+                check(e1.toFormattedText() == "Error [GENERIC_ERROR]: Something failed") { "e1 formatting" }
+
+                // 5. Error with custom code and details
+                val e2 = KotlinMcpResult.Error(
+                    code = "SYNTAX_ERROR",
+                    message = "Unresolved symbol",
+                    details = mapOf("line" to "12", "column" to "5")
+                )
+                val e2Text = e2.toFormattedText()
+                check(e2Text.startsWith("Error [SYNTAX_ERROR]: Unresolved symbol\nDetails:\n")) { "e2 header and details" }
+                check(e2Text.contains(" - line: 12")) { "e2 line detail" }
+                check(e2Text.contains(" - column: 5")) { "e2 column detail" }
+
+                // 6. Error with requireAnotherCall
+                val e3 = KotlinMcpResult.Error(message = "Compilation issue", requireAnotherCall = true)
+                check(e3.toFormattedText().contains("requireAnotherCall: true — apply the diagnostics above and re-run this tool until it reports no issues.")) { "e3 retry banner" }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: KotlinMcpResult.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN KotlinMcpResult.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for KotlinMcpResult.kt")
+        assertEquals(0, report.survivedCount, "All KotlinMcpResult mutants must be killed")
+        assertEquals(100.0, report.score)
+    }
+
+    @Test
+    fun `mutation test production ProjectEnvironmentProfile source file`() {
+        val file = File("src/main/kotlin/com/gokorei/kotlinmcp/models/ProjectEnvironmentProfile.kt")
+        assertTrue(file.exists(), "Target production file must exist: ${file.absolutePath}")
+
+        val rawSource = file.readText()
+        val productionCode = rawSource
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .joinToString("\n")
+
+        val testSuiteCode = """
+            fun main() {
+                val defaultProfile = ProjectEnvironmentProfile()
+                check(!defaultProfile.isKmp) { "default isKmp must be false" }
+                check(defaultProfile.activeFrameworks.isEmpty()) { "default activeFrameworks empty" }
+
+                val profile = ProjectEnvironmentProfile(
+                    activeFrameworks = setOf(FrameworkFeature.COMPOSE, FrameworkFeature.KTOR),
+                    isKmp = true
+                )
+
+                check(profile.isKmp) { "isKmp check" }
+                check(profile.hasFramework(FrameworkFeature.COMPOSE)) { "has compose" }
+                check(profile.hasFramework(FrameworkFeature.KTOR)) { "has ktor" }
+                check(!profile.hasFramework(FrameworkFeature.SPRING)) { "!has spring" }
+                check(!profile.hasFramework(FrameworkFeature.ARROW)) { "!has arrow" }
+
+                val allProfile = ProjectEnvironmentProfile.ALL
+                FrameworkFeature.entries.forEach { f ->
+                    check(allProfile.hasFramework(f)) { "ALL contains: " + f.id }
+                }
+
+                val noneProfile = ProjectEnvironmentProfile.NONE
+                FrameworkFeature.entries.forEach { f ->
+                    check(!noneProfile.hasFramework(f)) { "NONE does not contain: " + f.id }
+                }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: ProjectEnvironmentProfile.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN ProjectEnvironmentProfile.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for ProjectEnvironmentProfile.kt")
+        assertEquals(0, report.survivedCount, "All ProjectEnvironmentProfile mutants must be killed")
+        assertEquals(100.0, report.score)
+    }
 }
+
 
 
 
