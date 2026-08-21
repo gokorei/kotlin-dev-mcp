@@ -12,7 +12,8 @@ import org.jetbrains.kotlin.psi.*
 object SnippetAstSafetyChecker {
 
     fun containsHostTerminatingCalls(code: String): Boolean {
-        val psi = K2SnippetFrontend.parsePsi(code) ?: return false
+        if (code.isBlank()) return false
+        val psi = K2SnippetFrontend.parsePsi(code) ?: return true
         var foundDangerous = false
 
         // Check imports

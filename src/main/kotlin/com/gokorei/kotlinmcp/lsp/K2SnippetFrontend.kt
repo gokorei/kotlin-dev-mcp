@@ -143,7 +143,7 @@ object K2SnippetFrontend {
                 ktFile
             }
         } catch (e: Throwable) {
-            logger.warn(e) { "K2SnippetFrontend.parsePsi FAILED for code:\n$code\nError: ${e.message}" }
+            logger.warn(e) { "K2SnippetFrontend.parsePsi FAILED (length: ${code.length}): ${e.message}" }
             null
         }
     }

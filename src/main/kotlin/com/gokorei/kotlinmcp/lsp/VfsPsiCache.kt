@@ -110,9 +110,10 @@ class DefaultVfsPsiCache(
         cache.clear()
     }
 
+    @Synchronized
     override fun startWatching(rootPath: String) {
         val rootDir = File(rootPath)
-        if (!rootDir.isDirectory || closed) return
+        if (!rootDir.isDirectory || closed || watchService != null) return
 
         try {
             val ws = FileSystems.getDefault().newWatchService()
@@ -138,8 +139,9 @@ class DefaultVfsPsiCache(
                     }
 
                     val dirPath = watchKeys[key]
+                    val events = key.pollEvents()
                     if (dirPath != null) {
-                        for (event in key.pollEvents()) {
+                        for (event in events) {
                             val context = event.context() as? Path
                             if (context != null) {
                                 val fullPath = dirPath.resolve(context)
