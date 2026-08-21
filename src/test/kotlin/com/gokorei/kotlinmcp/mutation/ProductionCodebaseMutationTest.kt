@@ -1457,7 +1457,242 @@ class ProductionCodebaseMutationTest {
             "Mutation score for VulnerabilityAuditor.kt (${report.score}%) must be at least 75% (offline baseline mode)"
         )
     }
+
+    @Test
+    fun `mutation test production StdlibSymbolCatalog source file`() {
+        val featureFile = File("src/main/kotlin/com/gokorei/kotlinmcp/models/ProjectEnvironmentProfile.kt")
+        val catalogFile = File("src/main/kotlin/com/gokorei/kotlinmcp/doc/StdlibSymbolCatalog.kt")
+        assertTrue(featureFile.exists(), "Target file must exist: ${featureFile.absolutePath}")
+        assertTrue(catalogFile.exists(), "Target file must exist: ${catalogFile.absolutePath}")
+
+        val featureSource = featureFile.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .joinToString("\n")
+
+        val catalogSource = catalogFile.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import com.gokorei.kotlinmcp.models.FrameworkFeature") }
+            .joinToString("\n")
+
+        val productionCode = featureSource + "\n\n" + catalogSource
+
+        val testSuiteCode = """
+            fun main() {
+                val defaultProfile = ProjectEnvironmentProfile()
+                check(!defaultProfile.isKmp) { "default isKmp false" }
+
+                // 1. Symbol mapping to FrameworkFeature
+                val applies = StdlibSymbolCatalog.symbolAppliesTo
+                check(applies["kotlinx.datetime.Instant"] == FrameworkFeature.DATETIME) { "instant mapping" }
+                check(applies["kotlinx.datetime.Clock"] == FrameworkFeature.DATETIME) { "clock mapping" }
+                check(applies["kotlinx.datetime.LocalDate"] == FrameworkFeature.DATETIME) { "localDate mapping" }
+                check(applies["runTest"] == FrameworkFeature.COROUTINES) { "runTest mapping" }
+                check(applies["MainDispatcherRule"] == FrameworkFeature.COROUTINES) { "mainDispatcherRule mapping" }
+                check(applies["Turbine.test"] == FrameworkFeature.TURBINE) { "turbine mapping" }
+                check(applies["mockk"] == FrameworkFeature.MOCKK) { "mockk mapping" }
+                check(applies["every"] == FrameworkFeature.MOCKK) { "every mapping" }
+                check(applies["verify"] == FrameworkFeature.MOCKK) { "verify mapping" }
+                check(applies["Ktor/Routing"] == FrameworkFeature.KTOR) { "ktor routing mapping" }
+                check(applies["Ktor/ContentNegotiation"] == FrameworkFeature.KTOR) { "ktor content negotiation mapping" }
+                check(applies["Either"] == FrameworkFeature.ARROW) { "either mapping" }
+                check(applies["Raise"] == FrameworkFeature.ARROW) { "raise mapping" }
+                check(applies["valid"] == FrameworkFeature.ARROW) { "valid mapping" }
+                check(applies["validNel"] == FrameworkFeature.ARROW) { "validNel mapping" }
+
+                // 2. Symbol documentation entries
+                val docs = StdlibSymbolCatalog.symbolDocs
+                check(docs["kotlin.collections.List"].orEmpty().contains("interface List<out E>")) { "list doc" }
+                check(docs["kotlin.collections.MutableList"].orEmpty().contains("interface MutableList<E>")) { "mutable list doc" }
+                check(docs["kotlin.collections.Map"].orEmpty().contains("interface Map<K, out V>")) { "map doc" }
+                check(docs["kotlin.Result"].orEmpty().contains("value class Result<out T>")) { "result doc" }
+                check(docs["kotlinx.coroutines.Flow"].orEmpty().contains("interface Flow<out T>")) { "flow doc" }
+                check(docs["mapNotNull"].orEmpty().contains("mapNotNull(transform: (T) -> R?): List<R>")) { "mapNotNull doc" }
+                check(docs["CoroutineScope"].orEmpty().contains("interface CoroutineScope")) { "coroutine scope doc" }
+                check(docs["runBlocking"].orEmpty().contains("runBlocking")) { "runBlocking doc" }
+                check(docs["Either"].orEmpty().contains("sealed class Either<out A, out B>")) { "either doc" }
+                check(docs["Raise"].orEmpty().contains("interface Raise<in E>")) { "raise doc" }
+                check(docs["kotlinx.datetime.Instant"].orEmpty().contains("class Instant")) { "instant doc" }
+                check(docs["readText"].orEmpty().contains("readText")) { "readText doc" }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: StdlibSymbolCatalog.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+        if (report.totalMutants == 0) {
+            println("   BASELINE ERROR: ${report.results.firstOrNull()?.details}")
+        }
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN StdlibSymbolCatalog.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for StdlibSymbolCatalog.kt")
+        assertEquals(0, report.survivedCount, "All StdlibSymbolCatalog mutants must be killed")
+        assertEquals(100.0, report.score)
+    }
+
+    @Test
+    fun `mutation test production LlmGuidance source file`() {
+        val file = File("src/main/kotlin/com/gokorei/kotlinmcp/server/LlmGuidance.kt")
+        assertTrue(file.exists(), "Target file must exist: ${file.absolutePath}")
+
+        val productionCode = file.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .joinToString("\n")
+
+        val testSuiteCode = """
+            fun main() {
+                // 1. Constants verification
+                check(LlmGuidance.LLM_GUIDE_RESOURCE_URI == "kotlin://server/usage-guide.md") { "guide uri" }
+                check(LlmGuidance.LLM_GUIDE_RESOURCE_NAME == "kotlin-server-usage-guide") { "guide name" }
+                check(LlmGuidance.LLM_GUIDE_PROMPT_NAME == "kotlin_mcp_quickstart") { "prompt name" }
+
+                // 2. Default argument verification (includeExamples = true)
+                val defaultGuide = LlmGuidance.buildLlmUsageGuide()
+                check(defaultGuide.contains("## Quick Examples")) { "default includeExamples is true" }
+                check(!defaultGuide.contains("## Current Goal")) { "default goal is null" }
+
+                // 3. Guide generation with goal and examples
+                val guideWithGoal = LlmGuidance.buildLlmUsageGuide(goal = "refactor legacy codebase", includeExamples = true)
+                check(guideWithGoal.contains("# Kotlin MCP LLM Usage Guide")) { "guide title" }
+                check(guideWithGoal.contains("Use this guide when selecting Kotlin tools, choosing response presets,")) { "intro line 1" }
+                check(guideWithGoal.contains("or avoiding token-heavy calls.")) { "intro line 2" }
+                check(guideWithGoal.contains("## Current Goal\n\n- Prioritize the guidance below for: refactor legacy codebase")) { "goal section" }
+                check(guideWithGoal.contains("## Tool Action & Parameter Matrix")) { "matrix section" }
+                check(guideWithGoal.contains("| Tool | Action | Required Parameters | Purpose | Token Cost |")) { "matrix header" }
+                check(guideWithGoal.contains("| `kotlin_check_snippet` | N/A | `code` | Fast in-memory syntax & type check | Low (<200) |")) { "matrix check" }
+                check(guideWithGoal.contains("| `kotlin_docs_read` | `search`\\|`lookup`\\|`explain` | `query` (optional: `preset=\"compact\"`) | Stdlib & language documentation lookup | Low-Med (Use `preset=\"compact\"`) |")) { "matrix docs" }
+                check(guideWithGoal.contains("| `kotlin_code_analyze` | `file_context`\\|`nullability`\\|`coroutines`\\|`symbol_declarations`\\|`ast_dump` | `code` (optional: `filePath`) | Single-file PSI AST analysis | Low-Med |")) { "matrix analyze" }
+                check(guideWithGoal.contains("| `kotlin_text_lsp_read` | `definition`\\|`references`\\|`type_hierarchy`\\|`call_hierarchy`\\|`workspace_search` | `symbol` + `workspacePath` | Cross-file semantic LSP navigation | Med |")) { "matrix lsp" }
+                check(guideWithGoal.contains("| `kotlin_project_inspect` | `structure`\\|`kmp_targets`\\|`dependencies`\\|`diagnose_build`\\|`package_api` | `workspacePath` (optional: `preset=\"compact\"`) | Gradle build & module inspection | Med |")) { "matrix inspect" }
+                check(guideWithGoal.contains("| `kotlin_library_analyze` | `inspect_jar`\\|`resolve_types`\\|`decompile_class` | `jarPath` or `className` | Compiled dependency API analysis | Med |")) { "matrix library" }
+                check(guideWithGoal.contains("| `kotlin_refactor` | `functional`\\|`java_to_kotlin`\\|`suggest_idioms`\\|`quick_fix`\\|`rxjava` | `code` | Mutating AST refactoring transformations | Med |")) { "matrix refactor" }
+                check(guideWithGoal.contains("| `kotlin_lint` | `lint_detekt`\\|`lint_ktlint`\\|`format_ktlint`\\|`baseline_dump` | `workspacePath` or `code` | Mutating code style & static analysis | Med-High |")) { "matrix lint" }
+                check(guideWithGoal.contains("| `kotlin_run` | `snippet`\\|`gradle_task` | `code` or `taskName` | Subprocess code/task execution | High |")) { "matrix run" }
+
+                check(guideWithGoal.contains("## Strict Execution Pipelines (State Machines)")) { "pipelines section" }
+                check(guideWithGoal.contains("### 1. Code Refactoring & Modification Flow")) { "flow title" }
+                check(guideWithGoal.contains("1. **Analyze PSI Context**: Run `kotlin_code_analyze(action=\"file_context\", code=...)` to inspect AST structures.")) { "step 1" }
+                check(guideWithGoal.contains("2. **Validate Proposed Edit**: Run `kotlin_check_snippet(code=proposedCode)` to confirm syntax/type validity.")) { "step 2" }
+                check(guideWithGoal.contains("3. **Execute Mutation**: Call `kotlin_refactor(action=...)` or `kotlin_text_lsp_edit(action=\"rename\", ...)`.")) { "step 3" }
+                check(guideWithGoal.contains("4. **Re-Verify AST Integrity**: Re-run `kotlin_check_snippet(code=updatedCode)`.")) { "step 4" }
+
+                check(guideWithGoal.contains("## Token Budgeting & Response Presets")) { "budgeting section" }
+                check(guideWithGoal.contains("- **MANDATORY `preset=\"compact\"`**: Always supply `preset=\"compact\"` on `kotlin_docs_read` and `kotlin_project_inspect(action=\"package_api\")` during discovery.")) { "preset compact rule" }
+                check(guideWithGoal.contains("- **Fast Dry-Run Validation**: Run `kotlin_check_snippet` before `kotlin_run(action=\"snippet\")`")) { "dry run rule" }
+                check(guideWithGoal.contains("- **Context Reduction**: Use `kotlin_code_analyze(action=\"file_context\")` instead of transmitting large raw file content blobs.")) { "context reduction rule" }
+
+                check(guideWithGoal.contains("## Write Safety & Execution Guarantees")) { "write safety header" }
+                check(guideWithGoal.contains("- **Read-Only First**: Always execute discovery read actions before mutating write actions")) { "read only first" }
+                check(guideWithGoal.contains("- **Mutating Operations**: Treat `kotlin_text_lsp_edit(action=\"rename\")`, `kotlin_refactor`, and `kotlin_lint(action=\"format_ktlint\")` as mutating file modifications.")) { "mutating ops" }
+                check(guideWithGoal.contains("- **AST Guarantee**: All tools utilize in-memory PSI AST parsing.")) { "ast guarantee" }
+
+                check(guideWithGoal.contains("## Explicit Anti-Patterns (DO NOT DO THIS)")) { "antipatterns section" }
+                check(guideWithGoal.contains("1. **Regex Code Renaming**: DO NOT use string regex or text replacements to rename Kotlin symbols across files.")) { "anti 1" }
+                check(guideWithGoal.contains("2. **Shell Execution for Syntax Checking**: DO NOT invoke raw shell commands or Gradle build tasks to check snippet syntax.")) { "anti 2" }
+                check(guideWithGoal.contains("3. **Regex Build Script Parsing**: DO NOT rely on manual regex when analyzing Gradle Kotlin DSL build scripts.")) { "anti 3" }
+                check(guideWithGoal.contains("4. **Unvalidated Refactorings**: DO NOT apply large code refactorings without dry-running `kotlin_check_snippet` first.")) { "anti 4" }
+                check(guideWithGoal.contains("5. **Unmocked Live Network Calls**: DO NOT make unmocked live HTTP requests")) { "anti 5" }
+                check(guideWithGoal.contains("6. **Non-Daemon Subprocess Output Threads**: DO NOT create non-daemon background threads for reading process output streams.")) { "anti 6" }
+
+                check(guideWithGoal.contains("## Quick Examples")) { "examples section" }
+                check(guideWithGoal.contains("kotlin_check_snippet(code = \"fun main() { val x: Int = 42 }\")")) { "example 1" }
+                check(guideWithGoal.contains("kotlin_text_lsp_read(action = \"definition\", symbol = \"parseData\", workspacePath = \"/path/to/project\")")) { "example 2" }
+                check(guideWithGoal.contains("kotlin_code_analyze(action = \"nullability\", code = snippet)")) { "example 3" }
+                check(guideWithGoal.contains("kotlin_refactor(action = \"functional\", code = imperativeLoop)")) { "example 4" }
+
+                check(guideWithGoal.contains("## Decision Shortcuts")) { "shortcuts section" }
+                check(guideWithGoal.contains("- **Validate snippet code**: use `kotlin_check_snippet`.")) { "sc 1" }
+                check(guideWithGoal.contains("- **Locate unknown symbol**: use `kotlin_text_lsp_read(action=\"definition\", symbol=..., workspacePath=...)`.")) { "sc 2" }
+                check(guideWithGoal.contains("- **Refactor imperative loops**: use `kotlin_refactor(action=\"functional\")`.")) { "sc 3" }
+                check(guideWithGoal.contains("- **Convert legacy Java to Kotlin**: use `kotlin_refactor(action=\"java_to_kotlin\")`.")) { "sc 4" }
+                check(guideWithGoal.contains("- **Diagnose Gradle build failures**: use `kotlin_project_inspect(action=\"diagnose_build\", workspacePath=...)`.")) { "sc 5" }
+                check(guideWithGoal.contains("- **Inspect library jar API**: use `kotlin_library_analyze(action=\"inspect_jar\", jarPath=\"...\")`.")) { "sc 6" }
+
+                check(guideWithGoal.contains("## Efficiency Defaults")) { "defaults section" }
+                check(guideWithGoal.contains("- Always specify `action` parameter explicitly on progressive discovery tools.")) { "eff 1" }
+                check(guideWithGoal.contains("- Pass `workspacePath` when analyzing cross-file dependencies or workspace symbols.")) { "eff 2" }
+                check(guideWithGoal.contains("- Use `kotlin_check_snippet` for fast syntax and type checking before executing `./gradlew` build tasks.")) { "eff 3" }
+                check(guideWithGoal.contains("- Avoid passing massive string blobs when analyzing single files; use `kotlin_code_analyze(action=\"file_context\")`.")) { "eff 4" }
+
+                check(guideWithGoal.contains("## Write Safety")) { "write safety 2 section" }
+                check(guideWithGoal.contains("- Treat `kotlin_text_lsp_edit(action=\"rename\")` as a mutating operation that rewrites workspace files in place.")) { "ws 1" }
+                check(guideWithGoal.contains("- Treat `kotlin_refactor` (`java_to_kotlin`, `functional`, `suggest_idioms`, `quick_fix`, `rxjava`) as mutating code generators.")) { "ws 2" }
+                check(guideWithGoal.contains("- Treat `kotlin_lint(action=\"format_ktlint\"|\"baseline_dump\")` as mutating workspace operations.")) { "ws 3" }
+                check(guideWithGoal.contains("- Treat `kotlin_run` (`snippet`, `gradle_task`) as process execution operations.")) { "ws 4" }
+
+                check(guideWithGoal.contains("## Client Gotchas")) { "client gotchas section" }
+                check(guideWithGoal.contains("- All tool responses return formatted output, so read the compact Markdown structure directly.")) { "gotcha 1" }
+                check(guideWithGoal.contains("- In-memory PSI AST parsing parses actual Kotlin syntax nodes; string matchers inside comments/KDoc are never matched.")) { "gotcha 2" }
+                check(guideWithGoal.contains("- When `workspacePath` is supplied, symbol rename performs AST offset replacements from right to left to ensure token index validity.")) { "gotcha 3" }
+
+                // 4. Guide generation without goal and without examples
+                val guideMinimal = LlmGuidance.buildLlmUsageGuide(goal = null, includeExamples = false)
+                check(!guideMinimal.contains("## Current Goal")) { "no goal section" }
+                check(!guideMinimal.contains("## Quick Examples")) { "no examples section" }
+                check(guideMinimal.contains("# Kotlin MCP LLM Usage Guide")) { "title retained" }
+
+                // 5. Structural line count verification to kill newline and table separator mutants
+                check(guideWithGoal.contains("| :--- | :--- | :--- | :--- | :--- |")) { "markdown table divider" }
+                check(guideWithGoal.lines().size == 97) { "guideWithGoal line count: ${'$'}{guideWithGoal.lines().size}" }
+                check(guideMinimal.lines().size == 77) { "guideMinimal line count: ${'$'}{guideMinimal.lines().size}" }
+                check(defaultGuide.lines().size == 93) { "defaultGuide line count: ${'$'}{defaultGuide.lines().size}" }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: LlmGuidance.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+        if (report.totalMutants == 0) {
+            println("   BASELINE ERROR: ${report.results.firstOrNull()?.details}")
+        }
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN LlmGuidance.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for LlmGuidance.kt")
+        assertTrue(
+            report.score >= 85.0,
+            "Mutation score for LlmGuidance.kt (${report.score}%) must be at least 85%"
+        )
+    }
 }
+
 
 
 
