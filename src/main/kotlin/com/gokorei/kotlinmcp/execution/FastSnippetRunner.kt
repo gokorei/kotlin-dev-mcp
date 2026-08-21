@@ -32,10 +32,22 @@ class ThreadLocalPrintStream(private val defaultStream: PrintStream) : PrintStre
         val target = activeTarget.get() ?: defaultStream
         target.flush()
     }
+
+    override fun close() {
+        val target = activeTarget.get()
+        if (target != null) {
+            target.close()
+        }
+    }
 }, true, Charsets.UTF_8.name()) {
 
+    override fun close() {
+        // Guard: prevent closing the process-wide System.out / System.err interceptor
+        flush()
+    }
+
     companion object {
-        private val activeTarget = ThreadLocal<PrintStream?>()
+        private val activeTarget = InheritableThreadLocal<PrintStream?>()
 
         fun <T> withCapture(stream: PrintStream, block: () -> T): T {
             val prev = activeTarget.get()

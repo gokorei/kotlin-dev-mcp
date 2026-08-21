@@ -12,6 +12,11 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Bug Fixes
 
+- **Thread-safe VFS cache locking and dynamic directory watching** — fixed read-write lock semantics in `VfsPsiCache` by moving cache mutations under write locks, adding recursive directory registration for runtime-created subdirectories, and ensuring directory invalidation evicts all descendant entries.
+- **Async snippet child thread output capture & stdio protection** — transitioned `ThreadLocalPrintStream` to `InheritableThreadLocal` to capture output from asynchronous threads spawned inside in-memory snippets and guarded global stdio wrappers from accidental closure.
+- **Expanded AST host termination analysis** — updated `SnippetAstSafetyChecker` to detect split variable assignments for `Runtime` and `ProcessHandle` instances, callable references (`::exitProcess`, `System::exit`), and `ProcessHandle.current().destroy()`.
+- **Resilient response projection token pruning** — enhanced `ProjectionFilter.compactContent` to strictly preserve internal blank lines within AST dumps until reaching explicit section boundaries.
+
 ### Improvements
 
 - **Standardized logging across all server modules** — eliminated residual direct `System.err.println` calls in `K2SnippetFrontend` and `DocService`, standardizing 100% of runtime logging on `KotlinLogging` (`io.github.oshai:kotlin-logging-jvm`) backed by `slf4j-simple`.

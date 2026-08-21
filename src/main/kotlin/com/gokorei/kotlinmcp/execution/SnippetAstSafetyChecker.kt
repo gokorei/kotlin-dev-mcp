@@ -21,6 +21,7 @@ object SnippetAstSafetyChecker {
         val exitProcessAliases = mutableSetOf("exitProcess")
         val systemAliases = mutableSetOf("System", "java.lang.System")
         val runtimeAliases = mutableSetOf("Runtime", "java.lang.Runtime")
+        val processHandleAliases = mutableSetOf("ProcessHandle", "java.lang.ProcessHandle")
         val directExitAliases = mutableSetOf<String>()
         val getRuntimeAliases = mutableSetOf<String>()
 
@@ -54,6 +55,9 @@ object SnippetAstSafetyChecker {
                     "java.lang.Runtime", "Runtime" -> {
                         if (alias != null) runtimeAliases.add(alias)
                     }
+                    "java.lang.ProcessHandle", "ProcessHandle" -> {
+                        if (alias != null) processHandleAliases.add(alias)
+                    }
                 }
             }
         }
@@ -62,6 +66,8 @@ object SnippetAstSafetyChecker {
         val userDeclaredFunctionNames = mutableSetOf<String>()
         val userDeclaredClassNames = mutableSetOf<String>()
         val userDeclaredVarNames = mutableSetOf<String>()
+        val runtimeInstanceVariables = mutableSetOf<String>()
+        val processHandleVariables = mutableSetOf<String>()
 
         psi.accept(object : KtTreeVisitorVoid() {
             override fun visitNamedFunction(function: KtNamedFunction) {
@@ -73,16 +79,50 @@ object SnippetAstSafetyChecker {
                 super.visitClassOrObject(classOrObject)
             }
             override fun visitProperty(property: KtProperty) {
-                property.name?.let { userDeclaredVarNames.add(it) }
+                val name = property.name
+                if (name != null) {
+                    userDeclaredVarNames.add(name)
+                    val initText = property.initializer?.text?.trim().orEmpty()
+                    val typeText = property.typeReference?.text?.trim().orEmpty()
+                    if (initText.contains("getRuntime()") || typeText in runtimeAliases || typeText.endsWith(".Runtime")) {
+                        runtimeInstanceVariables.add(name)
+                    }
+                    if (initText.contains("ProcessHandle") || typeText in processHandleAliases || typeText.endsWith(".ProcessHandle")) {
+                        processHandleVariables.add(name)
+                    }
+                }
                 super.visitProperty(property)
             }
             override fun visitParameter(parameter: KtParameter) {
                 parameter.name?.let { userDeclaredVarNames.add(it) }
                 super.visitParameter(parameter)
             }
+            override fun visitDestructuringDeclarationEntry(multiDeclarationEntry: KtDestructuringDeclarationEntry) {
+                multiDeclarationEntry.name?.let { userDeclaredVarNames.add(it) }
+                super.visitDestructuringDeclarationEntry(multiDeclarationEntry)
+            }
         })
 
         psi.accept(object : KtTreeVisitorVoid() {
+            override fun visitCallableReferenceExpression(expression: KtCallableReferenceExpression) {
+                val callableName = expression.callableReference.text.trim()
+                val receiver = expression.receiverExpression?.text?.trim()
+
+                if (callableName == "exit" && (receiver == null || receiver in systemAliases || receiver in runtimeAliases)) {
+                    foundDangerous = true
+                }
+                if (callableName == "exitProcess" && (receiver == null || receiver == "kotlin.system")) {
+                    foundDangerous = true
+                }
+                if (callableName == "halt") {
+                    foundDangerous = true
+                }
+                if ((callableName == "destroy" || callableName == "destroyForcibly") && (receiver == null || receiver in processHandleVariables || receiver.contains("ProcessHandle"))) {
+                    foundDangerous = true
+                }
+                super.visitCallableReferenceExpression(expression)
+            }
+
             override fun visitCallExpression(expression: KtCallExpression) {
                 val callee = expression.calleeExpression
                 val calleeName = callee?.text?.trim()
@@ -118,6 +158,9 @@ object SnippetAstSafetyChecker {
                         if (receiver == "kotlin.system") {
                             foundDangerous = true
                         }
+                        if (receiver in runtimeInstanceVariables) {
+                            foundDangerous = true
+                        }
                     }
 
                     // Check kotlin.system.exitProcess
@@ -125,8 +168,12 @@ object SnippetAstSafetyChecker {
                         foundDangerous = true
                     }
 
-                    // Check Runtime.getRuntime().halt / exit or aliased getRuntime().halt / exit
+                    // Check Runtime.getRuntime().halt / exit or aliased getRuntime().halt / exit or instance variable
                     if (selector == "halt" || selector == "exit") {
+                        if (receiver in runtimeInstanceVariables) {
+                            foundDangerous = true
+                        }
+
                         // Check if receiver is a call to an imported getRuntime alias (e.g. hostRuntime().halt(1))
                         val receiverCallName = if (receiverExpr is KtCallExpression) {
                             receiverExpr.calleeExpression?.text?.trim()
@@ -145,6 +192,13 @@ object SnippetAstSafetyChecker {
                                     foundDangerous = true
                                 }
                             }
+                        }
+                    }
+
+                    // Check ProcessHandle.current().destroy() / destroyForcibly()
+                    if (selector == "destroy" || selector == "destroyForcibly") {
+                        if (receiver in processHandleVariables || receiver.contains("ProcessHandle") || receiver.endsWith(".current()")) {
+                            foundDangerous = true
                         }
                     }
                 }

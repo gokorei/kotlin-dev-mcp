@@ -149,6 +149,29 @@ class FastSnippetRunnerHardeningTest {
     }
 
     @Test
+    fun `child threads spawned by snippet route output to captured stream without stdout leakage`() {
+        val runner = DefaultFastSnippetRunner()
+        val code = """
+            fun main() {
+                val t = Thread {
+                    println("ASYNC_CHILD_OUTPUT_CAPTURED")
+                }
+                t.start()
+                t.join()
+            }
+        """.trimIndent()
+
+        val compiled = SnippetCompiler.compile(code) as CompileResult.Compiled
+        val result = runner.run(compiled.outDir, timeoutMillis = 5_000L)
+        SnippetCompiler.cleanup(compiled)
+        runner.close()
+
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("ASYNC_CHILD_OUTPUT_CAPTURED"), "Output from child threads must be captured")
+    }
+
+    @Test
     fun `warm loop runs successive snippets under 150ms each`() {
         val runner = DefaultFastSnippetRunner()
         val durations = mutableListOf<Long>()

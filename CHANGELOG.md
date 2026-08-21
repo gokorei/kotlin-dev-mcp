@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Main entry point lifecycle & cleanup safety** — updated `Main.kt` with thread-safe idempotent shutdown cleanup (`AtomicBoolean`) and structured `try`/`finally` resource disposal on stdio session termination.
 - **Decoupled housekeeping doc generators** — moved repository build-time doc generators (`McpDocGenerator`, `ChangelogGenerator`) into dedicated `com.gokorei.kotlinmcp.doc.tooling` package, separating repo housekeeping tools from runtime domain doc services (`DocService`).
 
+### Fixed
+- **Thread-safe VFS cache locking and dynamic directory watching** — fixed read-write lock semantics in `VfsPsiCache` by moving cache mutations under write locks, adding recursive directory registration for runtime-created subdirectories, and ensuring directory invalidation evicts all descendant entries.
+- **Async snippet child thread output capture & stdio protection** — transitioned `ThreadLocalPrintStream` to `InheritableThreadLocal` to capture output from asynchronous threads spawned inside in-memory snippets and guarded global stdio wrappers from accidental closure.
+- **Expanded AST host termination analysis** — updated `SnippetAstSafetyChecker` to detect split variable assignments for `Runtime` and `ProcessHandle` instances, callable references (`::exitProcess`, `System::exit`), and `ProcessHandle.current().destroy()`.
+- **Resilient response projection token pruning** — enhanced `ProjectionFilter.compactContent` to strictly preserve internal blank lines within AST dumps until reaching explicit section boundaries.
+
 ## [1.1.0] - 2026-08-19
 
 ### Added

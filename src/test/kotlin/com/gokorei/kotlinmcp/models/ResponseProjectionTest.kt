@@ -91,6 +91,23 @@ class ResponseProjectionTest {
     }
 
     @Test
+    fun `ProjectionFilter compact preset does not prematurely break on empty lines inside AST dump`() {
+        val original = KotlinMcpResult.Success(
+            content = "Header\n--- Internal AST Dump ---\nFirst line of dump\n\nSecond line after empty line\n--- Results ---\nKey output text",
+            metadata = emptyMap()
+        )
+
+        val projection = ResponseProjection(preset = ResponsePreset.COMPACT)
+        val filtered = ProjectionFilter.apply(original, projection)
+
+        assertTrue(filtered.isSuccess)
+        val success = filtered as KotlinMcpResult.Success
+        assertFalse(success.content.contains("First line of dump"))
+        assertFalse(success.content.contains("Second line after empty line"))
+        assertTrue(success.content.contains("Key output text"))
+    }
+
+    @Test
     fun `ProjectionFilter summary preset preserves main content and applies field masks`() {
         val original = KotlinMcpResult.Success(
             content = "Summary content for caller",

@@ -65,58 +65,89 @@ class DefaultVfsPsiCache(
     override fun getOrParse(file: File): KtFile? {
         if (closed || !file.exists() || !file.isFile) return null
         val normalizedPath = file.absoluteFile.normalize().invariantSeparatorsPath
+        val lastMod = file.lastModified()
 
-        return rwLock.read {
+        // 1. Fast read-lock lookup
+        val cached = rwLock.read {
             if (closed) return@read null
-            val lastMod = file.lastModified()
-
             val existing = cache[normalizedPath]
             if (existing != null && existing.lastModified == lastMod) {
-                return@read existing.file
+                existing.file
+            } else {
+                null
             }
+        }
+        if (cached != null) return cached
 
-            val text = runCatching { file.readText() }.getOrNull() ?: return@read null
-            val hash = text.hashCode()
+        val text = runCatching { file.readText() }.getOrNull() ?: return null
+        val hash = text.hashCode()
 
+        // 2. Hash-match check under read lock
+        val contentMatched = rwLock.read {
+            if (closed) return@read null
+            val existing = cache[normalizedPath]
             if (existing != null && existing.contentHash == hash && (existing.content == null || existing.content == text || existing.file.text == text)) {
-                val updated = existing.copy(lastModified = lastMod, content = text)
-                cache[normalizedPath] = updated
-                return@read updated.file
+                existing
+            } else null
+        }
+        if (contentMatched != null) {
+            rwLock.write {
+                if (!closed) {
+                    cache[normalizedPath] = contentMatched.copy(lastModified = lastMod, content = text)
+                }
             }
+            return contentMatched.file
+        }
 
-            val parsed = K2SnippetFrontend.parsePsi(text) ?: return@read null
+        // 3. Parse AST outside locks to prevent blocking concurrent readers
+        val parsed = K2SnippetFrontend.parsePsi(text) ?: return null
+
+        rwLock.write {
             if (!closed) {
                 cache[normalizedPath] = CachedEntry(parsed, lastMod, hash, text)
             }
-            parsed
         }
+        return parsed
     }
 
     override fun getOrParse(filePath: String, content: String): KtFile? {
         if (closed) return null
         val normalizedPath = File(filePath).absoluteFile.normalize().invariantSeparatorsPath
+        val hash = content.hashCode()
 
-        return rwLock.read {
+        val cached = rwLock.read {
             if (closed) return@read null
-            val hash = content.hashCode()
-
             val existing = cache[normalizedPath]
             if (existing != null && existing.contentHash == hash && (existing.content == null || existing.content == content || existing.file.text == content)) {
-                return@read existing.file
-            }
+                existing.file
+            } else null
+        }
+        if (cached != null) return cached
 
-            val parsed = K2SnippetFrontend.parsePsi(content) ?: return@read null
+        // Parse AST outside locks
+        val parsed = K2SnippetFrontend.parsePsi(content) ?: return null
+
+        rwLock.write {
             if (!closed) {
                 cache[normalizedPath] = CachedEntry(parsed, System.currentTimeMillis(), hash, content)
             }
-            parsed
         }
+        return parsed
     }
 
     override fun invalidate(filePath: String) {
         val normalized = File(filePath).absoluteFile.normalize().invariantSeparatorsPath
+        val prefix = "$normalized/"
         rwLock.write {
             cache.remove(normalized)
+            // If path was a directory, also evict all descendant entries
+            val iter = cache.keys.iterator()
+            while (iter.hasNext()) {
+                val key = iter.next()
+                if (key.startsWith(prefix)) {
+                    iter.remove()
+                }
+            }
         }
     }
 
@@ -127,6 +158,18 @@ class DefaultVfsPsiCache(
     override fun clear() {
         rwLock.write {
             cache.clear()
+        }
+    }
+
+    private fun registerDirectory(dir: File, ws: WatchService, modifiers: Array<WatchEvent.Modifier>) {
+        runCatching {
+            val path = dir.toPath()
+            val key = if (modifiers.isNotEmpty()) {
+                path.register(ws, arrayOf(ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY), *modifiers)
+            } else {
+                path.register(ws, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY)
+            }
+            watchKeys[key] = path
         }
     }
 
@@ -150,15 +193,7 @@ class DefaultVfsPsiCache(
             rootDir.walkTopDown().onEnter { dir ->
                 !K2ResolutionUtils.isExcludedWorkspaceDir(dir)
             }.filter { it.isDirectory }.forEach { dir ->
-                runCatching {
-                    val path = dir.toPath()
-                    val key = if (modifiers.isNotEmpty()) {
-                        path.register(ws, arrayOf(ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY), *modifiers)
-                    } else {
-                        path.register(ws, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY)
-                    }
-                    watchKeys[key] = path
-                }
+                registerDirectory(dir, ws, modifiers)
             }
 
             val thread = Thread({
@@ -176,8 +211,17 @@ class DefaultVfsPsiCache(
                             val context = event.context() as? Path
                             if (context != null) {
                                 val fullPath = dirPath.resolve(context)
-                                val ext = fullPath.toFile().extension
-                                if (ext == "kt" || ext == "kts" || ext == "java") {
+                                val file = fullPath.toFile()
+
+                                // If a new directory was created, recursively register it
+                                if (event.kind() == ENTRY_CREATE && file.isDirectory && !K2ResolutionUtils.isExcludedWorkspaceDir(file)) {
+                                    file.walkTopDown().onEnter { !K2ResolutionUtils.isExcludedWorkspaceDir(it) }.filter { it.isDirectory }.forEach { subDir ->
+                                        registerDirectory(subDir, ws, modifiers)
+                                    }
+                                }
+
+                                val ext = file.extension
+                                if (ext == "kt" || ext == "kts" || ext == "java" || event.kind() == ENTRY_DELETE || file.isDirectory) {
                                     invalidate(fullPath)
                                 }
                             }

@@ -108,8 +108,60 @@ class VfsPsiCacheTest {
             }
             Thread.sleep(60)
         }
-
         assertEquals("val a = 200", updatedText, "WatchService must invalidate stale cache on disk modification")
+        cache.close()
+    }
+
+    @Test
+    fun `startWatching dynamically registers newly created directories and invalidates files within them`(@TempDir tempDir: Path) {
+        val cache = DefaultVfsPsiCache(maxCapacity = 10)
+        cache.startWatching(tempDir.toString())
+
+        // Create a new subfolder after startWatching is active
+        val subDir = tempDir.resolve("dynamic/pkg").toFile()
+        subDir.mkdirs()
+        Thread.sleep(100) // Brief pause for WatchService to process directory creation
+
+        val file = File(subDir, "DynamicModel.kt")
+        file.writeText("data class DynamicModel(val v: Int = 1)")
+
+        val psi1 = cache.getOrParse(file)
+        assertEquals("data class DynamicModel(val v: Int = 1)", psi1?.text)
+
+        val originalMtime = file.lastModified()
+        file.writeText("data class DynamicModel(val v: Int = 2)")
+        file.setLastModified(originalMtime)
+
+        var updatedText: String? = null
+        for (i in 1..50) {
+            val current = cache.getOrParse(file)
+            if (current?.text == "data class DynamicModel(val v: Int = 2)") {
+                updatedText = current.text
+                break
+            }
+            Thread.sleep(60)
+        }
+
+        assertEquals("data class DynamicModel(val v: Int = 2)", updatedText, "WatchService must register new subdirs and invalidate modified files")
+        cache.close()
+    }
+
+    @Test
+    fun `invalidate on directory path removes all nested cached files`(@TempDir tempDir: Path) {
+        val cache = DefaultVfsPsiCache(maxCapacity = 10)
+        val subDir = tempDir.resolve("subpackage").toFile()
+        subDir.mkdirs()
+
+        val f1 = File(subDir, "A.kt").apply { writeText("class A") }
+        val f2 = File(subDir, "B.kt").apply { writeText("class B") }
+
+        assertNotNull(cache.getOrParse(f1))
+        assertNotNull(cache.getOrParse(f2))
+        assertEquals(2, cache.size)
+
+        // Invalidate directory
+        cache.invalidate(subDir.absolutePath)
+        assertEquals(0, cache.size, "Invalidating directory path must evict all nested children from cache")
         cache.close()
     }
 }

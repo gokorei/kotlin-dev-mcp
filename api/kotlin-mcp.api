@@ -399,6 +399,7 @@ public final class com/gokorei/kotlinmcp/execution/SnippetAstSafetyChecker {
 public final class com/gokorei/kotlinmcp/execution/ThreadLocalPrintStream : java/io/PrintStream {
 	public static final field Companion Lcom/gokorei/kotlinmcp/execution/ThreadLocalPrintStream$Companion;
 	public fun <init> (Ljava/io/PrintStream;)V
+	public fun close ()V
 }
 
 public final class com/gokorei/kotlinmcp/execution/ThreadLocalPrintStream$Companion {

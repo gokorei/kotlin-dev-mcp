@@ -156,6 +156,62 @@ class SnippetAstSafetyCheckerTest {
     }
 
     @Test
+    fun `detects variable assigned Runtime halt and exit calls`() {
+        val snippet1 = """
+            fun main() {
+                val r = Runtime.getRuntime()
+                r.halt(1)
+            }
+        """.trimIndent()
+        assertTrue(SnippetAstSafetyChecker.containsHostTerminatingCalls(snippet1))
+
+        val snippet2 = """
+            fun main() {
+                val r = java.lang.Runtime.getRuntime()
+                r.exit(1)
+            }
+        """.trimIndent()
+        assertTrue(SnippetAstSafetyChecker.containsHostTerminatingCalls(snippet2))
+    }
+
+    @Test
+    fun `detects callable references to exit methods`() {
+        val snippet1 = """
+            fun main() {
+                val fn = System::exit
+                fn(0)
+            }
+        """.trimIndent()
+        assertTrue(SnippetAstSafetyChecker.containsHostTerminatingCalls(snippet1))
+
+        val snippet2 = """
+            import kotlin.system.exitProcess
+            fun main() {
+                listOf(1).forEach(::exitProcess)
+            }
+        """.trimIndent()
+        assertTrue(SnippetAstSafetyChecker.containsHostTerminatingCalls(snippet2))
+    }
+
+    @Test
+    fun `detects ProcessHandle current destroy calls`() {
+        val snippet1 = """
+            fun main() {
+                ProcessHandle.current().destroy()
+            }
+        """.trimIndent()
+        assertTrue(SnippetAstSafetyChecker.containsHostTerminatingCalls(snippet1))
+
+        val snippet2 = """
+            fun main() {
+                val p = java.lang.ProcessHandle.current()
+                p.destroyForcibly()
+            }
+        """.trimIndent()
+        assertTrue(SnippetAstSafetyChecker.containsHostTerminatingCalls(snippet2))
+    }
+
+    @Test
     fun `allows safe ordinary code`() {
         val snippet = """
             fun main() {
@@ -167,3 +223,4 @@ class SnippetAstSafetyCheckerTest {
         assertFalse(SnippetAstSafetyChecker.containsHostTerminatingCalls(snippet))
     }
 }
+
