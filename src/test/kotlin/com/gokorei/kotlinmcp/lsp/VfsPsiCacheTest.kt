@@ -98,22 +98,15 @@ class VfsPsiCacheTest {
         // Update file and restore original timestamp to strictly test WatchService invalidation
         file.writeText("val a = 200")
         assertTrue(file.setLastModified(originalMtime), "setLastModified must succeed")
-
         // Poll with bounded timeout for WatchService event delivery
         var updatedText: String? = null
-        for (i in 1..40) {
+        for (i in 1..50) {
             val current = cache.getOrParse(file)
             if (current?.text == "val a = 200") {
                 updatedText = current.text
                 break
             }
-            Thread.sleep(50)
-        }
-
-        // Fallback: If OS WatchService event polling latency exceeds test window, test explicit invalidation
-        if (updatedText == null) {
-            cache.invalidate(file.toPath())
-            updatedText = cache.getOrParse(file)?.text
+            Thread.sleep(60)
         }
 
         assertEquals("val a = 200", updatedText, "WatchService must invalidate stale cache on disk modification")

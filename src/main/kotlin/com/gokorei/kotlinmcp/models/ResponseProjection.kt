@@ -83,7 +83,7 @@ object ProjectionFilter {
                 skipping = true
                 continue
             }
-            if (skipping && (line.startsWith("--- ") || line.isBlank())) {
+            if (skipping && (trimmed.startsWith("--- ") || line.isBlank())) {
                 skipping = false
                 if (line.isBlank()) continue
             }

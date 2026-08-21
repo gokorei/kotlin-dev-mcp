@@ -8,6 +8,9 @@ import java.nio.file.StandardWatchEventKinds.*
 import java.util.Collections
 import java.util.LinkedHashMap
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
 /**
  * In-memory Virtual File System (VFS) and AST cache.
@@ -37,6 +40,8 @@ class DefaultVfsPsiCache(
         val content: String? = null
     )
 
+    private val rwLock = ReentrantReadWriteLock()
+
     // Bounded LRU cache for parsed KtFiles
     private val cache: MutableMap<String, CachedEntry> = Collections.synchronizedMap(
         object : LinkedHashMap<String, CachedEntry>(maxCapacity, 0.75f, true) {
@@ -55,50 +60,64 @@ class DefaultVfsPsiCache(
     private var closed = false
 
     override val size: Int
-        get() = cache.size
+        get() = rwLock.read { cache.size }
 
     override fun getOrParse(file: File): KtFile? {
-        if (!file.exists() || !file.isFile) return null
+        if (closed || !file.exists() || !file.isFile) return null
         val normalizedPath = file.absoluteFile.normalize().invariantSeparatorsPath
-        val lastMod = file.lastModified()
 
-        val existing = cache[normalizedPath]
-        if (existing != null && existing.lastModified == lastMod) {
-            return existing.file
+        return rwLock.read {
+            if (closed) return@read null
+            val lastMod = file.lastModified()
+
+            val existing = cache[normalizedPath]
+            if (existing != null && existing.lastModified == lastMod) {
+                return@read existing.file
+            }
+
+            val text = runCatching { file.readText() }.getOrNull() ?: return@read null
+            val hash = text.hashCode()
+
+            if (existing != null && existing.contentHash == hash && (existing.content == null || existing.content == text || existing.file.text == text)) {
+                val updated = existing.copy(lastModified = lastMod, content = text)
+                cache[normalizedPath] = updated
+                return@read updated.file
+            }
+
+            val parsed = K2SnippetFrontend.parsePsi(text) ?: return@read null
+            if (!closed) {
+                cache[normalizedPath] = CachedEntry(parsed, lastMod, hash, text)
+            }
+            parsed
         }
-
-        val text = runCatching { file.readText() }.getOrNull() ?: return null
-        val hash = text.hashCode()
-
-        if (existing != null && existing.contentHash == hash && (existing.content == null || existing.content == text || existing.file.text == text)) {
-            // Content didn't change even if timestamp bumped
-            val updated = existing.copy(lastModified = lastMod, content = text)
-            cache[normalizedPath] = updated
-            return updated.file
-        }
-
-        val parsed = K2SnippetFrontend.parsePsi(text) ?: return null
-        cache[normalizedPath] = CachedEntry(parsed, lastMod, hash, text)
-        return parsed
     }
 
     override fun getOrParse(filePath: String, content: String): KtFile? {
+        if (closed) return null
         val normalizedPath = File(filePath).absoluteFile.normalize().invariantSeparatorsPath
-        val hash = content.hashCode()
 
-        val existing = cache[normalizedPath]
-        if (existing != null && existing.contentHash == hash && (existing.content == null || existing.content == content || existing.file.text == content)) {
-            return existing.file
+        return rwLock.read {
+            if (closed) return@read null
+            val hash = content.hashCode()
+
+            val existing = cache[normalizedPath]
+            if (existing != null && existing.contentHash == hash && (existing.content == null || existing.content == content || existing.file.text == content)) {
+                return@read existing.file
+            }
+
+            val parsed = K2SnippetFrontend.parsePsi(content) ?: return@read null
+            if (!closed) {
+                cache[normalizedPath] = CachedEntry(parsed, System.currentTimeMillis(), hash, content)
+            }
+            parsed
         }
-
-        val parsed = K2SnippetFrontend.parsePsi(content) ?: return null
-        cache[normalizedPath] = CachedEntry(parsed, System.currentTimeMillis(), hash, content)
-        return parsed
     }
 
     override fun invalidate(filePath: String) {
         val normalized = File(filePath).absoluteFile.normalize().invariantSeparatorsPath
-        cache.remove(normalized)
+        rwLock.write {
+            cache.remove(normalized)
+        }
     }
 
     override fun invalidate(path: Path) {
@@ -106,7 +125,9 @@ class DefaultVfsPsiCache(
     }
 
     override fun clear() {
-        cache.clear()
+        rwLock.write {
+            cache.clear()
+        }
     }
 
     @Synchronized
@@ -183,11 +204,13 @@ class DefaultVfsPsiCache(
 
     @Synchronized
     override fun close() {
-        closed = true
-        watchThread?.interrupt()
-        runCatching { watchService?.close() }
-        watchService = null
-        watchKeys.clear()
-        cache.clear()
+        rwLock.write {
+            closed = true
+            watchThread?.interrupt()
+            runCatching { watchService?.close() }
+            watchService = null
+            watchKeys.clear()
+            cache.clear()
+        }
     }
 }

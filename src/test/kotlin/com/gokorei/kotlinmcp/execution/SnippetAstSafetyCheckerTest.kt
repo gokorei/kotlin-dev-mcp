@@ -100,6 +100,32 @@ class SnippetAstSafetyCheckerTest {
     }
 
     @Test
+    fun `detects direct aliased getRuntime import calls`() {
+        val snippet = """
+            import java.lang.Runtime.getRuntime as hostRuntime
+            fun main() {
+                hostRuntime().halt(1)
+            }
+        """.trimIndent()
+
+        assertTrue(SnippetAstSafetyChecker.containsHostTerminatingCalls(snippet))
+    }
+
+    @Test
+    fun `detects aliased Runtime even when unrelated local Runtime class is declared`() {
+        val snippet = """
+            import java.lang.Runtime as SysRuntime
+            class Runtime { val value = 1 }
+
+            fun main() {
+                SysRuntime.getRuntime().halt(1)
+            }
+        """.trimIndent()
+
+        assertTrue(SnippetAstSafetyChecker.containsHostTerminatingCalls(snippet))
+    }
+
+    @Test
     fun `ignores user-defined exit functions`() {
         val snippet = """
             fun exit(code: Int = 0) {

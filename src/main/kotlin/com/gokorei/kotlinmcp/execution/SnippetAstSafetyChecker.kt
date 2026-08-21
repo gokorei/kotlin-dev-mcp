@@ -22,6 +22,7 @@ object SnippetAstSafetyChecker {
         val systemAliases = mutableSetOf("System", "java.lang.System")
         val runtimeAliases = mutableSetOf("Runtime", "java.lang.Runtime")
         val directExitAliases = mutableSetOf<String>()
+        val getRuntimeAliases = mutableSetOf<String>()
 
         var hasWildcardKotlinSystem = false
         var hasWildcardJavaLang = false
@@ -42,6 +43,10 @@ object SnippetAstSafetyChecker {
                     "java.lang.System.exit" -> {
                         if (alias != null) directExitAliases.add(alias)
                         else directExitAliases.add("exit")
+                    }
+                    "java.lang.Runtime.getRuntime" -> {
+                        if (alias != null) getRuntimeAliases.add(alias)
+                        else getRuntimeAliases.add("getRuntime")
                     }
                     "java.lang.System", "System" -> {
                         if (alias != null) systemAliases.add(alias)
@@ -100,12 +105,17 @@ object SnippetAstSafetyChecker {
 
                 val parent = expression.parent
                 if (parent is KtDotQualifiedExpression && parent.selectorExpression == expression) {
-                    val receiver = parent.receiverExpression.text.trim()
+                    val receiverExpr = parent.receiverExpression
+                    val receiver = receiverExpr.text.trim()
                     val selector = calleeName
 
                     // Check System.exit or aliased System
-                    if (selector == "exit" && (receiver in systemAliases || receiver == "kotlin.system")) {
-                        if (receiver !in userDeclaredClassNames && receiver !in userDeclaredVarNames) {
+                    if (selector == "exit") {
+                        val matchedSystemAlias = systemAliases.firstOrNull { it == receiver }
+                        if (matchedSystemAlias != null && matchedSystemAlias !in userDeclaredClassNames && matchedSystemAlias !in userDeclaredVarNames) {
+                            foundDangerous = true
+                        }
+                        if (receiver == "kotlin.system") {
                             foundDangerous = true
                         }
                     }
@@ -115,13 +125,26 @@ object SnippetAstSafetyChecker {
                         foundDangerous = true
                     }
 
-                    // Check Runtime.getRuntime().halt / exit
-                    if ((selector == "halt" || selector == "exit")) {
-                        val isRuntimeReceiver = runtimeAliases.any { r ->
-                            receiver == "$r.getRuntime()" || receiver == "$r.getRuntime()." || receiver.endsWith("$r.getRuntime()")
+                    // Check Runtime.getRuntime().halt / exit or aliased getRuntime().halt / exit
+                    if (selector == "halt" || selector == "exit") {
+                        // Check if receiver is a call to an imported getRuntime alias (e.g. hostRuntime().halt(1))
+                        val receiverCallName = if (receiverExpr is KtCallExpression) {
+                            receiverExpr.calleeExpression?.text?.trim()
+                        } else null
+
+                        if (receiverCallName != null && receiverCallName in getRuntimeAliases) {
+                            if (receiverCallName !in userDeclaredFunctionNames) {
+                                foundDangerous = true
+                            }
                         }
-                        if (isRuntimeReceiver && "Runtime" !in userDeclaredClassNames && "Runtime" !in userDeclaredVarNames) {
-                            foundDangerous = true
+
+                        // Check receiver matching any runtime alias (e.g. SysRuntime.getRuntime())
+                        for (r in runtimeAliases) {
+                            if (receiver == "$r.getRuntime()" || receiver == "$r.getRuntime()." || receiver.endsWith("$r.getRuntime()")) {
+                                if (r !in userDeclaredClassNames && r !in userDeclaredVarNames) {
+                                    foundDangerous = true
+                                }
+                            }
                         }
                     }
                 }
