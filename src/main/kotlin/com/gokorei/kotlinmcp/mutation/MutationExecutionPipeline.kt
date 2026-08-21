@@ -14,7 +14,9 @@ interface MutationExecutionPipeline : AutoCloseable {
     fun run(
         code: String,
         testCode: String? = null,
-        timeoutPerMutantMs: Long = 2000L
+        timeoutPerMutantMs: Long = 2000L,
+        includeExtremeOperators: Boolean = false,
+        maxOrder: Int = 1
     ): MutationReport
 }
 
@@ -26,7 +28,9 @@ class DefaultMutationExecutionPipeline(
     override fun run(
         code: String,
         testCode: String?,
-        timeoutPerMutantMs: Long
+        timeoutPerMutantMs: Long,
+        includeExtremeOperators: Boolean,
+        maxOrder: Int
     ): MutationReport {
         val trimmedCode = code.trim()
         val trimmedTest = testCode?.trim().orEmpty()
@@ -66,7 +70,11 @@ class DefaultMutationExecutionPipeline(
         }
 
         // 2. Generate AST mutants from target source code
-        val mutants = generator.generate(trimmedCode)
+        val mutants = generator.generate(
+            code = trimmedCode,
+            includeExtremeOperators = includeExtremeOperators,
+            maxOrder = maxOrder
+        )
         if (mutants.isEmpty()) {
             return MutationReport(
                 score = 100.0,
@@ -75,7 +83,8 @@ class DefaultMutationExecutionPipeline(
                 survivedCount = 0,
                 compilationErrorCount = 0,
                 timeoutCount = 0,
-                results = emptyList()
+                results = emptyList(),
+                order = maxOrder
             )
         }
 
@@ -152,7 +161,8 @@ class DefaultMutationExecutionPipeline(
             survivedCount = survivedCount,
             compilationErrorCount = compilationErrorCount,
             timeoutCount = timeoutCount,
-            results = results
+            results = results,
+            order = maxOrder
         )
     }
 
