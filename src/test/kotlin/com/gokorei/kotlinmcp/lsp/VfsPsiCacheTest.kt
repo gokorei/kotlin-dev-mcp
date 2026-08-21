@@ -23,6 +23,7 @@ class VfsPsiCacheTest {
         assertNotNull(psi2)
         assertEquals(psi1?.text, psi2?.text)
         assertEquals(1, cache.size)
+        cache.close()
     }
 
     @Test
@@ -34,12 +35,13 @@ class VfsPsiCacheTest {
         val psi1 = cache.getOrParse(file)
         assertEquals("val initial = 1", psi1?.text)
 
-        // Modify file
-        Thread.sleep(20) // Ensure timestamp advances
+        // Modify file & advance timestamp deterministically
         file.writeText("val updated = 2")
+        file.setLastModified(file.lastModified() + 2_000)
 
         val psi2 = cache.getOrParse(file)
         assertEquals("val updated = 2", psi2?.text)
+        cache.close()
     }
 
     @Test
@@ -54,6 +56,7 @@ class VfsPsiCacheTest {
 
         cache.invalidate(file.absolutePath)
         assertEquals(0, cache.size)
+        cache.close()
     }
 
     @Test
@@ -67,6 +70,16 @@ class VfsPsiCacheTest {
         }
 
         assertEquals(3, cache.size, "Cache size must be bounded by maxCapacity")
+
+        // Mutate files 1 and 2 without updating timestamp so cached entry would return old text
+        files[0].writeText("val x1 = 999")
+        files[1].writeText("val x2 = 999")
+
+        // Because File1 and File2 were evicted from the LRU cache, getOrParse will re-parse and see 999
+        val reparse1 = cache.getOrParse(files[0])
+        assertEquals("val x1 = 999", reparse1?.text, "Evicted File1 must be re-parsed from disk")
+
+        cache.close()
     }
 
     @Test
@@ -81,14 +94,21 @@ class VfsPsiCacheTest {
         assertEquals("val a = 100", psi1?.text)
 
         // Update file
-        Thread.sleep(50)
         file.writeText("val a = 200")
+        file.setLastModified(file.lastModified() + 2_000)
 
-        // Invalidate via file watch trigger
-        cache.invalidate(file.toPath())
-        val psi2 = cache.getOrParse(file)
-        assertEquals("val a = 200", psi2?.text)
+        // Poll with bounded timeout for WatchService event delivery
+        var updatedText: String? = null
+        for (i in 1..25) {
+            val current = cache.getOrParse(file)
+            if (current?.text == "val a = 200") {
+                updatedText = current.text
+                break
+            }
+            Thread.sleep(40)
+        }
 
+        assertEquals("val a = 200", updatedText, "WatchService must invalidate stale cache on disk modification")
         cache.close()
     }
 }

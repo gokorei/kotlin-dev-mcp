@@ -118,7 +118,7 @@ class VfsAtomicAndConcurrencyStressTest {
     }
 
     @Test
-    fun `directory recursive deletion evicts all nested child entries`(@TempDir tempDir: Path) {
+    fun `directory recursive deletion allows explicit per-file invalidation of nested entries`(@TempDir tempDir: Path) {
         val cache = DefaultVfsPsiCache(maxCapacity = 50)
         val nestedDir = tempDir.resolve("nested/subpackage").toFile()
         nestedDir.mkdirs()

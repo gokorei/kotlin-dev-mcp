@@ -139,7 +139,7 @@ class WorkspaceSemanticIndexer(
                     }
                 })
             } else {
-                val psi = vfsCache.getOrParse(file) ?: K2SnippetFrontend.parsePsi(text) ?: continue
+                val psi = vfsCache.getOrParse(file.path, text) ?: K2SnippetFrontend.parsePsi(text) ?: continue
                 parsed += file to psi
             }
         }

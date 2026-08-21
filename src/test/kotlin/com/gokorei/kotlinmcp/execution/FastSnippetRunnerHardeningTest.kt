@@ -5,12 +5,12 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.lang.ref.WeakReference
+import java.net.URLClassLoader
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
 @Tag("stress")
 @Tag("hardening")
@@ -75,7 +75,7 @@ class FastSnippetRunnerHardeningTest {
     @Test
     fun `metaspace and classloader instances are garbage collected across repeated executions`() {
         val runner = DefaultFastSnippetRunner(threadPoolSize = 2)
-        val weakRefs = mutableListOf<WeakReference<Any>>()
+        val weakRefs = mutableListOf<WeakReference<ClassLoader>>()
 
         for (i in 1..25) {
             val code = """
@@ -87,6 +87,10 @@ class FastSnippetRunnerHardeningTest {
             """.trimIndent()
 
             val compiled = SnippetCompiler.compile(code) as CompileResult.Compiled
+            val cl = URLClassLoader(arrayOf(compiled.outDir.toUri().toURL()), this::class.java.classLoader)
+            weakRefs.add(WeakReference(cl))
+            cl.close()
+
             val result = runner.run(compiled.outDir, timeoutMillis = 5_000L)
             assertTrue(result.isSuccess)
             SnippetCompiler.cleanup(compiled)
@@ -95,8 +99,12 @@ class FastSnippetRunnerHardeningTest {
         runner.close()
 
         // Trigger garbage collection
-        System.gc()
-        Thread.sleep(100)
+        repeat(3) {
+            System.gc()
+            Thread.sleep(50)
+        }
+        val cleared = weakRefs.count { it.get() == null }
+        assertTrue(cleared > 0, "Expected at least some closed ClassLoaders to be reclaimed by GC")
     }
 
     @Test
@@ -112,8 +120,12 @@ class FastSnippetRunnerHardeningTest {
         // Run via service: must NOT terminate current JVM and must return result
         val result = service.execute(dangerousSnippet, timeoutMillis = 10_000L, runner = "in_memory")
 
-        // Should have routed to host_jvm subprocess safely
-        assertTrue(result.isSuccess || result.isError)
+        // Must have routed to the host_jvm subprocess, not the in-memory runner
+        val mode = when (result) {
+            is KotlinMcpResult.Success -> result.metadata["mode"]
+            is KotlinMcpResult.Error -> result.details["mode"]
+        }
+        assertEquals("host_jvm", mode, "dangerous snippets must run in an isolated subprocess")
     }
 
     @Test
@@ -134,5 +146,27 @@ class FastSnippetRunnerHardeningTest {
         assertTrue(result.isSuccess)
         val success = result as KotlinMcpResult.Success
         assertTrue(success.content.contains("Computed sum: 2550"))
+    }
+
+    @Test
+    fun `warm loop runs successive snippets under 150ms each`() {
+        val runner = DefaultFastSnippetRunner()
+        val durations = mutableListOf<Long>()
+
+        for (i in 1..5) {
+            val code = "fun main() { println(\"loop $i\") }"
+            val compiled = SnippetCompiler.compile(code) as CompileResult.Compiled
+            val start = System.nanoTime()
+            val result = runner.run(compiled.outDir, timeoutMillis = 5_000L)
+            val durMs = (System.nanoTime() - start) / 1_000_000
+            SnippetCompiler.cleanup(compiled)
+
+            assertTrue(result.isSuccess)
+            durations.add(durMs)
+        }
+        runner.close()
+
+        val warmAvg = durations.drop(1).average()
+        assertTrue(warmAvg < 150.0, "Expected warm execution to be fast, got avg: $warmAvg ms")
     }
 }

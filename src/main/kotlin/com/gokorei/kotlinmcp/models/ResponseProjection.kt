@@ -71,7 +71,7 @@ object ProjectionFilter {
     }
 
     private fun compactContent(content: String): String {
-        // Strip lines that belong to debug/AST dumps between separators
+        // Strip lines that belong to debug/AST dumps between separators or until blank line boundary
         val lines = content.lines()
         val compacted = mutableListOf<String>()
         var skipping = false
@@ -81,8 +81,9 @@ object ProjectionFilter {
                 skipping = true
                 continue
             }
-            if (skipping && line.startsWith("--- ")) {
+            if (skipping && (line.startsWith("--- ") || line.isBlank())) {
                 skipping = false
+                if (line.isBlank()) continue
             }
             if (!skipping) {
                 compacted.add(line)

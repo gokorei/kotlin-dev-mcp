@@ -1,10 +1,7 @@
 package com.gokorei.kotlinmcp.execution
 
 import com.gokorei.kotlinmcp.lsp.K2SnippetFrontend
-import org.jetbrains.kotlin.psi.KtCallExpression
-import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
-import org.jetbrains.kotlin.psi.KtNameReferenceExpression
-import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
+import org.jetbrains.kotlin.psi.*
 
 /**
  * Static AST safety inspector using K2 PSI.
@@ -14,38 +11,76 @@ import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
  */
 object SnippetAstSafetyChecker {
 
-    private val terminatingFunctionNames = setOf(
-        "exitProcess", "exit", "halt"
-    )
-
     fun containsHostTerminatingCalls(code: String): Boolean {
         val psi = K2SnippetFrontend.parsePsi(code) ?: return false
         var foundDangerous = false
+
+        // Check imports
+        val imports = psi.importDirectives
+        val exitProcessAlias = imports.firstOrNull {
+            val fqn = it.importedFqName?.asString()
+            fqn == "kotlin.system.exitProcess"
+        }?.aliasName ?: "exitProcess"
+
+        val hasWildcardKotlinSystem = imports.any { it.importedFqName?.asString() == "kotlin.system" && it.isAllUnder }
+        val hasExplicitExitProcessImport = imports.any { it.importedFqName?.asString() == "kotlin.system.exitProcess" }
+
+        // Find user-declared functions/classes/variables in the snippet
+        val userDeclaredFunctionNames = mutableSetOf<String>()
+        val userDeclaredClassNames = mutableSetOf<String>()
+        val userDeclaredVarNames = mutableSetOf<String>()
+
+        psi.accept(object : KtTreeVisitorVoid() {
+            override fun visitNamedFunction(function: KtNamedFunction) {
+                function.name?.let { userDeclaredFunctionNames.add(it) }
+                super.visitNamedFunction(function)
+            }
+            override fun visitClassOrObject(classOrObject: KtClassOrObject) {
+                classOrObject.name?.let { userDeclaredClassNames.add(it) }
+                super.visitClassOrObject(classOrObject)
+            }
+            override fun visitProperty(property: KtProperty) {
+                property.name?.let { userDeclaredVarNames.add(it) }
+                super.visitProperty(property)
+            }
+            override fun visitParameter(parameter: KtParameter) {
+                parameter.name?.let { userDeclaredVarNames.add(it) }
+                super.visitParameter(parameter)
+            }
+        })
 
         psi.accept(object : KtTreeVisitorVoid() {
             override fun visitCallExpression(expression: KtCallExpression) {
                 val callee = expression.calleeExpression
                 val calleeName = callee?.text?.trim()
-                if (calleeName in terminatingFunctionNames) {
-                    val parent = expression.parent
-                    if (parent is KtDotQualifiedExpression) {
-                        val receiver = parent.receiverExpression.text.trim()
-                        if (receiver.endsWith("System") || receiver.contains("Runtime") || receiver.contains("Runtime.getRuntime()")) {
+
+                // Check for exitProcess or its alias
+                if (calleeName != null) {
+                    if (calleeName == exitProcessAlias || (hasWildcardKotlinSystem && calleeName == "exitProcess")) {
+                        if (hasExplicitExitProcessImport || hasWildcardKotlinSystem || calleeName !in userDeclaredFunctionNames) {
                             foundDangerous = true
                         }
-                    } else if (calleeName == "exitProcess" || calleeName == "exit") {
+                    }
+                }
+
+                val parent = expression.parent
+                if (parent is KtDotQualifiedExpression && parent.selectorExpression == expression) {
+                    val receiver = parent.receiverExpression.text.trim()
+                    val selector = calleeName
+
+                    if (selector == "exit" && (receiver == "System" || receiver == "java.lang.System")) {
+                        if (receiver !in userDeclaredClassNames && receiver !in userDeclaredVarNames) {
+                            foundDangerous = true
+                        }
+                    }
+
+                    if ((selector == "halt" || selector == "exit") &&
+                        (receiver == "Runtime.getRuntime()" || receiver == "java.lang.Runtime.getRuntime()")) {
                         foundDangerous = true
                     }
                 }
-                super.visitCallExpression(expression)
-            }
 
-            override fun visitDotQualifiedExpression(expression: KtDotQualifiedExpression) {
-                val text = expression.text.replace("\\s+".toRegex(), "")
-                if (text.contains("System.exit(") || text.contains("Runtime.getRuntime().halt(") || text.contains("Runtime.getRuntime().exit(")) {
-                    foundDangerous = true
-                }
-                super.visitDotQualifiedExpression(expression)
+                super.visitCallExpression(expression)
             }
         })
 

@@ -103,10 +103,11 @@ class DefaultRunSnippetService(
         val projectClasspath = SnippetCompiler.detectProjectClasspath(projectPath)
         val executionClasspath = (extraClasspath + projectClasspath).distinct().filter { it.isNotBlank() }
         val hasDangerousCalls = SnippetAstSafetyChecker.containsHostTerminatingCalls(trimmed)
+        val allowInMemory = jvmArgs.isEmpty() && javaPath == null && !hasDangerousCalls
 
-        return if (!hasDangerousCalls && (runner.equals("in_memory", ignoreCase = true) || (runner.equals("fast", ignoreCase = true) && jvmArgs.isEmpty() && javaPath == null))) {
+        return if (allowInMemory && (runner.equals("in_memory", ignoreCase = true) || runner.equals("fast", ignoreCase = true))) {
             fastSnippetRunner.run(compiled.outDir, timeoutMillis, executionClasspath)
-        } else if (runner.equals("host_jvm", ignoreCase = true) || hasDangerousCalls) {
+        } else if (runner.equals("host_jvm", ignoreCase = true) || hasDangerousCalls || jvmArgs.isNotEmpty() || javaPath != null) {
             runHostJvm(compiled.outDir, timeoutMillis, executionClasspath, jvmArgs, javaPath)
         } else {
             runCompiled(compiled.outDir, timeoutMillis, executionClasspath)
@@ -238,7 +239,11 @@ class DefaultRunSnippetService(
                     KotlinMcpResult.Error(
                         message = "Snippet exited on host JVM with code $exit:\n${if (text.isBlank()) "(no output)" else text}".trim(),
                         code = "RUNTIME_ERROR",
-                        details = mapOf("exitCode" to exit.toString(), "durationMs" to durationMs.toString()),
+                        details = mapOf(
+                            "mode" to "host_jvm",
+                            "exitCode" to exit.toString(),
+                            "durationMs" to durationMs.toString()
+                        ),
                         requireAnotherCall = true
                     )
                 }

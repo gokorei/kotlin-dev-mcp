@@ -55,6 +55,30 @@ class ResponseProjectionTest {
         val success = filtered as KotlinMcpResult.Success
         assertFalse(success.metadata.containsKey("raw"), "compact preset should prune verbose raw dumps")
         assertTrue(success.metadata.containsKey("count"))
+        assertFalse(success.content.contains("Internal AST Dump"), "compact preset must strip internal AST dumps")
+        assertTrue(success.content.contains("Key summary here"), "compact preset must preserve key results")
+    }
+
+    @Test
+    fun `ProjectionFilter summary preset preserves main content and applies field masks`() {
+        val original = KotlinMcpResult.Success(
+            content = "Summary content for caller",
+            metadata = mapOf("symbol" to "UserRepo", "debugTrace" to "trace", "category" to "database")
+        )
+
+        val projection = ResponseProjection(
+            preset = ResponsePreset.SUMMARY,
+            fields = setOf("symbol", "category")
+        )
+
+        val filtered = ProjectionFilter.apply(original, projection)
+        assertTrue(filtered.isSuccess)
+        val success = filtered as KotlinMcpResult.Success
+        assertEquals("Summary content for caller", success.content)
+        assertEquals(2, success.metadata.size)
+        assertTrue(success.metadata.containsKey("symbol"))
+        assertTrue(success.metadata.containsKey("category"))
+        assertFalse(success.metadata.containsKey("debugTrace"))
     }
 
     @Test
