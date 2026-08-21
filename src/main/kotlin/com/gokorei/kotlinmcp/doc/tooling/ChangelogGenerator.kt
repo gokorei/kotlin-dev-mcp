@@ -64,35 +64,27 @@ class DefaultChangelogGenerator : ChangelogGenerator {
                     appendLine("## [${entry.version}]$datePart")
                 }
 
-                var hasContent = false
                 if (entry.added.isNotEmpty()) {
                     appendLine()
                     appendLine("### Added")
                     entry.added.forEach { appendLine(it) }
-                    hasContent = true
                 }
                 if (entry.changed.isNotEmpty()) {
                     appendLine()
                     appendLine("### Changed")
                     entry.changed.forEach { appendLine(it) }
-                    hasContent = true
                 }
                 if (entry.fixed.isNotEmpty()) {
                     appendLine()
                     appendLine("### Fixed")
                     entry.fixed.forEach { appendLine(it) }
-                    hasContent = true
                 }
                 if (entry.security.isNotEmpty()) {
                     appendLine()
                     appendLine("### Security")
                     entry.security.forEach { appendLine(it) }
-                    hasContent = true
                 }
 
-                if (!hasContent && entry.version == null) {
-                    // Empty unreleased section
-                }
                 appendLine()
             }
 
