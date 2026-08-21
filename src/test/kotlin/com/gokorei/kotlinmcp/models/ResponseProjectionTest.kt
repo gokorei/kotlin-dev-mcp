@@ -1,0 +1,152 @@
+package com.gokorei.kotlinmcp.models
+
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
+
+class ResponseProjectionTest {
+
+    @Test
+    fun `ResponsePreset fromString handles case-insensitive aliases`() {
+        assertEquals(ResponsePreset.COMPACT, ResponsePreset.fromString("compact"))
+        assertEquals(ResponsePreset.COMPACT, ResponsePreset.fromString("COMPACT"))
+        assertEquals(ResponsePreset.SUMMARY, ResponsePreset.fromString("summary"))
+        assertEquals(ResponsePreset.FULL, ResponsePreset.fromString("full"))
+        assertEquals(ResponsePreset.FULL, ResponsePreset.fromString(null))
+        assertEquals(ResponsePreset.FULL, ResponsePreset.fromString("unknown"))
+    }
+
+    @Test
+    fun `ProjectionFilter prunes metadata keys when fields filter is provided`() {
+        val original = KotlinMcpResult.Success(
+            content = "Sample content with details",
+            metadata = mapOf(
+                "symbol" to "MyClass",
+                "kind" to "class",
+                "internalAstOffset" to "120..450",
+                "verboseDebugInfo" to "dump"
+            )
+        )
+
+        val projection = ResponseProjection(
+            preset = ResponsePreset.FULL,
+            fields = setOf("symbol", "kind")
+        )
+
+        val filtered = ProjectionFilter.apply(original, projection)
+        assertTrue(filtered.isSuccess)
+        val success = filtered as KotlinMcpResult.Success
+        assertEquals(2, success.metadata.size)
+        assertTrue(success.metadata.containsKey("symbol"))
+        assertTrue(success.metadata.containsKey("kind"))
+        assertFalse(success.metadata.containsKey("internalAstOffset"))
+    }
+
+    @Test
+    fun `ProjectionFilter compact preset minimizes verbose content`() {
+        val original = KotlinMcpResult.Success(
+            content = "Detailed header\n--- Internal AST Dump ---\nRaw AST metadata\n--- Results ---\nKey summary here",
+            metadata = mapOf("raw" to "large_dump", "count" to "1")
+        )
+
+        val projection = ResponseProjection(preset = ResponsePreset.COMPACT)
+        val filtered = ProjectionFilter.apply(original, projection)
+
+        assertTrue(filtered.isSuccess)
+        val success = filtered as KotlinMcpResult.Success
+        assertFalse(success.metadata.containsKey("raw"), "compact preset should prune verbose raw dumps")
+        assertTrue(success.metadata.containsKey("count"))
+        assertFalse(success.content.contains("Internal AST Dump"), "compact preset must strip internal AST dumps")
+        assertTrue(success.content.contains("Key summary here"), "compact preset must preserve key results")
+    }
+
+    @Test
+    fun `ProjectionFilter compact preset preserves embedded phrases in body paragraphs`() {
+        val original = KotlinMcpResult.Success(
+            content = "This document describes the Internal AST Dump feature in Kotlin compiler.\nIt explains the syntax.",
+            metadata = emptyMap()
+        )
+
+        val projection = ResponseProjection(preset = ResponsePreset.COMPACT)
+        val filtered = ProjectionFilter.apply(original, projection)
+
+        assertTrue(filtered.isSuccess)
+        val success = filtered as KotlinMcpResult.Success
+        assertTrue(success.content.contains("This document describes the Internal AST Dump feature"))
+    }
+
+    @Test
+    fun `ProjectionFilter compact preset handles indented section separators`() {
+        val original = KotlinMcpResult.Success(
+            content = "Header\n--- Internal AST Dump ---\nDump content\n   --- Results ---\nKey output text",
+            metadata = emptyMap()
+        )
+
+        val projection = ResponseProjection(preset = ResponsePreset.COMPACT)
+        val filtered = ProjectionFilter.apply(original, projection)
+
+        assertTrue(filtered.isSuccess)
+        val success = filtered as KotlinMcpResult.Success
+        assertFalse(success.content.contains("Dump content"))
+        assertTrue(success.content.contains("Key output text"))
+    }
+
+    @Test
+    fun `ProjectionFilter compact preset does not prematurely break on empty lines inside AST dump`() {
+        val original = KotlinMcpResult.Success(
+            content = "Header\n--- Internal AST Dump ---\nFirst line of dump\n\nSecond line after empty line\n--- Results ---\nKey output text",
+            metadata = emptyMap()
+        )
+
+        val projection = ResponseProjection(preset = ResponsePreset.COMPACT)
+        val filtered = ProjectionFilter.apply(original, projection)
+
+        assertTrue(filtered.isSuccess)
+        val success = filtered as KotlinMcpResult.Success
+        assertFalse(success.content.contains("First line of dump"))
+        assertFalse(success.content.contains("Second line after empty line"))
+        assertTrue(success.content.contains("Key output text"))
+    }
+
+    @Test
+    fun `ProjectionFilter summary preset preserves main content and applies field masks`() {
+        val original = KotlinMcpResult.Success(
+            content = "Summary content for caller",
+            metadata = mapOf("symbol" to "UserRepo", "debugTrace" to "trace", "category" to "database")
+        )
+
+        val projection = ResponseProjection(
+            preset = ResponsePreset.SUMMARY,
+            fields = setOf("symbol", "category")
+        )
+
+        val filtered = ProjectionFilter.apply(original, projection)
+        assertTrue(filtered.isSuccess)
+        val success = filtered as KotlinMcpResult.Success
+        assertEquals("Summary content for caller", success.content)
+        assertEquals(2, success.metadata.size)
+        assertTrue(success.metadata.containsKey("symbol"))
+        assertTrue(success.metadata.containsKey("category"))
+        assertFalse(success.metadata.containsKey("debugTrace"))
+    }
+
+    @Test
+    fun `ProjectionFilter preserves error codes and message while trimming debug metadata`() {
+        val error = KotlinMcpResult.Error(
+            message = "Syntax error in file",
+            code = "SYNTAX_ERROR",
+            details = mapOf("stacktrace" to "verbose stack", "file" to "Main.kt")
+        )
+
+        val projection = ResponseProjection(
+            preset = ResponsePreset.COMPACT,
+            fields = setOf("file")
+        )
+
+        val filtered = ProjectionFilter.apply(error, projection)
+        assertTrue(filtered.isError)
+        val err = filtered as KotlinMcpResult.Error
+        assertEquals("SYNTAX_ERROR", err.code)
+        assertEquals("Syntax error in file", err.message)
+        assertEquals(mapOf("file" to "Main.kt"), err.details)
+    }
+}

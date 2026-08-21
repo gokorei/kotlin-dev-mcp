@@ -76,7 +76,8 @@ data class KtCallHierarchyResult(
  * Shared in-process workspace crawler using the K2 PSI AST parser.
  */
 class WorkspaceSemanticIndexer(
-    val defaultMaxFiles: Int = System.getenv("WORKSPACE_MAX_FILES")?.toIntOrNull() ?: 200
+    val defaultMaxFiles: Int = System.getenv("WORKSPACE_MAX_FILES")?.toIntOrNull() ?: 200,
+    val vfsCache: VfsPsiCache = DefaultVfsPsiCache()
 ) {
     private data class FileCacheEntry(
         val lastModified: Long,
@@ -138,7 +139,7 @@ class WorkspaceSemanticIndexer(
                     }
                 })
             } else {
-                val psi = K2SnippetFrontend.parsePsi(text) ?: continue
+                val psi = vfsCache.getOrParse(file.path, text) ?: K2SnippetFrontend.parsePsi(text) ?: continue
                 parsed += file to psi
             }
         }
