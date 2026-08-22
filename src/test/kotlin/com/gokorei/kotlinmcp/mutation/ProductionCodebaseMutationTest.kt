@@ -1811,7 +1811,115 @@ class ProductionCodebaseMutationTest {
             "Mutation score for McpDocGenerator.kt (${report.score}%) must be at least 85%"
         )
     }
+
+    @Test
+    fun `mutation test production MutationModels source file`() {
+        val file = File("src/main/kotlin/com/gokorei/kotlinmcp/mutation/MutationModels.kt")
+        assertTrue(file.exists(), "Target file must exist: ${file.absolutePath}")
+
+        val productionCode = file.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import ") }
+            .filterNot { it.trim() == "@Serializable" }
+            .joinToString("\n")
+
+        val testSuiteCode = """
+            fun main() {
+                // 1. MutationOperator enum
+                check(MutationOperator.RELATIONAL_BOUNDARY.description.contains("Relational boundary")) { "op relational" }
+                check(MutationOperator.BOOLEAN_INVERSION.description.contains("Boolean literal")) { "op boolean" }
+                check(MutationOperator.ARITHMETIC_OPERATOR.description.contains("Arithmetic operator")) { "op arithmetic" }
+                check(MutationOperator.RETURN_VALUE.description.contains("Return value")) { "op return" }
+                check(MutationOperator.VOID_CALL_REMOVAL.description.contains("Omission of standalone")) { "op void" }
+                check(MutationOperator.CONDITION_REPLACEMENT.description.contains("Full condition replacement")) { "op condition" }
+                check(MutationOperator.LITERAL_MUTATION.description.contains("Constant literal")) { "op literal" }
+                check(MutationOperator.COLLECTION_OPERATOR.description.contains("Standard library collection")) { "op collection" }
+                check(MutationOperator.EMPTY_METHOD_BODY.description.contains("Function body truncation")) { "op empty body" }
+                check(MutationOperator.HIGHER_ORDER_COMPOUND.description.contains("Higher-order compound")) { "op higher order" }
+                check(MutationOperator.values().size == 10) { "all 10 operators present" }
+
+                // 2. AstMutant data class
+                val defaultMutant = AstMutant("id1", MutationOperator.RETURN_VALUE, 10, 5, "orig", "mut", "source", "desc")
+                check(defaultMutant.order == 1) { "default order 1" }
+                check(defaultMutant.id == "id1") { "mutant id" }
+                check(defaultMutant.operator == MutationOperator.RETURN_VALUE) { "mutant operator" }
+                check(defaultMutant.line == 10) { "mutant line" }
+                check(defaultMutant.column == 5) { "mutant column" }
+                check(defaultMutant.originalSnippet == "orig") { "mutant orig" }
+                check(defaultMutant.mutatedSnippet == "mut") { "mutant mut" }
+                check(defaultMutant.mutatedSource == "source") { "mutant source" }
+                check(defaultMutant.description == "desc") { "mutant desc" }
+
+                // 3. MutantStatus enum
+                check(MutantStatus.values().size == 4) { "4 status values" }
+                check(MutantStatus.KILLED.name == "KILLED") { "status killed" }
+                check(MutantStatus.SURVIVED.name == "SURVIVED") { "status survived" }
+                check(MutantStatus.COMPILATION_ERROR.name == "COMPILATION_ERROR") { "status comp error" }
+                check(MutantStatus.TIMEOUT.name == "TIMEOUT") { "status timeout" }
+
+                // 4. MutantResult data class
+                val defaultResult = MutantResult(defaultMutant, MutantStatus.KILLED)
+                check(defaultResult.details == null) { "default details null" }
+                check(defaultResult.durationMs == 0L) { "default duration 0" }
+                val customResult = MutantResult(defaultMutant, MutantStatus.SURVIVED, "detailMsg", 42L)
+                check(customResult.details == "detailMsg") { "custom details" }
+                check(customResult.durationMs == 42L) { "custom duration" }
+
+                // 5. MutationReport calculations
+                val defaultReport = MutationReport(
+                    score = 80.0,
+                    totalMutants = 10,
+                    killedCount = 8,
+                    survivedCount = 1,
+                    compilationErrorCount = 1,
+                    timeoutCount = 0,
+                    results = listOf(defaultResult)
+                )
+                check(defaultReport.order == 1) { "default order 1" }
+                check(defaultReport.effectiveMutants == 9) { "effective mutants calculation: 10 - 1 = 9" }
+                check(defaultReport.isStrong) { "score 80.0 isStrong true" }
+
+                val strongReport = MutationReport(85.0, 10, 8, 1, 1, 0, emptyList())
+                check(strongReport.isStrong) { "score 85.0 isStrong true" }
+
+                val weakReport = MutationReport(79.9, 10, 7, 2, 1, 0, emptyList())
+                check(!weakReport.isStrong) { "score 79.9 isStrong false" }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: MutationModels.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+        if (report.totalMutants == 0) {
+            println("   BASELINE ERROR: ${report.results.firstOrNull()?.details}")
+        }
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN MutationModels.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for MutationModels.kt")
+        assertEquals(0, report.survivedCount, "All MutationModels mutants must be killed")
+        assertEquals(100.0, report.score)
+    }
 }
+
 
 
 
