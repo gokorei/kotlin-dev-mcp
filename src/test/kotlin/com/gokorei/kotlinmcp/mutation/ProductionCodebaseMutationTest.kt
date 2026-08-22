@@ -1691,7 +1691,128 @@ class ProductionCodebaseMutationTest {
             "Mutation score for LlmGuidance.kt (${report.score}%) must be at least 85%"
         )
     }
+
+    @Test
+    fun `mutation test production McpDocGenerator source file`() {
+        val file = File("src/main/kotlin/com/gokorei/kotlinmcp/doc/tooling/McpDocGenerator.kt")
+        assertTrue(file.exists(), "Target file must exist: ${file.absolutePath}")
+
+        val productionCode = file.readText()
+            .substringBefore("/**\n * CLI entrypoint")
+            .replace("ToolRegistrar.buildToolDocSpecs()", "emptyList()")
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import ") }
+            .joinToString("\n")
+
+        val testSuiteCode = """
+            fun main() {
+                // 0. Default constructors and data classes
+                val defaultGen = DefaultMcpDocGenerator()
+                check(defaultGen.toolSpecs.isEmpty()) { "default toolSpecs empty" }
+                val defaultParam = ParamDocSpec("paramX", "descX")
+                check(!defaultParam.required) { "default required false" }
+                check(defaultParam.type == "string") { "default type string" }
+                check(defaultParam.itemsType == null) { "default itemsType null" }
+
+                val defaultTool = ToolDocSpec("toolX", "descX", false)
+                check(defaultTool.actions.isEmpty()) { "default actions empty" }
+                check(defaultTool.params.isEmpty()) { "default params empty" }
+                check(defaultTool.requiredParams.isEmpty()) { "default requiredParams empty" }
+                check(defaultTool.notes == null) { "default notes null" }
+
+                val specs = listOf(
+                    ToolDocSpec(
+                        name = "read_tool",
+                        description = "Inspect workspace state.",
+                        readOnly = true,
+                        actions = listOf("inspect", "query"),
+                        params = listOf(
+                            ParamDocSpec(name = "path", description = "Target path", type = "string", required = true),
+                            ParamDocSpec(name = "tags", description = "Filter tags", type = "array", itemsType = "string", required = false)
+                        ),
+                        requiredParams = listOf("path")
+                    ),
+                    ToolDocSpec(
+                        name = "edit_tool",
+                        description = "Mutates files on disk.",
+                        readOnly = false,
+                        actions = emptyList(),
+                        params = listOf(
+                            ParamDocSpec(name = "content", description = "New file content", type = "string", required = true)
+                        ),
+                        requiredParams = listOf("content")
+                    )
+                )
+
+                val generator = DefaultMcpDocGenerator(specs)
+
+                // 1. Reference Markdown verification
+                val refMarkdown = generator.generateToolReferenceMarkdown()
+                check(refMarkdown.contains("# Kotlin MCP Tool & Action API Reference")) { "title" }
+                check(refMarkdown.contains("authoritative, code-backed API reference for all **2 MCP tools**")) { "tool count" }
+                check(refMarkdown.contains("All tools use progressive discovery with action-multiplexed parameters to minimize LLM token consumption while providing complete IDE-grade capabilities.")) { "intro progressive" }
+                check(refMarkdown.contains("## Read-Only Tools (`readOnly = true`)")) { "read-only section" }
+                check(refMarkdown.contains("Read-only tools are safe for research, audits, and discovery. They never modify files on disk or execute untrusted host code.")) { "read-only safety notice" }
+                check(refMarkdown.contains("## Mutating / Edit Tools (`readOnly = false`)")) { "mutating section" }
+                check(refMarkdown.contains("Mutating tools generate code diffs, format files, rename symbols across workspaces, or execute child JVM processes.")) { "mutating note" }
+                check(refMarkdown.contains("### `read_tool`")) { "read_tool header" }
+                check(refMarkdown.contains("**Description:** Inspect workspace state.")) { "read_tool desc" }
+                check(refMarkdown.contains("**Supported Actions:** `inspect`, `query`")) { "actions list" }
+                check(refMarkdown.contains("| Parameter | Type | Required | Description |")) { "param table header" }
+                check(refMarkdown.contains("| :--- | :--- | :--- | :--- |")) { "param table divider" }
+                check(refMarkdown.contains("| `path` | `string` | **Yes** | Target path |")) { "param path" }
+                check(refMarkdown.contains("| `tags` | `Array<string>` | No | Filter tags |")) { "param tags array" }
+                check(refMarkdown.contains("### `edit_tool`")) { "edit_tool header" }
+                check(refMarkdown.contains("**Description:** Mutates files on disk.")) { "edit_tool desc" }
+                check(refMarkdown.contains("| `content` | `string` | **Yes** | New file content |")) { "param content" }
+                check(refMarkdown.contains("[← Home](Home)")) { "footer link" }
+                check(refMarkdown.lines().size == 40) { "refMarkdown line count: ${'$'}{refMarkdown.lines().size}" }
+
+                // 2. Summary Table verification
+                val summaryTable = generator.generateToolSummaryTable()
+                check(summaryTable.contains("| Tool Name | Actions / Targets | Description |")) { "table header" }
+                check(summaryTable.contains("| :--- | :--- | :--- |")) { "table divider" }
+                check(summaryTable.contains("| `read_tool` | `inspect`, `query` | **Read-Only**: Inspect workspace state. |")) { "read_tool row" }
+                check(summaryTable.contains("| `edit_tool` | *(Direct)* | **Mutating**: Mutates files on disk. |")) { "edit_tool row" }
+                check(summaryTable.lines().size == 5) { "summaryTable line count: ${'$'}{summaryTable.lines().size}" }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: McpDocGenerator.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+        if (report.totalMutants == 0) {
+            println("   BASELINE ERROR: ${report.results.firstOrNull()?.details}")
+        }
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN McpDocGenerator.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for McpDocGenerator.kt")
+        assertTrue(
+            report.score >= 85.0,
+            "Mutation score for McpDocGenerator.kt (${report.score}%) must be at least 85%"
+        )
+    }
 }
+
 
 
 
