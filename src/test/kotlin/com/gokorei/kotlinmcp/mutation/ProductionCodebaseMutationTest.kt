@@ -1918,7 +1918,228 @@ class ProductionCodebaseMutationTest {
         assertEquals(0, report.survivedCount, "All MutationModels mutants must be killed")
         assertEquals(100.0, report.score)
     }
+
+    @Test
+    fun `mutation test production GradleProjectInspector source file`() {
+        val resultFile = File("src/main/kotlin/com/gokorei/kotlinmcp/models/KotlinMcpResult.kt")
+        val file = File("src/main/kotlin/com/gokorei/kotlinmcp/project/GradleProjectInspector.kt")
+        assertTrue(file.exists(), "Target file must exist: ${file.absolutePath}")
+
+        val modelsCode = resultFile.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import ") }
+            .filterNot { it.trim() == "@Serializable" }
+            .joinToString("\n")
+
+        val inspectorCode = file.readText()
+            .lines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import ") }
+            .joinToString("\n")
+
+        val imports = "import java.io.File\n\n"
+        val productionCode = imports + modelsCode + "\n\n" + inspectorCode
+
+        val testSuiteCode = """
+            fun main() {
+                val inspector = GradleProjectInspector()
+
+                // 1. inspectGradleProject with Kotlin DSL plugins and KMP targets
+                val kmpScript = ""${'"'}
+                    plugins {
+                        kotlin("multiplatform") version "2.0.0"
+                        id("com.android.library") version "8.2.0"
+                    }
+                    kotlin {
+                        jvm()
+                        iosArm64()
+                        wasmJs {
+                            browser()
+                        }
+                    }
+                ""${'"'}.trimIndent()
+
+                val kmpResult = inspector.inspectGradleProject(kmpScript, null)
+                check(kmpResult is KotlinMcpResult.Success) { "kmp inspection success" }
+                val kmpContent = (kmpResult as KotlinMcpResult.Success).content
+                check(kmpContent.contains("# Gradle Project Inspection")) { "kmp header" }
+                check(kmpContent.contains("## Detected Plugins (2)")) { "kmp plugins header" }
+                check(kmpContent.contains("- `kotlin-multiplatform`")) { "kotlin-multiplatform plugin" }
+                check(kmpContent.contains("- `com.android.library`")) { "android plugin" }
+                check(kmpContent.contains("## KMP Targets (3)")) { "kmp targets header" }
+                check(kmpContent.contains("- `jvm`")) { "jvm target" }
+                check(kmpContent.contains("- `iosArm64`")) { "iosArm64 target" }
+                check(kmpContent.contains("- `wasmJs`")) { "wasmJs target" }
+                check(kmpContent.contains("## Recommended Guidelines")) { "guidelines header" }
+                check(kmpContent.contains("[Multiplatform Web Storage (Room 3.0 & DataStore)](kotlin://guidelines/kmp-storage.md)")) { "kmp guidelines link" }
+                check(kmpResult.metadata["pluginCount"] == "2") { "metadata pluginCount 2" }
+                check(kmpResult.metadata["targetCount"] == "3") { "metadata targetCount 3" }
+                check(kmpResult.metadata["subprojectCount"] == "0") { "metadata subprojectCount 0" }
+
+                // 2. inspectGradleProject with Groovy DSL and single-platform fallback
+                val groovyScript = ""${'"'}
+                    apply plugin: 'java'
+                    id 'application'
+                ""${'"'}.trimIndent()
+                val groovyResult = inspector.inspectGradleProject(groovyScript, null)
+                check(groovyResult is KotlinMcpResult.Success) { "groovy inspection success" }
+                val groovyContent = (groovyResult as KotlinMcpResult.Success).content
+                check(groovyContent.contains("- `java`")) { "java plugin" }
+                check(groovyContent.contains("- `application`")) { "application plugin" }
+                check(groovyContent.contains("## KMP Targets (0)")) { "kmp targets 0 header" }
+                check(groovyContent.contains("- JVM / Single-platform")) { "single platform notice" }
+                check(groovyResult.metadata["targetCount"] == "0") { "metadata targetCount 0" }
+
+                // 3. inspectGradleProject with empty content
+                val emptyResult = inspector.inspectGradleProject("", null)
+                check(emptyResult is KotlinMcpResult.Success) { "empty inspection success" }
+                val emptyContent = (emptyResult as KotlinMcpResult.Success).content
+                check(emptyContent.contains("- (none detected directly)")) { "none detected directly" }
+                check(emptyResult.metadata["pluginCount"] == "0") { "metadata pluginCount 0" }
+
+                // 4. listKmpTargets verification
+                val targetsPopulated = inspector.listKmpTargets("kotlin { jvm(); iosX64() }")
+                check(targetsPopulated is KotlinMcpResult.Success) { "targetsPopulated success" }
+                val targetsPopulatedContent = (targetsPopulated as KotlinMcpResult.Success).content
+                check(targetsPopulatedContent.contains("# KMP Targets (2)")) { "targets header 2" }
+                check(targetsPopulatedContent.contains("- `jvm`")) { "target jvm" }
+                check(targetsPopulatedContent.contains("- `iosX64`")) { "target iosX64" }
+                check(targetsPopulated.metadata["targetCount"] == "2") { "metadata targetCount 2" }
+
+                val targetsEmpty = inspector.listKmpTargets("plugins { java }")
+                check(targetsEmpty is KotlinMcpResult.Success) { "targetsEmpty success" }
+                val targetsEmptyContent = (targetsEmpty as KotlinMcpResult.Success).content
+                check(targetsEmptyContent.contains("# KMP Targets (0)")) { "targets header 0" }
+                check(targetsEmptyContent.contains("- Single-platform (JVM / Android)")) { "single platform notice" }
+                check(targetsEmpty.metadata["targetCount"] == "0") { "metadata targetCount 0" }
+
+                // 5. analyzeDependencies verification
+                val depsScript = ""${'"'}
+                    dependencies {
+                        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+                        api 'com.google.guava:guava:33.0.0-jre'
+                        testImplementation(libs.junit.jupiter)
+                        compileOnly(project(":api"))
+                    }
+                ""${'"'}.trimIndent()
+                val depsResult = inspector.analyzeDependencies(depsScript)
+                check(depsResult is KotlinMcpResult.Success) { "depsResult success" }
+                val depsContent = (depsResult as KotlinMcpResult.Success).content
+                check(depsContent.contains("# Project Dependencies (4)")) { "deps header 4" }
+                check(depsContent.contains("- `implementation: org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0`")) { "dep 1" }
+                check(depsContent.contains("- `api: com.google.guava:guava:33.0.0-jre`")) { "dep 2" }
+                check(depsContent.contains("- `testImplementation: libs.junit.jupiter`")) { "dep 3" }
+                check(depsContent.contains("- `compileOnly: project(\":api\")`")) { "dep 4" }
+                check(depsResult.metadata["dependencyCount"] == "4") { "metadata dependencyCount 4" }
+
+                val emptyDepsResult = inspector.analyzeDependencies("")
+                check(emptyDepsResult is KotlinMcpResult.Success) { "emptyDepsResult success" }
+                val emptyDepsContent = (emptyDepsResult as KotlinMcpResult.Success).content
+                check(emptyDepsContent.contains("- (no dependencies extracted from script snippet)")) { "no deps note" }
+                check(emptyDepsResult.metadata["dependencyCount"] == "0") { "metadata dependencyCount 0" }
+
+                // 6. diagnoseBuild verification
+                val badBuild = inspector.diagnoseBuild("repositories { jcenter() }", "", "")
+                check(badBuild is KotlinMcpResult.Success) { "badBuild success" }
+                val badBuildContent = (badBuild as KotlinMcpResult.Success).content
+                check(badBuildContent.contains("# Gradle Build Diagnostic")) { "bad diagnostic header" }
+                check(badBuildContent.contains("JCenter repository is sunset; migrate to mavenCentral().")) { "jcenter warning" }
+                check(badBuild.metadata["issueCount"] == "1") { "metadata issueCount 1" }
+
+                val cleanBuild = inspector.diagnoseBuild("repositories { mavenCentral() }", "", "")
+                check(cleanBuild is KotlinMcpResult.Success) { "cleanBuild success" }
+                val cleanBuildContent = (cleanBuild as KotlinMcpResult.Success).content
+                check(cleanBuildContent.contains("# Gradle Build Diagnostic")) { "clean diagnostic header" }
+                check(cleanBuildContent.contains("✅ No obvious Gradle script issues detected.")) { "clean notice" }
+                check(cleanBuild.metadata["issueCount"] == "0") { "metadata issueCount 0" }
+
+                // 7. settingsSubprojects and subprojects inspection
+                val tmpDir = java.io.File.createTempFile("mcp_test", "").apply { delete(); mkdirs() }
+                try {
+                    val settingsFile = java.io.File(tmpDir, "settings.gradle.kts")
+                    settingsFile.writeText("include(\":core:network\")\ninclude \":feature:ui\"")
+                    val sub1 = java.io.File(tmpDir, "core/network").apply { mkdirs() }
+                    java.io.File(sub1, "build.gradle.kts").writeText("plugins { id(\"kotlin\") }")
+                    val sub2 = java.io.File(tmpDir, "feature/ui").apply { mkdirs() }
+                    java.io.File(sub2, "build.gradle").writeText("apply plugin: 'com.android.library'")
+
+                    val rootResult = inspector.inspectGradleProject("", tmpDir.absolutePath)
+                    check(rootResult is KotlinMcpResult.Success) { "rootResult success" }
+                    val rootContent = (rootResult as KotlinMcpResult.Success).content
+                    check(rootContent.contains("## Settings Subprojects (2)")) { "subprojects 2 header" }
+                    check(rootContent.contains("- `:core:network`")) { "subproject 1" }
+                    check(rootContent.contains("- `:feature:ui`")) { "subproject 2" }
+                    check(rootContent.contains("- `kotlin`")) { "sub1 plugin" }
+                    check(rootContent.contains("- `com.android.library`")) { "sub2 plugin" }
+                    check(rootResult.metadata["subprojectCount"] == "2") { "metadata subprojects 2" }
+                } finally {
+                    tmpDir.deleteRecursively()
+                }
+
+                // 8. All KMP target names
+                val allKmpScript = ""${'"'}
+                    kotlin {
+                        jvm()
+                        androidTarget()
+                        iosX64()
+                        iosArm64()
+                        iosSimulatorArm64()
+                        js()
+                        wasmJs()
+                        linuxX64()
+                        macosX64()
+                        macosArm64()
+                    }
+                ""${'"'}.trimIndent()
+                val allKmpResult = inspector.listKmpTargets(allKmpScript)
+                check(allKmpResult is KotlinMcpResult.Success) { "allKmpResult success" }
+                val allKmpContent = (allKmpResult as KotlinMcpResult.Success).content
+                check(allKmpContent.contains("# KMP Targets (10)")) { "all 10 targets header" }
+                check(allKmpContent.contains("## Recommended Guidelines")) { "kmp guidelines header" }
+                check(allKmpContent.contains("[Multiplatform Web Storage (Room 3.0 & DataStore)](kotlin://guidelines/kmp-storage.md)")) { "kmp link" }
+                listOf("jvm", "androidTarget", "iosX64", "iosArm64", "iosSimulatorArm64", "js", "wasmJs", "linuxX64", "macosX64", "macosArm64").forEach {
+                    check(allKmpContent.contains("- `" + it + "`")) { "contains target " + it }
+                }
+                check(allKmpResult.metadata["targetCount"] == "10") { "metadata targetCount 10" }
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(
+            code = productionCode,
+            testCode = testSuiteCode,
+            includeExtremeOperators = false,
+            maxOrder = 1
+        )
+
+        println("\n=======================================================")
+        println("🧬 REAL PRODUCTION FILE MUTATION AUDIT: GradleProjectInspector.kt")
+        println("   Score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed, ${report.survivedCount} survived)")
+        println("   Total Mutants: ${report.totalMutants} (Discarded Comp Errors: ${report.compilationErrorCount})")
+        if (report.totalMutants == 0) {
+            println("   BASELINE ERROR: ${report.results.firstOrNull()?.details}")
+        }
+
+        val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
+        if (survived.isNotEmpty()) {
+            println("   ⚠️ SURVIVED MUTANTS IN GradleProjectInspector.kt:")
+            survived.forEach {
+                println("      - Line ${it.mutant.line} [${it.mutant.operator}]: ${it.mutant.description}")
+                println("        Original: ${it.mutant.originalSnippet}")
+                println("        Mutated:  ${it.mutant.mutatedSnippet}")
+            }
+        }
+        println("=======================================================\n")
+
+        assertTrue(report.totalMutants > 0, "Expected mutants to be generated for GradleProjectInspector.kt")
+        assertTrue(
+            report.score >= 80.0,
+            "Mutation score for GradleProjectInspector.kt (${report.score}%) must be at least 80%"
+        )
+    }
 }
+
+
 
 
 
