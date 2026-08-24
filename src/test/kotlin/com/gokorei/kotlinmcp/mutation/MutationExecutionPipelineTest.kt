@@ -107,10 +107,10 @@ class MutationExecutionPipelineTest {
 
         val report = pipeline.run(code, testCode)
 
-        if (report.totalMutants > 0 && report.effectiveMutants == 0) {
-            assertEquals(0.0, report.score, "Score must be 0.0 when all mutants fail compilation")
-            assertFalse(report.isStrong, "Suite with no executable mutants must not be reported as strong")
-        }
+        assertTrue(report.totalMutants > 0, "Mutants should be generated for return expression")
+        assertEquals(0, report.effectiveMutants, "All generated mutants should fail compilation for CustomObj")
+        assertEquals(0.0, report.score, "Score must be 0.0 when all mutants fail compilation")
+        assertFalse(report.isStrong, "Suite with no executable mutants must not be reported as strong")
     }
 
     @Test

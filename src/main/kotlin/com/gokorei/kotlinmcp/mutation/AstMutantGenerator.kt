@@ -160,29 +160,50 @@ class AstMutantGenerator {
                 val returnedExpr = expression.returnedExpression
                 if (returnedExpr != null) {
                     val range = returnedExpr.textRange
-                    val text = returnedExpr.text.trim()
+                    val text = returnedExpr.text
                     val replacements = mutableListOf<Pair<String, String>>()
 
-                    if (text.startsWith("\"") && text.endsWith("\"")) {
-                        if (text != "\"\"") {
-                            replacements.add("\"\"" to "Replaced return string with \"\"")
-                        } else {
-                            replacements.add("\"mutated\"" to "Replaced empty return string with \"mutated\"")
+                    when (returnedExpr) {
+                        is KtStringTemplateExpression -> {
+                            if (returnedExpr.entries.isEmpty()) {
+                                replacements.add("\"mutated\"" to "Replaced empty return string with \"mutated\"")
+                            } else {
+                                replacements.add("\"\"" to "Replaced return string with \"\"")
+                            }
                         }
-                    } else if (text == "true" || text == "false") {
-                        val opposite = if (text == "true") "false" else "true"
-                        replacements.add(opposite to "Replaced return boolean with $opposite")
-                    } else if (text.toIntOrNull() != null || text.toLongOrNull() != null) {
-                        if (text == "0" || text == "0L") {
-                            replacements.add("1" to "Replaced return 0 with 1")
-                        } else {
+                        is KtConstantExpression -> {
+                            val constText = returnedExpr.text
+                            val tokenType = returnedExpr.node.elementType
+                            if (tokenType == KtTokens.TRUE_KEYWORD || constText == "true") {
+                                replacements.add("false" to "Replaced return boolean with false")
+                            } else if (tokenType == KtTokens.FALSE_KEYWORD || constText == "false") {
+                                replacements.add("true" to "Replaced return boolean with true")
+                            } else if (tokenType == KtTokens.NULL_KEYWORD || constText == "null") {
+                                replacements.add("\"\"" to "Replaced return null with \"\"")
+                            } else if (constText == "0" || constText == "0L") {
+                                replacements.add("1" to "Replaced return 0 with 1")
+                            } else {
+                                replacements.add("0" to "Replaced return value with 0")
+                            }
+                        }
+                        is KtPrefixExpression -> {
+                            if (returnedExpr.operationToken == KtTokens.EXCL) {
+                                val base = returnedExpr.baseExpression
+                                if (base != null) {
+                                    replacements.add(base.text to "Removed negation from return expression")
+                                }
+                            } else {
+                                replacements.add("0" to "Replaced return value with 0")
+                                replacements.add("false" to "Replaced return value with false")
+                                replacements.add("null" to "Replaced return value with null")
+                            }
+                        }
+                        else -> {
+                            // General fallback replacements for complex/object return expressions
                             replacements.add("0" to "Replaced return value with 0")
+                            replacements.add("false" to "Replaced return value with false")
+                            replacements.add("null" to "Replaced return value with null")
                         }
-                    } else {
-                        // General fallback replacements
-                        replacements.add("0" to "Replaced return value with 0")
-                        replacements.add("false" to "Replaced return value with false")
-                        replacements.add("null" to "Replaced return value with null")
                     }
 
                     for ((replacement, desc) in replacements) {

@@ -91,6 +91,8 @@ class MutationServiceTest {
         val success = result as KotlinMcpResult.Success
         val isStrong = success.metadata["isStrong"]
         assertEquals("false", isStrong)
+        assertTrue(success.content.contains("NO EFFECTIVE MUTANTS"), "Content should indicate no effective mutants")
+        assertTrue(success.content.contains("No executable mutants could be compiled"), "Content should explain mutants failed compilation")
     }
 
     @Test

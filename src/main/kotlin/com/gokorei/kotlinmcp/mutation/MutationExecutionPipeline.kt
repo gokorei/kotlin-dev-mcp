@@ -4,7 +4,9 @@ import com.gokorei.kotlinmcp.execution.CompileResult
 import com.gokorei.kotlinmcp.execution.DefaultFastSnippetRunner
 import com.gokorei.kotlinmcp.execution.FastSnippetRunner
 import com.gokorei.kotlinmcp.execution.SnippetCompiler
+import com.gokorei.kotlinmcp.lsp.K2SnippetFrontend
 import com.gokorei.kotlinmcp.models.KotlinMcpResult
+import org.jetbrains.kotlin.psi.KtFile
 
 /**
  * Pipeline for executing AST mutation testing in-memory.
@@ -49,7 +51,7 @@ class DefaultMutationExecutionPipeline(
                 totalMutants = 0,
                 killedCount = 0,
                 survivedCount = 0,
-                compilationErrorCount = 1,
+                compilationErrorCount = 0,
                 timeoutCount = 0,
                 results = listOf(MutantResult(dummyMutant, MutantStatus.BASELINE_ERROR, "Baseline code failed compilation: $msg"))
             )
@@ -176,32 +178,56 @@ class DefaultMutationExecutionPipeline(
 
     private fun mergeSourceAndTest(code: String, testCode: String): String {
         if (testCode.isBlank()) return code
-        val codeLines = code.lines()
-        val testLines = testCode.lines()
 
-        val codeImports = codeLines.filter { it.trim().startsWith("import ") }
-        val testImports = testLines.filter { it.trim().startsWith("import ") }
+        val codeFile = K2SnippetFrontend.parsePsi(code)
+        val testFile = K2SnippetFrontend.parsePsi(testCode)
+
+        if (codeFile == null || testFile == null) {
+            return "$code\n\n$testCode".trim()
+        }
+
+        val codeImports = codeFile.importDirectives.map { it.text }
+        val testImports = testFile.importDirectives.map { it.text }
         val allImports = (codeImports + testImports).distinct()
 
-        val codeBody = codeLines.filterNot { it.trim().startsWith("import ") || it.trim().startsWith("package ") }
-        val testBody = testLines.filterNot { it.trim().startsWith("import ") || it.trim().startsWith("package ") }
+        val selectedPackage = codeFile.packageDirective?.takeIf { it.text.isNotBlank() }?.text
+            ?: testFile.packageDirective?.takeIf { it.text.isNotBlank() }?.text
 
-        val packageDecl = codeLines.firstOrNull { it.trim().startsWith("package ") }
-            ?: testLines.firstOrNull { it.trim().startsWith("package ") }
+        val codeBody = stripPackageAndImports(code, codeFile)
+        val testBody = stripPackageAndImports(testCode, testFile)
 
         val sb = StringBuilder()
-        if (packageDecl != null) {
-            sb.appendLine(packageDecl)
+        if (selectedPackage != null) {
+            sb.appendLine(selectedPackage)
             sb.appendLine()
         }
         if (allImports.isNotEmpty()) {
             allImports.forEach { sb.appendLine(it) }
             sb.appendLine()
         }
-        sb.appendLine(codeBody.joinToString("\n"))
+        sb.appendLine(codeBody)
         sb.appendLine()
-        sb.appendLine(testBody.joinToString("\n"))
+        sb.appendLine(testBody)
         return sb.toString().trim()
+    }
+
+    private fun stripPackageAndImports(source: String, file: KtFile): String {
+        val rangesToRemove = mutableListOf<org.jetbrains.kotlin.com.intellij.openapi.util.TextRange>()
+        file.packageDirective?.takeIf { it.text.isNotBlank() }?.let { rangesToRemove.add(it.textRange) }
+        file.importList?.takeIf { it.text.isNotBlank() }?.let { rangesToRemove.add(it.textRange) }
+
+        if (rangesToRemove.isEmpty()) return source.trim()
+
+        val sortedRanges = rangesToRemove.sortedByDescending { it.startOffset }
+        var result = source
+        for (range in sortedRanges) {
+            val start = range.startOffset.coerceAtLeast(0)
+            val end = range.endOffset.coerceAtMost(result.length)
+            if (start < end) {
+                result = result.substring(0, start) + result.substring(end)
+            }
+        }
+        return result.trim()
     }
 
     override fun close() {
