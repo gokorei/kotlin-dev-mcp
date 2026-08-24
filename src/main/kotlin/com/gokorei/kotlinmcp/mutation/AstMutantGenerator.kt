@@ -40,6 +40,13 @@ class AstMutantGenerator {
                     val range = opRef.textRange
                     val mutatedCode = replaceRange(code, range.startOffset, range.endOffset, replacement)
                     val (line, col) = computeLineAndColumn(code, range.startOffset)
+                    val exprStart = expression.textRange.startOffset
+                    val localSnippet = replaceRange(
+                        expression.text,
+                        range.startOffset - exprStart,
+                        range.endOffset - exprStart,
+                        replacement
+                    )
                     mutants.add(
                         AstMutant(
                             id = "mutant-${mutants.size + 1}-${UUID.randomUUID().toString().take(6)}",
@@ -47,7 +54,7 @@ class AstMutantGenerator {
                             line = line,
                             column = col,
                             originalSnippet = expression.text,
-                            mutatedSnippet = expression.text.replaceFirst(opText, replacement),
+                            mutatedSnippet = localSnippet,
                             mutatedSource = mutatedCode,
                             description = desc
                         )
@@ -67,6 +74,13 @@ class AstMutantGenerator {
                     val range = opRef.textRange
                     val mutatedCode = replaceRange(code, range.startOffset, range.endOffset, replacement)
                     val (line, col) = computeLineAndColumn(code, range.startOffset)
+                    val exprStart = expression.textRange.startOffset
+                    val localSnippet = replaceRange(
+                        expression.text,
+                        range.startOffset - exprStart,
+                        range.endOffset - exprStart,
+                        replacement
+                    )
                     mutants.add(
                         AstMutant(
                             id = "mutant-${mutants.size + 1}-${UUID.randomUUID().toString().take(6)}",
@@ -74,7 +88,7 @@ class AstMutantGenerator {
                             line = line,
                             column = col,
                             originalSnippet = expression.text,
-                            mutatedSnippet = expression.text.replaceFirst(opText, replacement),
+                            mutatedSnippet = localSnippet,
                             mutatedSource = mutatedCode,
                             description = desc
                         )

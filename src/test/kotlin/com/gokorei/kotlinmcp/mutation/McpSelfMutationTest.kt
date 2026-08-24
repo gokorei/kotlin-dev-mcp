@@ -1,13 +1,21 @@
 package com.gokorei.kotlinmcp.mutation
 
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestInstance
 
 @Tag("hardening")
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class McpSelfMutationTest {
 
     private val pipeline = DefaultMutationExecutionPipeline()
+
+    @AfterAll
+    fun tearDown() {
+        pipeline.close()
+    }
 
     @Test
     fun `mutation tests internal SnippetAstSafetyChecker detection logic`() {
@@ -48,6 +56,7 @@ class McpSelfMutationTest {
         }
 
         assertTrue(report.totalMutants >= 5, "Expected multiple mutants on safety check branching")
+        assertTrue(report.effectiveMutants > 0, "Must have executable mutants")
         assertEquals(0, report.survivedCount, "All security guard mutants must be killed by strict test suite")
         assertEquals(100.0, report.score)
         assertTrue(report.isStrong)
@@ -77,6 +86,7 @@ class McpSelfMutationTest {
 
         println("ProjectionFilter mutation test score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed)")
         assertTrue(report.totalMutants >= 3)
+        assertTrue(report.effectiveMutants > 0)
         assertEquals(0, report.survivedCount, "All projection filter mutants must be killed")
         assertEquals(100.0, report.score)
     }
@@ -102,6 +112,7 @@ class McpSelfMutationTest {
 
         println("ToonUtils mutation test score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed)")
         assertTrue(report.totalMutants >= 2)
+        assertTrue(report.effectiveMutants > 0)
         assertEquals(0, report.survivedCount, "All table encoder mutants must be killed")
         assertEquals(100.0, report.score)
     }
@@ -135,6 +146,7 @@ class McpSelfMutationTest {
 
         println("ResponsePreset mutation test score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed)")
         assertTrue(report.totalMutants >= 2)
+        assertTrue(report.effectiveMutants > 0)
         assertEquals(0, report.survivedCount, "All preset parser mutants must be killed")
         assertEquals(100.0, report.score)
     }
@@ -163,6 +175,7 @@ class McpSelfMutationTest {
 
         println("Compose rule mutation test score: ${report.score}% (${report.killedCount}/${report.effectiveMutants} killed)")
         assertTrue(report.totalMutants >= 3)
+        assertTrue(report.effectiveMutants > 0)
         assertEquals(0, report.survivedCount, "All Compose rule mutants must be killed")
         assertEquals(100.0, report.score)
     }

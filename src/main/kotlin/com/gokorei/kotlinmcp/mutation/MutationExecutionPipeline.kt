@@ -48,8 +48,11 @@ class DefaultMutationExecutionPipeline(
         }
 
         val compiledBaseline = baselineCompile as CompileResult.Compiled
-        val baselineResult = runner.run(compiledBaseline.outDir, timeoutMillis = 5000L)
-        SnippetCompiler.cleanup(compiledBaseline)
+        val baselineResult = try {
+            runner.run(compiledBaseline.outDir, timeoutMillis = 5000L)
+        } finally {
+            SnippetCompiler.cleanup(compiledBaseline)
+        }
 
         if (baselineResult.isError) {
             val err = baselineResult as KotlinMcpResult.Error
@@ -106,30 +109,33 @@ class DefaultMutationExecutionPipeline(
             }
 
             val compiled = compiledMutant as CompileResult.Compiled
-            val runResult = runner.run(compiled.outDir, timeoutMillis = timeoutPerMutantMs)
-            val durMs = (System.nanoTime() - startNanos) / 1_000_000
-            SnippetCompiler.cleanup(compiled)
+            try {
+                val runResult = runner.run(compiled.outDir, timeoutMillis = timeoutPerMutantMs)
+                val durMs = (System.nanoTime() - startNanos) / 1_000_000
 
-            when (runResult) {
-                is KotlinMcpResult.Error -> {
-                    if (runResult.code == "EXECUTION_TIMEOUT") {
-                        results.add(MutantResult(mutant, MutantStatus.TIMEOUT, runResult.message, durMs))
-                    } else {
-                        // Test assertion failed or runtime exception caught the mutant -> KILLED
-                        results.add(MutantResult(mutant, MutantStatus.KILLED, runResult.message, durMs))
+                when (runResult) {
+                    is KotlinMcpResult.Error -> {
+                        if (runResult.code == "EXECUTION_TIMEOUT") {
+                            results.add(MutantResult(mutant, MutantStatus.TIMEOUT, runResult.message, durMs))
+                        } else {
+                            // Test assertion failed or runtime exception caught the mutant -> KILLED
+                            results.add(MutantResult(mutant, MutantStatus.KILLED, runResult.message, durMs))
+                        }
+                    }
+                    is KotlinMcpResult.Success -> {
+                        // Test passed despite mutation -> SURVIVED
+                        results.add(
+                            MutantResult(
+                                mutant = mutant,
+                                status = MutantStatus.SURVIVED,
+                                details = "Test passed exit 0 despite mutation at line ${mutant.line}: ${mutant.description}",
+                                durationMs = durMs
+                            )
+                        )
                     }
                 }
-                is KotlinMcpResult.Success -> {
-                    // Test passed despite mutation -> SURVIVED
-                    results.add(
-                        MutantResult(
-                            mutant = mutant,
-                            status = MutantStatus.SURVIVED,
-                            details = "Test passed exit 0 despite mutation at line ${mutant.line}: ${mutant.description}",
-                            durationMs = durMs
-                        )
-                    )
-                }
+            } finally {
+                SnippetCompiler.cleanup(compiled)
             }
         }
 

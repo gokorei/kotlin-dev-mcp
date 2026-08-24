@@ -31,7 +31,15 @@ class DefaultMutationService(
             )
         }
 
-        val report = pipeline.run(code, testCode)
+        val report = runCatching {
+            pipeline.run(code, testCode)
+        }.getOrElse { ex ->
+            return KotlinMcpResult.Error(
+                message = "Mutation testing execution failed: ${ex.message ?: ex::class.simpleName}",
+                code = "MUTATION_EXECUTION_ERROR",
+                details = mapOf("exception" to (ex::class.qualifiedName ?: "UnknownException"))
+            )
+        }
 
         // Check if baseline failed
         if (report.totalMutants == 0 && report.results.isNotEmpty() && report.results.first().mutant.id == "baseline") {
