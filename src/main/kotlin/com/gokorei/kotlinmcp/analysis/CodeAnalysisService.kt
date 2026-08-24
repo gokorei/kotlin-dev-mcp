@@ -22,7 +22,7 @@ interface CodeAnalysisService : CommandService<CodeAnalysisAction> {
     fun execute(
         action: CodeAnalysisAction,
         code: String,
-        workspacePath: String? = null,
+        workspacePath: String?,
         projection: ResponseProjection = ResponseProjection()
     ): KotlinMcpResult
 

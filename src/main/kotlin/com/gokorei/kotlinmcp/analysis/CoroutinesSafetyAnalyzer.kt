@@ -88,8 +88,19 @@ class CoroutinesSafetyAnalyzer {
                 super.visitCallExpression(expression)
             }
             override fun visitSimpleNameExpression(expression: KtSimpleNameExpression) {
-                if (expression.getReferencedName() == "GlobalScope" && expression.parent !is KtImportDirective) {
-                    findings.add("⚠️ `GlobalScope` usage detected. Prefer structured concurrency via `coroutineScope` or passing `CoroutineScope` as context parameter.")
+                if (expression.getReferencedName() == "GlobalScope") {
+                    var inImport = false
+                    var parent: org.jetbrains.kotlin.com.intellij.psi.PsiElement? = expression.parent
+                    while (parent != null) {
+                        if (parent is KtImportDirective) {
+                            inImport = true
+                            break
+                        }
+                        parent = parent.parent
+                    }
+                    if (!inImport) {
+                        findings.add("⚠️ `GlobalScope` usage detected. Prefer structured concurrency via `coroutineScope` or passing `CoroutineScope` as context parameter.")
+                    }
                 }
                 super.visitSimpleNameExpression(expression)
             }

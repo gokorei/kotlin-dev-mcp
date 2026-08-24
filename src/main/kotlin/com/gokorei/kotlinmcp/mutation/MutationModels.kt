@@ -3,7 +3,8 @@ package com.gokorei.kotlinmcp.mutation
 import kotlinx.serialization.Serializable
 
 /**
- * Standard mutation operators supported by the K2 PSI mutation testing engine.
+ * Mutation operators supported by the K2 PSI mutation testing engine,
+ * spanning standard, extreme structural, and higher-order operators.
  */
 @Serializable
 enum class MutationOperator(val description: String) {
@@ -11,7 +12,12 @@ enum class MutationOperator(val description: String) {
     BOOLEAN_INVERSION("Boolean literal and condition negation (true <-> false, condition <-> !condition)"),
     ARITHMETIC_OPERATOR("Arithmetic operator replacement (+ <-> -, * <-> /, % <-> *)"),
     RETURN_VALUE("Return value replacement (null, 0, false, empty)"),
-    VOID_CALL_REMOVAL("Omission of standalone function call expression statements")
+    VOID_CALL_REMOVAL("Omission of standalone function call expression statements"),
+    CONDITION_REPLACEMENT("Full condition replacement with boolean literal (if(expr) <-> if(true)/if(false))"),
+    LITERAL_MUTATION("Constant literal modification (+1, -1, empty string, altered constants)"),
+    COLLECTION_OPERATOR("Standard library collection operator inversion (filter <-> filterNot, any <-> all, take <-> drop)"),
+    EMPTY_METHOD_BODY("Function body truncation and early default return"),
+    HIGHER_ORDER_COMPOUND("Higher-order compound mutation applying multiple simultaneous distortions")
 }
 
 /**
@@ -26,7 +32,8 @@ data class AstMutant(
     val originalSnippet: String,
     val mutatedSnippet: String,
     val mutatedSource: String,
-    val description: String
+    val description: String,
+    val order: Int = 1
 )
 
 /**
@@ -72,7 +79,8 @@ data class MutationReport(
     val survivedCount: Int,
     val compilationErrorCount: Int,
     val timeoutCount: Int,
-    val results: List<MutantResult>
+    val results: List<MutantResult>,
+    val order: Int = 1
 ) {
     val effectiveMutants: Int
         get() = totalMutants - compilationErrorCount

@@ -37,9 +37,10 @@ interface LspService {
     fun close() {}
 }
 
-class DefaultLspService(
+class DefaultLspService @JvmOverloads constructor(
     private val docService: DocService = DefaultDocService(),
-    private val semanticEngine: K2SemanticEngine = DefaultK2SemanticEngine()
+    private val semanticEngine: K2SemanticEngine = DefaultK2SemanticEngine(),
+    private val semanticHierarchyMaxFiles: Int = System.getenv("WORKSPACE_MAX_FILES")?.toIntOrNull() ?: 200
 ) : LspService {
 
     private val indexer = WorkspaceSemanticIndexer()
@@ -152,7 +153,6 @@ class DefaultLspService(
                 if (found == null && expression.getReferencedName() == symbol) {
                     found = expression
                 }
-                super.visitSimpleNameExpression(expression)
             }
         })
         return found
@@ -164,8 +164,7 @@ class DefaultLspService(
         var result: Pair<Int, String>? = null
         file.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
             override fun visitNamedDeclaration(declaration: org.jetbrains.kotlin.psi.KtNamedDeclaration) {
-                if (result == null && declaration is org.jetbrains.kotlin.psi.KtPrimaryConstructor) {
-                    super.visitNamedDeclaration(declaration)
+                if (declaration is org.jetbrains.kotlin.psi.KtPrimaryConstructor) {
                     return
                 }
                 if (result == null && declaration.name == symbol) {
@@ -188,63 +187,35 @@ class DefaultLspService(
             )
         }
         val s = symbol.trim()
-        val references = mutableListOf<String>()
-
         val session = runCatching { semanticEngine.session(workspacePath, code) }.getOrNull()
-        if (session != null) {
-            val rows = runCatching { semanticEngine.referencesForSymbol(session, s, workspacePath) }.getOrNull().orEmpty()
-            val ordered = rows.sortedWith(compareBy(
-                { if (it.file == "Snippet.kt") 0 else 1 },
-                { it.file },
-                { it.line },
-                { it.column }
-            ))
-            ordered.forEach { ref ->
-                val fqn = ref.fqn?.let { " → $it" }.orEmpty()
-                if (ref.file == "Snippet.kt") {
-                    references.add("Snippet: Line ${ref.line}: `${ref.snippet}`")
-                } else {
-                    references.add("${ref.file}: Line ${ref.line}: `${ref.snippet}`$fqn")
-                }
-            }
-        }
+        val rows = if (session != null) {
+            runCatching { semanticEngine.referencesForSymbol(session, s, workspacePath) }.getOrNull().orEmpty()
+        } else emptyList()
 
-        if (references.isEmpty()) {
-            val psi = K2SnippetFrontend.parsePsi(code)
-            if (psi != null) {
-                fun lineOf(offset: Int): Int = code.substring(0, minOf(offset, code.length)).count { '\n' == it } + 1
-                val offsets = mutableSetOf<Int>()
-                psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
-                    override fun visitSimpleNameExpression(expression: org.jetbrains.kotlin.psi.KtSimpleNameExpression) {
-                        if (expression.getReferencedName() == s) offsets.add(expression.textRange.startOffset)
-                        super.visitSimpleNameExpression(expression)
-                    }
-                })
-                psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
-                    override fun visitNamedDeclaration(declaration: org.jetbrains.kotlin.psi.KtNamedDeclaration) {
-                        if (declaration.name == s) {
-                            declaration.nameIdentifier?.textRange?.let { offsets.add(it.startOffset) }
-                        }
-                        super.visitNamedDeclaration(declaration)
-                    }
-                })
-                offsets.sorted().forEach { offset ->
-                    val snippetLine = lineOf(offset)
-                    val lineText = code.lines().getOrNull(snippetLine - 1)?.trim().orEmpty()
-                    references.add("Snippet: Line $snippetLine: `$lineText`")
-                }
+        val ordered = rows.sortedWith(compareBy(
+            { if (it.file == "Snippet.kt") 0 else 1 },
+            { it.file },
+            { it.line },
+            { it.column }
+        ))
+        val references = ordered.map { ref ->
+            val fqn = ref.fqn?.let { " → $it" }.orEmpty()
+            if (ref.file == "Snippet.kt") {
+                "Snippet: Line ${ref.line}: `${ref.snippet}`"
+            } else {
+                "${ref.file}: Line ${ref.line}: `${ref.snippet}`$fqn"
             }
-        }
+        }.distinct()
 
         val content = if (references.isNotEmpty()) {
-            incompletePrefix(workspacePath) + "# Symbol References for `$s` (${references.size} occurrences found)\n\n" + references.distinct().joinToString("\n")
+            incompletePrefix(workspacePath) + "# Symbol References for `$s` (${references.size} occurrences found)\n\n" + references.joinToString("\n")
         } else {
             incompletePrefix(workspacePath) + "No occurrences or references of symbol `$s` were found."
         }
 
         return KotlinMcpResult.Success(
             content = content,
-            metadata = mapOf("symbol" to s, "referenceCount" to references.distinct().size.toString())
+            metadata = mapOf("symbol" to s, "referenceCount" to references.size.toString())
         )
     }
 
@@ -290,7 +261,7 @@ class DefaultLspService(
         )
     }
 
-    private fun renameSymbol(code: String, oldName: String?, newName: String?, workspacePath: String?, maxFiles: Int = 500): KotlinMcpResult {
+    private fun renameSymbol(code: String, oldName: String?, newName: String?, workspacePath: String?): KotlinMcpResult {
         if (oldName.isNullOrBlank() || newName.isNullOrBlank()) {
             return KotlinMcpResult.Error(
                 message = "Both oldName and newName parameters are required for renameSymbol.",
@@ -301,89 +272,71 @@ class DefaultLspService(
         val new = newName.trim()
 
         val session = runCatching { semanticEngine.session(workspacePath, code) }.getOrNull()
-        if (session != null) {
-            val editsResult = runCatching { semanticEngine.renameEditsForSymbol(session, old, workspacePath) }
-            if (editsResult.isFailure) {
-                return renameSymbolLegacy(code, old, new, workspacePath, maxFiles)
-            }
-            val edits = editsResult.getOrThrow()
-            val snippetEdits = edits.filter { it.file == "Snippet.kt" }
-            val snippetApply = applyRenameEdits(code, snippetEdits.map { it.offset to it.length }, new, old)
-            val refactoredCode = snippetApply.updatedText
-            val snippetReplacementCount = snippetApply.appliedCount
-
-            val workspaceChanges = mutableListOf<String>()
-            var isTruncated = false
-            var totalMatchingFiles = 0
-
-            if (!workspacePath.isNullOrBlank()) {
-                val root = File(workspacePath)
-                if (root.exists() && root.isDirectory) {
-                    val wsEdits = edits.filter { it.file != "Snippet.kt" }.groupBy { it.file }
-                    totalMatchingFiles = wsEdits.size
-                    if (totalMatchingFiles > maxFiles) {
-                        isTruncated = true
-                    }
-                    wsEdits.toSortedMap().toList().take(maxFiles).forEach { (rel, fileEdits) ->
-                        val target = root.resolve(rel)
-                        try {
-                            if (target.isFile) {
-                                val original = target.readText()
-                                val applyRes = applyRenameEdits(original, fileEdits.map { it.offset to it.length }, new, old)
-                                if (applyRes.conflictCount > 0) {
-                                    workspaceChanges.add("$rel: CONFLICT (${applyRes.conflictCount} edits skipped due to changed content)")
-                                } else if (applyRes.updatedText != original) {
-                                    target.writeText(applyRes.updatedText)
-                                    workspaceChanges.add("$rel: ${applyRes.appliedCount} replacements")
-                                }
-                            }
-                        } catch (e: Exception) {
-                            workspaceChanges.add("$rel: FAILED (${e.message})")
-                        }
-                    }
-                }
-            }
-
-            val content = buildString {
-                append(incompletePrefix(workspacePath))
-                if (isTruncated) {
-                    appendLine("⚠ Workspace scan truncated: examined $maxFiles of $totalMatchingFiles Kotlin files.")
-                    appendLine()
-                }
-                appendLine("# Symbol Rename: `$old` -> `$new`")
-                appendLine("- Replacements in snippet: $snippetReplacementCount")
-                if (workspaceChanges.isNotEmpty()) {
-                    appendLine("- Workspace files updated:")
-                    workspaceChanges.forEach { appendLine("  - $it") }
-                } else if (!workspacePath.isNullOrBlank()) {
-                    appendLine("- No workspace files matched (or workspacePath not a readable directory).")
-                }
-                appendLine()
-                appendLine("## Refactored Snippet")
-                appendLine("```kotlin")
-                appendLine(refactoredCode)
-                appendLine("```")
-            }
-
-            val metadataMap = mutableMapOf(
-                "oldName" to old,
-                "newName" to new,
-                "replacementCount" to snippetReplacementCount.toString(),
-                "workspaceFileCount" to workspaceChanges.size.toString()
-            )
-            if (isTruncated) {
-                metadataMap["truncated"] = "true"
-                metadataMap["totalFiles"] = totalMatchingFiles.toString()
-                metadataMap["maxFiles"] = maxFiles.toString()
-            }
-
-            return KotlinMcpResult.Success(
-                content = content,
-                metadata = metadataMap
-            )
+        val edits: List<ResolvedRenameEdit> = if (session != null) {
+            runCatching { semanticEngine.renameEditsForSymbol(session, old, workspacePath) }.getOrNull().orEmpty()
+        } else {
+            emptyList()
         }
 
-        return renameSymbolLegacy(code, old, new, workspacePath, maxFiles)
+        val snippetEdits = edits.filter { it.file == "Snippet.kt" }
+        val snippetApply = applyRenameEdits(code, snippetEdits.map { it.offset to it.length }, new, old)
+        val refactoredCode = snippetApply.updatedText
+        val snippetReplacementCount = snippetApply.appliedCount
+
+        val workspaceChanges = mutableListOf<String>()
+
+        if (!workspacePath.isNullOrBlank()) {
+            val root = File(workspacePath)
+            if (root.exists() && root.isDirectory) {
+                val wsEdits = edits.filter { it.file != "Snippet.kt" }.groupBy { it.file }
+                wsEdits.toSortedMap().forEach { (rel, fileEdits) ->
+                    val target = root.resolve(rel)
+                    try {
+                        if (target.isFile) {
+                            val original = target.readText()
+                            val applyRes = applyRenameEdits(original, fileEdits.map { it.offset to it.length }, new, old)
+                            if (applyRes.conflictCount > 0) {
+                                workspaceChanges.add("$rel: CONFLICT (${applyRes.conflictCount} edits skipped due to changed content)")
+                            } else if (applyRes.updatedText != original) {
+                                target.writeText(applyRes.updatedText)
+                                workspaceChanges.add("$rel: ${applyRes.appliedCount} replacements")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        workspaceChanges.add("$rel: FAILED (${e.message})")
+                    }
+                }
+            }
+        }
+
+        val content = buildString {
+            append(incompletePrefix(workspacePath))
+            appendLine("# Symbol Rename: `$old` -> `$new`")
+            appendLine("- Replacements in snippet: $snippetReplacementCount")
+            if (workspaceChanges.isNotEmpty()) {
+                appendLine("- Workspace files updated:")
+                workspaceChanges.forEach { appendLine("  - $it") }
+            } else if (!workspacePath.isNullOrBlank()) {
+                appendLine("- No workspace files matched (or workspacePath not a readable directory).")
+            }
+            appendLine()
+            appendLine("## Refactored Snippet")
+            appendLine("```kotlin")
+            appendLine(refactoredCode)
+            appendLine("```")
+        }
+
+        val metadataMap = mutableMapOf(
+            "oldName" to old,
+            "newName" to new,
+            "replacementCount" to snippetReplacementCount.toString(),
+            "workspaceFileCount" to workspaceChanges.size.toString()
+        )
+
+        return KotlinMcpResult.Success(
+            content = content,
+            metadata = metadataMap
+        )
     }
 
     private data class RenameApplyResult(
@@ -414,170 +367,6 @@ class DefaultLspService(
             }
         }
         return RenameApplyResult(result, applied, conflicts)
-    }
-
-    private fun renameSymbolLegacy(code: String, oldName: String?, newName: String?, workspacePath: String?, maxFiles: Int = 500): KotlinMcpResult {
-        if (oldName.isNullOrBlank() || newName.isNullOrBlank()) {
-            return KotlinMcpResult.Error(
-                message = "Both oldName and newName parameters are required for renameSymbol.",
-                code = "INVALID_ARGUMENTS"
-            )
-        }
-        val old = oldName.trim()
-        val new = newName.trim()
-
-        val (refactoredCode, snippetReplacementCount) = renameAstNodes(code, old, new)
-
-        val workspaceChanges = mutableListOf<String>()
-        var isTruncated = false
-        var totalMatchingFiles = 0
-
-        if (!workspacePath.isNullOrBlank()) {
-            val root = File(workspacePath)
-            if (root.exists() && root.isDirectory) {
-                val index = indexer.index(workspacePath)
-                val codePsi = K2SnippetFrontend.parsePsi(code)
-                val codePackage = codePsi?.packageFqName?.asString().orEmpty()
-                val codeImports = codePsi?.importDirectives?.mapNotNull { it.importedFqName?.asString() }?.toSet().orEmpty()
-
-                val allTargetDecls = index.declarations.filter { it.name == old }
-                val scopedTargetDecls = if (codePackage.isNotEmpty()) {
-                    allTargetDecls.filter { decl ->
-                        val declFqn = decl.fqn.orEmpty()
-                        declFqn.startsWith("$codePackage.") || declFqn == codePackage || codeImports.contains(declFqn) || codeImports.any { imp -> declFqn.startsWith("$imp.") }
-                    }.ifEmpty { allTargetDecls }
-                } else {
-                    allTargetDecls
-                }
-                val targetFqns = scopedTargetDecls.mapNotNull { it.fqn }.toSet()
-
-                val allFiles = root.walkTopDown()
-                    .onEnter { dir -> !K2ResolutionUtils.isExcludedWorkspaceDir(dir) }
-                    .filter { it.isFile && (it.extension == "kt" || it.extension == "kts") }
-                    .toList()
-
-                totalMatchingFiles = allFiles.size
-                if (totalMatchingFiles > maxFiles) {
-                    isTruncated = true
-                }
-
-                allFiles.take(maxFiles).forEach { file ->
-                    try {
-                        val original = file.readText()
-                        val (updated, count) = renameAstNodes(original, old, new, targetFqns)
-                        if (count > 0 && updated != original) {
-                            file.writeText(updated)
-                            val relative = file.relativeTo(root).path
-                            workspaceChanges.add("$relative: $count replacements")
-                        }
-                    } catch (e: Exception) {
-                        val relative = runCatching { file.relativeTo(root).path }.getOrDefault(file.name)
-                        workspaceChanges.add("$relative: FAILED (${e.message})")
-                    }
-                }
-            }
-        }
-
-        val content = buildString {
-            if (isTruncated) {
-                appendLine("⚠ Workspace scan truncated: examined $maxFiles of $totalMatchingFiles Kotlin files.")
-                appendLine()
-            }
-            appendLine("# Symbol Rename: `$old` -> `$new`")
-            appendLine("- Replacements in snippet: $snippetReplacementCount")
-            if (workspaceChanges.isNotEmpty()) {
-                appendLine("- Workspace files updated:")
-                workspaceChanges.forEach { appendLine("  - $it") }
-            } else if (!workspacePath.isNullOrBlank()) {
-                appendLine("- No workspace files matched (or workspacePath not a readable directory).")
-            }
-            appendLine()
-            appendLine("## Refactored Snippet")
-            appendLine("```kotlin")
-            appendLine(refactoredCode)
-            appendLine("```")
-        }
-
-        val metadataMap = mutableMapOf(
-            "oldName" to old,
-            "newName" to new,
-            "replacementCount" to snippetReplacementCount.toString(),
-            "workspaceFileCount" to workspaceChanges.size.toString()
-        )
-        if (isTruncated) {
-            metadataMap["truncated"] = "true"
-            metadataMap["totalFiles"] = totalMatchingFiles.toString()
-            metadataMap["maxFiles"] = maxFiles.toString()
-        }
-
-        return KotlinMcpResult.Success(
-            content = content,
-            metadata = metadataMap
-        )
-    }
-
-    private fun renameAstNodes(
-        code: String,
-        oldName: String,
-        newName: String,
-        targetFqns: Set<String> = emptySet()
-    ): Pair<String, Int> {
-        val psi = K2SnippetFrontend.parsePsi(code) ?: return code to 0
-
-        val filePackage = psi.packageFqName.asString()
-        val fileImports = psi.importDirectives.mapNotNull { it.importedFqName?.asString() }.toSet()
-        val matchesTargetFqn = targetFqns.isEmpty() || targetFqns.any { fqn ->
-            if (filePackage.isEmpty()) {
-                !fqn.contains(".") || fqn == oldName
-            } else {
-                fqn.startsWith("$filePackage.") || fqn == filePackage || fileImports.contains(fqn) || fileImports.any { imp -> fqn.startsWith("$imp.") }
-            }
-        }
-
-        val rangesToReplace = mutableListOf<org.jetbrains.kotlin.com.intellij.openapi.util.TextRange>()
-        var fileDeclaresTarget = false
-
-        psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
-            override fun visitNamedDeclaration(declaration: org.jetbrains.kotlin.psi.KtNamedDeclaration) {
-                if (declaration !is org.jetbrains.kotlin.psi.KtPrimaryConstructor && declaration.name == oldName) {
-                    val fqn = declaration.fqName?.asString() ?: declaration.name
-                    if (targetFqns.isEmpty() || (fqn != null && fqn in targetFqns)) {
-                        declaration.nameIdentifier?.textRange?.let { rangesToReplace.add(it) }
-                        fileDeclaresTarget = true
-                    }
-                }
-                super.visitNamedDeclaration(declaration)
-            }
-
-            override fun visitSimpleNameExpression(expression: org.jetbrains.kotlin.psi.KtSimpleNameExpression) {
-                if (expression.getReferencedName() == oldName) {
-                    if (matchesTargetFqn || fileDeclaresTarget) {
-                        rangesToReplace.add(expression.textRange)
-                    }
-                }
-                super.visitSimpleNameExpression(expression)
-            }
-        })
-
-        if (rangesToReplace.isEmpty()) {
-            return code to 0
-        }
-
-        val offsetShift = psi.text.indexOf(code).let { if (it >= 0) it else 0 }
-
-        val sortedRanges = rangesToReplace.distinctBy { it.startOffset to it.endOffset }
-            .sortedByDescending { it.startOffset }
-
-        val sb = StringBuilder(code)
-        for (range in sortedRanges) {
-            val start = range.startOffset - offsetShift
-            val end = range.endOffset - offsetShift
-            if (start in 0..sb.length && end in start..sb.length) {
-                sb.replace(start, end, newName)
-            }
-        }
-
-        return sb.toString() to sortedRanges.size
     }
 
     private fun workspaceSearch(symbol: String?, workspacePath: String?): KotlinMcpResult {
@@ -835,12 +624,12 @@ class DefaultLspService(
                 appendLine(docs)
             }
         }
-        val metadata = buildMap {
+        val metadata = buildMap<String, String> {
             put("symbol", target)
             put("found", "true")
             put("source", info.source.name)
-            if (info.type != null) put("type", info.type)
-            if (info.signature != null) put("signature", info.signature)
+            info.type?.let { put("type", it) }
+            info.signature?.let { put("signature", it) }
         }
         return KotlinMcpResult.Success(
             content = content.trim(),
@@ -856,9 +645,6 @@ class DefaultLspService(
         return "⚠ Workspace scan truncated: analyzed ${stats.analyzedFiles} of ${stats.totalKtFiles} .kt files " +
             "(semantic cap ${semanticEngine.workspaceFileCap}). Results may be incomplete.\n\n"
     }
-
-    private val semanticHierarchyMaxFiles: Int =
-        System.getenv("WORKSPACE_MAX_FILES")?.toIntOrNull() ?: 200
 
     private fun shouldUseIndexFallback(workspacePath: String?): Boolean {
         if (workspacePath.isNullOrBlank()) return false

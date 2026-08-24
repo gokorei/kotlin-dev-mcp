@@ -2,7 +2,6 @@ package com.gokorei.kotlinmcp.execution
 
 import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import com.gokorei.kotlinmcp.shared.LogTruncator
-import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.OutputStream
@@ -31,13 +30,6 @@ class ThreadLocalPrintStream(private val defaultStream: PrintStream) : PrintStre
     override fun flush() {
         val target = activeTarget.get() ?: defaultStream
         target.flush()
-    }
-
-    override fun close() {
-        val target = activeTarget.get()
-        if (target != null) {
-            target.close()
-        }
     }
 }, true, Charsets.UTF_8.name()) {
 
@@ -92,9 +84,12 @@ class DefaultFastSnippetRunner(
     threadPoolSize: Int = 4
 ) : FastSnippetRunner {
 
-    private val logger = KotlinLogging.logger {}
-    private val executor: ExecutorService = Executors.newFixedThreadPool(threadPoolSize) { r ->
-        Thread(r, "FastSnippetRunner-Worker").apply { isDaemon = true }
+    private val executor: ExecutorService = try {
+        Executors.newVirtualThreadPerTaskExecutor()
+    } catch (_: Throwable) {
+        Executors.newFixedThreadPool(threadPoolSize) { r ->
+            Thread(r, "FastSnippetRunner-Worker").apply { isDaemon = true }
+        }
     }
 
     init {
@@ -115,13 +110,26 @@ class DefaultFastSnippetRunner(
         val customPrintStream = PrintStream(capturedOut, true, Charsets.UTF_8.name())
 
         val task = Callable {
-            val classLoader = URLClassLoader(fullCp.toTypedArray(), this::class.java.classLoader)
+            val classLoader = object : URLClassLoader(fullCp.toTypedArray(), this::class.java.classLoader) {
+                override fun loadClass(name: String, resolve: Boolean): Class<*> {
+                    val classFile = outDir.resolve(name.replace('.', '/') + ".class").toFile()
+                    if (classFile.exists()) {
+                        val loaded = findLoadedClass(name)
+                        if (loaded != null) return loaded
+                        return findClass(name)
+                    }
+                    return super.loadClass(name, resolve)
+                }
+            }
             try {
                 // Find main class
                 val mainClass = try {
                     classLoader.loadClass(SnippetCompiler.MAIN_CLASS)
                 } catch (e: ClassNotFoundException) {
-                    classLoader.loadClass("SnippetKt")
+                    val candidate = outDir.toFile().walkTopDown()
+                        .firstOrNull { it.isFile && it.extension == "class" && !it.name.contains("$") }
+                    val rel = candidate?.relativeTo(outDir.toFile())?.path?.removeSuffix(".class")?.replace('/', '.') ?: "SnippetKt"
+                    classLoader.loadClass(rel)
                 }
 
                 val mainMethod = try {
@@ -132,20 +140,19 @@ class DefaultFastSnippetRunner(
 
                 // Intercept stdout/stderr thread-safely via ThreadLocalPrintStream
                 ThreadLocalPrintStream.withCapture(customPrintStream) {
-                    if (mainMethod.parameterCount == 1) {
-                        mainMethod.invoke(null, emptyArray<String>())
-                    } else {
-                        mainMethod.invoke(null)
-                    }
+                    val invokeArgs = if (mainMethod.parameterCount == 1) arrayOf<Any>(emptyArray<String>()) else emptyArray()
+                    mainMethod.invoke(null, *invokeArgs)
                 }
             } finally {
                 runCatching { classLoader.close() }
             }
         }
 
-        val future = executor.submit(task)
+        var future: Future<*>? = null
         return try {
-            future.get(timeoutMillis, TimeUnit.MILLISECONDS)
+            val f = executor.submit(task)
+            future = f
+            f.get(timeoutMillis, TimeUnit.MILLISECONDS)
             val durationMs = (System.nanoTime() - startNanos) / 1_000_000
             val rawText = capturedOut.toString(Charsets.UTF_8.name()).trim()
             val text = LogTruncator.truncate(rawText)
@@ -165,7 +172,7 @@ class DefaultFastSnippetRunner(
                 )
             )
         } catch (e: TimeoutException) {
-            future.cancel(true)
+            future?.cancel(true)
             KotlinMcpResult.Error(
                 message = "Execution timed out after ${timeoutMillis}ms; in-memory task cancelled.",
                 code = "EXECUTION_TIMEOUT"

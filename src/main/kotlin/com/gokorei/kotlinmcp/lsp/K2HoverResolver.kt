@@ -14,7 +14,7 @@ import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.renderer.DescriptorRenderer
 import org.jetbrains.kotlin.resolve.BindingContext
 
-internal object K2HoverResolver {
+object K2HoverResolver {
 
     fun hover(
         session: K2AnalysisSession,

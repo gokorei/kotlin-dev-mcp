@@ -34,7 +34,7 @@ sealed class CompileResult {
  * classpath, optionally extended with an extra classpath (a project's compiled
  * classes and dependency jars).
  */
-internal object SnippetCompiler {
+object SnippetCompiler {
 
     private val logger = KotlinLogging.logger {}
 
@@ -92,7 +92,7 @@ internal object SnippetCompiler {
      * falls back to the library jars bundled as resources by the
      * `dumpSnippetClasspath` Gradle task.
      */
-    internal fun resolveDefaultImports(javaClassPath: String): List<String> {
+    fun resolveDefaultImports(javaClassPath: String): List<String> {
         val fromSystem = javaClassPath
             .split(File.pathSeparator)
             .filter { it.isNotBlank() }
@@ -102,6 +102,7 @@ internal object SnippetCompiler {
 
     private fun isSnippetLibraryEntry(entry: String): Boolean {
         val name = entry.substringAfterLast('/').lowercase()
+        val allowInternals = java.lang.Boolean.getBoolean("kmcp.include_internal_classpath")
         return name.contains("kotlin-stdlib") ||
             name.contains("kotlinx-coroutines") ||
             name.contains("kotlinx-serialization") ||
@@ -109,7 +110,16 @@ internal object SnippetCompiler {
             name.contains("arrow-core") ||
             name.contains("mockk") ||
             name.contains("turbine") ||
-            name.contains("ktor")
+            name.contains("ktor") ||
+            name.contains("kotlin-logging") ||
+            name.contains("slf4j") ||
+            (allowInternals && (
+                name.contains("kotlin-compiler") ||
+                name.contains("kotlin-sdk") ||
+                name.contains("modelcontextprotocol") ||
+                entry.contains("build/classes/kotlin/main") ||
+                entry.contains("build/classes/kotlin/test")
+            ))
     }
 
     @Volatile
@@ -123,22 +133,26 @@ internal object SnippetCompiler {
      * JVM shutdown. Returns an empty list (with a warning) if materialization is
      * impossible, leaving callers to compile without the bundled libraries.
      */
-    internal fun materializeBundledSnippetClasspath(): List<String> {
+    internal fun materializeBundledSnippetClasspath(
+        classLoader: ClassLoader? = SnippetCompiler::class.java.classLoader
+    ): List<String> {
         bundledSnippetClasspath?.let { return it }
         synchronized(this) {
             bundledSnippetClasspath?.let { return it }
+            val loader = classLoader ?: return emptyList()
+            val manifest = loader.getResourceAsStream("snippet-classpath/snippet.classpath.txt") ?: return emptyList()
             val dir = try {
                 Files.createTempDirectory("kmcp-snippet-classpath")
             } catch (e: Exception) {
                 logger.warn(e) { "Could not create temp dir for bundled snippet library classpath; compiling without it" }
                 return emptyList()
             }
-            val resolved = try {
-                extractBundledJarsTo(dir)
-            } catch (e: Exception) {
-                logger.warn(e) { "Bundled snippet library classpath materialization failed; compiling without it" }
-                dir.toFile().deleteRecursively()
-                emptyList()
+            val names = manifest.use { it.bufferedReader().lineSequence().map { l -> l.trim() }.filter { n -> n.isNotBlank() }.toList() }
+            val resolved = names.mapNotNull { name ->
+                val input = loader.getResourceAsStream("snippet-classpath/$name") ?: return@mapNotNull null
+                val target = dir.resolve(name.substringAfterLast('/'))
+                input.use { Files.copy(it, target) }
+                target.toAbsolutePath().toString()
             }
             if (resolved.isEmpty()) {
                 dir.toFile().deleteRecursively()
@@ -152,22 +166,8 @@ internal object SnippetCompiler {
         }
     }
 
-    /**
-     * Copies every jar listed in the bundled `snippet-classpath/snippet.classpath.txt`
-     * manifest (plus any transitive jars shipped alongside) from classpath resources
-     * into [dir]. Returns the absolute paths of the jars written, skipping any whose
-     * resource cannot be located.
-     */
-    private fun extractBundledJarsTo(dir: Path): List<String> {
-        val loader = SnippetCompiler::class.java.classLoader ?: return emptyList()
-        val manifest = loader.getResourceAsStream("snippet-classpath/snippet.classpath.txt") ?: return emptyList()
-        val names = manifest.use { it.bufferedReader().lineSequence().map { l -> l.trim() }.filter { n -> n.isNotBlank() }.toList() }
-        return names.mapNotNull { name ->
-            val input = loader.getResourceAsStream("snippet-classpath/$name") ?: return@mapNotNull null
-            val target = dir.resolve(name.substringAfterLast('/'))
-            input.use { Files.copy(it, target) }
-            target.toAbsolutePath().toString()
-        }
+    internal fun resetBundledSnippetClasspathCache() {
+        bundledSnippetClasspath = null
     }
 
     val runtimeExecutionClasspath: List<String>

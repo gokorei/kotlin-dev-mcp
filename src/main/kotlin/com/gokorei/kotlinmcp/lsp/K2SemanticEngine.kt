@@ -239,26 +239,12 @@ class DefaultK2SemanticEngine(
         val targets: List<DeclarationDescriptor> = K2ResolutionUtils.pickTargets(declTargets.ifEmpty { refTargets })
 
         fun toRow(occ: K2ResolutionUtils.SymbolOccurrence, offset: Int, fqn: String?): ResolvedReference {
-            val file = occ.file
-            val lineText: String
-            val line: Int
-            val column: Int
-            val document = file.viewProvider.document
-            if (document != null) {
-                val lineIndex = document.getLineNumber(offset)
-                line = lineIndex + 1
-                val lineStart = document.getLineStartOffset(lineIndex)
-                column = offset - lineStart + 1
-                val lineEnd = document.getLineEndOffset(lineIndex)
-                lineText = document.getText().substring(lineStart, lineEnd).trim()
-            } else {
-                val text = file.text
-                line = SourceUtils.lineOf(text, offset)
-                val lineStart = text.lastIndexOf('\n', offset - 1) + 1
-                column = offset - lineStart + 1
-                val end = text.indexOf('\n', offset).let { if (it == -1) text.length else it }
-                lineText = text.substring(lineStart, end).trim()
-            }
+            val text = occ.file.text
+            val line = SourceUtils.lineOf(text, offset)
+            val lineStart = text.lastIndexOf('\n', (offset - 1).coerceAtLeast(0)).let { if (it == -1) 0 else it + 1 }
+            val column = offset - lineStart + 1
+            val end = text.indexOf('\n', offset).let { if (it == -1) text.length else it }
+            val lineText = text.substring(lineStart, end).trim()
             return ResolvedReference(symbol, occ.rel, line, column, lineText, occ.kind, fqn)
         }
 

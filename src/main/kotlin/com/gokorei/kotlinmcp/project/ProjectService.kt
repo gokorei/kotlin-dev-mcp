@@ -57,7 +57,8 @@ interface ProjectService : CommandService<ProjectAction> {
 
 class DefaultProjectService(
     private val indexer: WorkspaceSemanticIndexer = WorkspaceSemanticIndexer(),
-    private val schemaScanner: SchemaScanner = SchemaScanner()
+    private val schemaScanner: SchemaScanner = SchemaScanner(),
+    private val vulnerabilityAuditor: VulnerabilityAuditor = VulnerabilityAuditor()
 ) : ProjectService {
 
     override fun execute(action: ProjectAction, buildScriptContent: String, projectPath: String?, packageName: String?): KotlinMcpResult {
@@ -344,11 +345,6 @@ class DefaultProjectService(
                     super.visitSimpleNameExpression(expression)
                 }
             })
-        } else {
-            Regex("""kotlin\("([^"]+)"\)""").findAll(content).forEach { plugins.add("kotlin(${it.groupValues[1]})") }
-            Regex("""\bid\("([^"]+)"\)""").findAll(content).forEach { plugins.add("id(${it.groupValues[1]})") }
-            val barePlugins = setOf("application", "java-library", "java")
-            content.lines().map { it.trim() }.filter { it in barePlugins }.distinct().forEach { plugins.add(it) }
         }
         return plugins.distinct()
     }
@@ -398,86 +394,88 @@ class DefaultProjectService(
         val isKmpPlugin = content.contains("kotlin(\"multiplatform\")") ||
             content.contains("org.jetbrains.kotlin.multiplatform") ||
             content.contains("kotlin(\"kmp\")")
-
-        val output = if (detectedTargets.isNotEmpty() || isKmpPlugin) {
-            "# Kotlin Multiplatform (KMP) Targets\nFound ${detectedTargets.size} target(s):\n" +
-                detectedTargets.joinToString("\n") { " - `$it`" } +
-                "\n\nSource sets structure:\n - `commonMain` / `commonTest`\n" +
-                detectedTargets.joinToString("\n") { " - `${it}Main` / `${it}Test`" } +
-                "\n\n## Recommended Guidelines\n- [Multiplatform Web Storage (Room 3.0 & DataStore)](kotlin://guidelines/kmp-storage.md)"
-        } else {
-            "# Kotlin Project Analysis\nStandard single-target JVM project configuration."
+        val contentOut = buildString {
+            if (!isKmpPlugin && detectedTargets.isEmpty()) {
+                appendLine("Standard single-target JVM project configuration.")
+            } else {
+                appendLine("# Kotlin Multiplatform (KMP) Targets (${detectedTargets.size})")
+                if (detectedTargets.isNotEmpty()) {
+                    detectedTargets.forEach { appendLine(" - `$it`") }
+                    appendLine()
+                    appendLine("## Recommended Guidelines")
+                    appendLine("- [Multiplatform Web Storage (Room 3.0 & DataStore)](kotlin://guidelines/kmp-storage.md)")
+                } else {
+                    appendLine(" - (No specific platform targets declared yet; configure targets under `kotlin { ... }`)")
+                }
+            }
         }
-
         return KotlinMcpResult.Success(
-            content = output,
+            content = contentOut,
             metadata = mapOf("targetCount" to detectedTargets.size.toString())
         )
     }
 
+    /**
+     * Parses gradle/libs.versions.toml into a map of alias -> coordinate string.
+     * Supports `libs.ktor.server` as well as dashed keys.
+     */
     private fun parseVersionCatalog(projectPath: String?): Map<String, String> {
         if (projectPath.isNullOrBlank()) return emptyMap()
-        val tomlFile = File(projectPath, "gradle/libs.versions.toml")
-        if (!tomlFile.exists()) return emptyMap()
-        val text = runCatching { tomlFile.readText() }.getOrNull().orEmpty()
+        val toml = File(projectPath, "gradle/libs.versions.toml")
+        if (!toml.exists()) return emptyMap()
 
         val versions = mutableMapOf<String, String>()
         val libraries = mutableMapOf<String, String>()
-
         var currentSection = ""
-        for (line in text.lines()) {
+
+        toml.readLines().forEach { line ->
             val trimmed = line.trim()
-            if (trimmed.startsWith("#") || trimmed.isBlank()) continue
+            if (trimmed.startsWith("#") || trimmed.isBlank()) return@forEach
+
             if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                currentSection = trimmed.substring(1, trimmed.length - 1).trim()
-                continue
+                currentSection = trimmed.removeSurrounding("[", "]").trim().lowercase()
+                return@forEach
             }
 
-            if (currentSection == "versions") {
-                val parts = trimmed.split("=", limit = 2)
-                if (parts.size == 2) {
-                    val key = parts[0].trim()
-                    val valStr = parts[1].trim().trim('"').trim('\'')
-                    versions[key] = valStr
-                }
-            } else if (currentSection == "libraries") {
-                val parts = trimmed.split("=", limit = 2)
-                if (parts.size == 2) {
-                    val rawAlias = parts[0].trim()
-                    val canonicalAlias = rawAlias.replace("-", ".")
-                    val rhs = parts[1].trim()
+            if (currentSection == "versions" && "=" in trimmed) {
+                val key = trimmed.substringBefore("=").trim()
+                val value = trimmed.substringAfter("=").trim().trim('"').trim('\'')
+                versions[key] = value
+            } else if (currentSection == "libraries" && "=" in trimmed) {
+                val rawAlias = trimmed.substringBefore("=").trim()
+                val canonicalAlias = rawAlias.replace('-', '.')
+                val rhs = trimmed.substringAfter("=").trim()
 
-                    if (rhs.startsWith("{") && rhs.endsWith("}")) {
-                        val body = rhs.substring(1, rhs.length - 1)
-                        val kvMap = mutableMapOf<String, String>()
-                        body.split(",").forEach { kv ->
-                            val kvParts = kv.split("=", limit = 2)
-                            if (kvParts.size == 2) {
-                                val k = kvParts[0].trim()
-                                val v = kvParts[1].trim().trim('"').trim('\'')
-                                kvMap[k] = v
-                            }
+                if (rhs.startsWith("{") && rhs.endsWith("}")) {
+                    val body = rhs.removeSurrounding("{", "}").trim()
+                    val kvMap = mutableMapOf<String, String>()
+                    val parts = body.split(",")
+                    parts.forEach { part ->
+                        if ("=" in part) {
+                            val k = part.substringBefore("=").trim()
+                            val v = part.substringAfter("=").trim().trim('"').trim('\'')
+                            kvMap[k] = v
                         }
-                        val group = kvMap["group"]
-                        val name = kvMap["name"]
-                        val module = kvMap["module"]
-                        val versionRef = kvMap["version.ref"]
-                        val version = kvMap["version"] ?: versionRef?.let { versions[it] } ?: ""
+                    }
+                    val group = kvMap["group"]
+                    val name = kvMap["name"]
+                    val module = kvMap["module"]
+                    val versionRef = kvMap["version.ref"]
+                    val version = kvMap["version"] ?: versionRef?.let { versions[it] } ?: ""
 
-                        val coord = when {
-                            module != null -> if (version.isNotBlank()) "$module:$version" else module
-                            group != null && name != null -> if (version.isNotBlank()) "$group:$name:$version" else "$group:$name"
-                            else -> null
-                        }
-                        if (coord != null) {
-                            libraries["libs.$canonicalAlias"] = coord
-                            libraries["libs.$rawAlias"] = coord
-                        }
-                    } else if (rhs.startsWith("\"") || rhs.startsWith("'")) {
-                        val coord = rhs.trim('"').trim('\'')
+                    val coord = when {
+                        module != null -> if (version.isNotBlank()) "$module:$version" else module
+                        group != null && name != null -> if (version.isNotBlank()) "$group:$name:$version" else "$group:$name"
+                        else -> null
+                    }
+                    if (coord != null) {
                         libraries["libs.$canonicalAlias"] = coord
                         libraries["libs.$rawAlias"] = coord
                     }
+                } else if (rhs.startsWith("\"") || rhs.startsWith("'")) {
+                    val coord = rhs.trim('"').trim('\'')
+                    libraries["libs.$canonicalAlias"] = coord
+                    libraries["libs.$rawAlias"] = coord
                 }
             }
         }
@@ -495,7 +493,7 @@ class DefaultProjectService(
         val psi = K2SnippetFrontend.parsePsi(effectiveContent)
 
         val configs = "implementation|api|testImplementation|runtimeOnly|compileOnly|testRuntimeOnly|androidTestImplementation"
-        // Groovy DSL: configuration 'group:artifact:version' or "group:artifact:version"
+        // Groovy DSL fallback on caller-supplied content: configuration 'group:artifact:version' or "group:artifact:version"
         Regex("""($configs)\s+["']([^"']+)["']""").findAll(content).forEach {
             entries.add("- `${it.groupValues[2]}` (${it.groupValues[1]})")
         }
@@ -529,23 +527,6 @@ class DefaultProjectService(
                     super.visitCallExpression(expression)
                 }
             })
-        } else {
-            val configs = "implementation|api|testImplementation|runtimeOnly|compileOnly|testRuntimeOnly|androidTestImplementation"
-            Regex("""($configs)\s*\(\s*"([^"]+)"\s*\)""").findAll(effectiveContent).forEach {
-                entries.add("- `${it.groupValues[2]}` (${it.groupValues[1]})")
-            }
-            Regex("""($configs)\s*\(\s*(libs\.[A-Za-z0-9_.]+)\s*\)""").findAll(effectiveContent).forEach {
-                val alias = it.groupValues[2]
-                val mapped = catalogMap[alias] ?: catalogMap[alias.replace("-", ".")]
-                if (mapped != null) {
-                    entries.add("- `$alias` → `$mapped` (${it.groupValues[1]}, version catalog)")
-                } else {
-                    entries.add("- `$alias` (${it.groupValues[1]}, version catalog)")
-                }
-            }
-            Regex("""($configs)\s*\(\s*project\(\s*":?([^"]+)"\s*\)\s*\)""").findAll(effectiveContent).forEach {
-                entries.add("- `project(\":${it.groupValues[2]}\")` (${it.groupValues[1]}, module)")
-            }
         }
 
         val output = if (entries.isNotEmpty()) {
@@ -572,342 +553,7 @@ class DefaultProjectService(
         readTimeoutMs: Int,
         maxRetries: Int
     ): KotlinMcpResult {
-        val scriptToAnalyze = if (projectPath != null) {
-            val file = java.io.File(projectPath, "build.gradle.kts")
-            if (file.exists()) file.readText() + "\n" + buildScriptContent else buildScriptContent
-        } else {
-            buildScriptContent
-        }
-
-        val libsToml = if (projectPath != null) {
-            val f = java.io.File(projectPath, "gradle/libs.versions.toml")
-            if (f.exists()) f.readText() else ""
-        } else {
-            ""
-        }
-
-        val lockfileContent = if (projectPath != null) {
-            val root = java.io.File(projectPath)
-            val lockfiles = root.listFiles { _, name -> name.endsWith(".lockfile") }?.toList().orEmpty() +
-                java.io.File(root, "gradle/gradle.lockfile").takeIf { it.exists() }?.let { listOf(it) }.orEmpty()
-            lockfiles.distinct().joinToString("\n") { runCatching { it.readText() }.getOrDefault("") }
-        } else ""
-
-        val scriptWithLockfile = if (lockfileContent.isNotBlank()) "$scriptToAnalyze\n$lockfileContent" else scriptToAnalyze
-
-        val parsedDeps = extractDependencyCoordinates(scriptWithLockfile, libsToml)
-
-        // No coordinates parseable → this is not a fake clean report. Tell the
-        // caller the tool cannot scan, so they don't mistake absence-of-data for
-        // absence-of-vulnerabilities.
-        if (parsedDeps.isEmpty()) {
-            return KotlinMcpResult.Error(
-                message = "No dependency coordinates could be parsed from the provided build script. The vulnerability scan requires resolvable Maven coordinates (e.g. implementation(\"g:a:v\") or a version catalog). If this is a real project, pass projectPath so gradle/libs.versions.toml and transitive resolution can be consulted.",
-                code = "TOOL_UNAVAILABLE",
-                details = mapOf("parsedCoordinateCount" to "0")
-            )
-        }
-
-        // 1) Primary path: query the OSV.dev vulnerability database for each
-        //    coordinate. Short timeout; failures fall back to the offline baseline.
-        var findings = queryOsvDatabase(parsedDeps, connectTimeoutMs, readTimeoutMs, maxRetries)
-        var source = "osv.dev"
-        if (findings == null) {
-            // 2) Offline fallback: a small, clearly-labelled embedded baseline so
-            //    the tool still surfaces known-critical CVEs without network.
-            findings = parsedDeps.mapNotNull { dep ->
-                OfflineVulnerabilityBaseline.check(dep.group, dep.name, dep.version)?.let { advisory ->
-                    VulnerabilityFinding(dep, advisory)
-                }
-            }
-            source = "local-baseline (offline fallback)"
-        }
-
-        val cleanDeps = parsedDeps.filter { dep -> findings.none { it.dependency == dep } }
-
-        val output = buildString {
-            appendLine("# Dependency Vulnerability Audit Report")
-            appendLine("Scanned ${parsedDeps.size} dependency coordinate(s). (source: $source)")
-            appendLine()
-
-            if (findings.isNotEmpty()) {
-                appendLine("## 🚨 Flagged Security Advisories (${findings.size})")
-                findings.forEach { f ->
-                    appendLine("- **`${f.dependency.coordinate}`**")
-                    appendLine("  - **Advisory ID**: ${f.advisory.id}")
-                    appendLine("  - **Severity**: ${f.advisory.severity}")
-                    appendLine("  - **Summary**: ${f.advisory.summary}")
-                    appendLine("  - **Fixed Version**: ${f.advisory.fixedVersion}")
-                    appendLine()
-                }
-            } else {
-                appendLine("## ✅ No Known Vulnerabilities Detected")
-                appendLine("All ${parsedDeps.size} analyzed dependencies match current secure version baselines.")
-                appendLine()
-            }
-
-            if (cleanDeps.isNotEmpty()) {
-                appendLine("## Scanned Clean Dependencies (${cleanDeps.size})")
-                cleanDeps.forEach { appendLine(" - `${it.coordinate}`") }
-            }
-        }
-
-        return KotlinMcpResult.Success(
-            content = output,
-            metadata = mapOf(
-                "scannedCoordinateCount" to parsedDeps.size.toString(),
-                "advisoryCount" to findings.size.toString(),
-                "source" to source
-            )
-        )
-    }
-
-    private data class DependencyCoordinate(val group: String, val name: String, val version: String) {
-        val coordinate: String get() = "$group:$name:$version"
-    }
-
-    private data class VulnerabilityAdvisory(
-        val id: String,
-        val severity: String,
-        val summary: String,
-        val fixedVersion: String
-    )
-
-    private data class VulnerabilityFinding(
-        val dependency: DependencyCoordinate,
-        val advisory: VulnerabilityAdvisory
-    )
-
-    /**
-     * Query the OSV.dev vulnerability database for all Maven coordinates in one
-     * batch. Retries up to maxRetries with exponential backoff on transient network
-     * errors or timeouts. Returns null when retries are exhausted.
-     */
-    private fun queryOsvDatabase(
-        deps: List<DependencyCoordinate>,
-        connectTimeoutMs: Int = 4000,
-        readTimeoutMs: Int = 6000,
-        maxRetries: Int = 3
-    ): List<VulnerabilityFinding>? {
-        if (System.getProperty("kmcp.disable_network_audits") == "true" || System.getenv("KMCP_DISABLE_NETWORK_AUDITS") == "true") {
-            return null
-        }
-        val queries = deps.map { dep ->
-            buildString {
-                append("{\"package\":{\"ecosystem\":\"Maven\",\"name\":\"${dep.group}:${dep.name}\"},\"version\":\"${dep.version}\"}")
-            }
-        }.joinToString(",")
-        val body = "{\"queries\":[$queries]}"
-
-        val effectiveRetries = maxRetries.coerceAtLeast(1)
-        var attempt = 0
-        var backoffMs = 100L
-
-        while (attempt < effectiveRetries) {
-            val res = try {
-                kotlinx.coroutines.runBlocking {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        val url = java.net.URI("https://api.osv.dev/v1/querybatch").toURL()
-                        val conn = url.openConnection() as java.net.HttpURLConnection
-                        conn.requestMethod = "POST"
-                        conn.connectTimeout = connectTimeoutMs
-                        conn.readTimeout = readTimeoutMs
-                        conn.setRequestProperty("Content-Type", "application/json")
-                        conn.doOutput = true
-                        conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-                        val status = conn.responseCode
-                        if (status !in 200..299) {
-                            conn.inputStream?.close()
-                            return@withContext null
-                        }
-                        val response = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                        conn.disconnect()
-
-                        parseOsvBatchResponse(response, deps)
-                    }
-                }
-            } catch (e: Throwable) {
-                null
-            }
-
-            if (res != null) return res
-
-            attempt++
-            if (attempt < effectiveRetries) {
-                try {
-                    Thread.sleep(backoffMs)
-                } catch (_: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    break
-                }
-                backoffMs = (backoffMs * 2).coerceAtMost(2000L)
-            }
-        }
-        return null
-    }
-
-    /**
-     * Minimal OSV querybatch JSON parser. For each query result we extract the
-     * first advisory's ID, severity, summary, and a fixed version. Uses the
-     * kotlinx.serialization JsonElement tree so no fragile regex is needed.
-     */
-    private fun parseOsvBatchResponse(response: String, deps: List<DependencyCoordinate>): List<VulnerabilityFinding> {
-        val findings = mutableListOf<VulnerabilityFinding>()
-        val root = try {
-            kotlinx.serialization.json.Json.parseToJsonElement(response) as kotlinx.serialization.json.JsonObject
-        } catch (e: Exception) {
-            return emptyList()
-        }
-        val results = root["results"] as? kotlinx.serialization.json.JsonArray ?: return emptyList()
-        results.forEachIndexed { i, resultEl ->
-            val dep = deps.getOrNull(i) ?: return@forEachIndexed
-            val resultObj = resultEl as? kotlinx.serialization.json.JsonObject ?: return@forEachIndexed
-            val vulns = resultObj["vulns"] as? kotlinx.serialization.json.JsonArray ?: return@forEachIndexed
-            val first = vulns.firstOrNull() as? kotlinx.serialization.json.JsonObject ?: return@forEachIndexed
-            val id = (first["id"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return@forEachIndexed
-            val summary = (first["summary"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: id
-            val fixed = (first["affected"] as? kotlinx.serialization.json.JsonArray)
-                ?.mapNotNull { el -> (el as? kotlinx.serialization.json.JsonObject) }
-                ?.flatMap { obj ->
-                    val ranges = obj["ranges"] as? kotlinx.serialization.json.JsonArray ?: emptyList<kotlinx.serialization.json.JsonElement>()
-                    ranges.mapNotNull { r ->
-                        (r as? kotlinx.serialization.json.JsonObject)?.get("events") as? kotlinx.serialization.json.JsonArray
-                    }.flatMap { events ->
-                        events.mapNotNull { e ->
-                            ((e as? kotlinx.serialization.json.JsonObject)?.get("fixed") as? kotlinx.serialization.json.JsonPrimitive)?.content
-                        }
-                    }
-                }?.firstOrNull()
-                ?: "unknown"
-            val severity = (first["severity"] as? kotlinx.serialization.json.JsonArray)
-                ?.mapNotNull { s -> (s as? kotlinx.serialization.json.JsonObject)?.get("score") as? kotlinx.serialization.json.JsonPrimitive }
-                ?.firstOrNull()?.content?.let { score ->
-                    when {
-                        score.toDoubleOrNull()?.let { it >= 9.0 } == true -> "CRITICAL"
-                        score.toDoubleOrNull()?.let { it >= 7.0 } == true -> "HIGH"
-                        score.toDoubleOrNull()?.let { it >= 4.0 } == true -> "MEDIUM"
-                        else -> "LOW"
-                    }
-                } ?: "UNKNOWN"
-            findings.add(
-                VulnerabilityFinding(
-                    dep,
-                    VulnerabilityAdvisory(id = id, severity = severity, summary = summary, fixedVersion = fixed)
-                )
-            )
-        }
-        return findings.distinctBy { it.dependency.coordinate to it.advisory.id }
-    }
-
-    /**
-     * Small offline baseline of known-critical CVEs. This is deliberately a
-     * fallback only (used when OSV.dev is unreachable); it is NOT a complete
-     * database and the report labels its source accordingly.
-     */
-    private object OfflineVulnerabilityBaseline {
-        private data class Rule(val group: String, val name: String, val vulnerableBelow: String, val advisory: VulnerabilityAdvisory)
-
-        private val rules = listOf(
-            Rule("org.apache.commons", "commons-compress", "1.26.0", VulnerabilityAdvisory("CVE-2024-26308", "HIGH", "Out-of-memory denial of service vulnerability in archive decompression.", "1.26.0")),
-            Rule("com.fasterxml.jackson.core", "jackson-databind", "2.15.0", VulnerabilityAdvisory("CVE-2023-35116", "HIGH", "Denial of service through deep nesting during JSON parsing.", "2.15.0")),
-            Rule("org.apache.logging.log4j", "log4j-core", "2.17.1", VulnerabilityAdvisory("CVE-2021-44228", "CRITICAL", "Log4Shell remote code execution vulnerability via JNDI lookup.", "2.17.1")),
-            Rule("io.ktor", "ktor-server-core", "2.3.12", VulnerabilityAdvisory("CVE-2024-34080", "MEDIUM", "Path traversal / header injection risk in Ktor HTTP server routes.", "2.3.12")),
-            Rule("io.netty", "netty-all", "4.1.108.Final", VulnerabilityAdvisory("CVE-2024-29025", "MEDIUM", "HTTP request smuggling vulnerability in Netty codec.", "4.1.108.Final")),
-            Rule("io.netty", "netty-codec-http", "4.1.108.Final", VulnerabilityAdvisory("CVE-2024-29025", "MEDIUM", "HTTP request smuggling vulnerability in Netty codec.", "4.1.108.Final")),
-            Rule("org.springframework.boot", "spring-boot", "3.2.4", VulnerabilityAdvisory("CVE-2024-22259", "HIGH", "URL parsing vulnerability in Spring Framework.", "3.2.4")),
-            Rule("com.squareup.okhttp3", "okhttp", "4.12.0", VulnerabilityAdvisory("CVE-2023-3635", "MEDIUM", "GzipSource Denial of Service vulnerability in OkHttp.", "4.12.0")),
-            Rule("org.yaml", "snakeyaml", "2.2", VulnerabilityAdvisory("CVE-2022-1471", "CRITICAL", "Unsafe deserialization remote code execution vulnerability.", "2.2"))
-        )
-
-        fun check(group: String, name: String, version: String): VulnerabilityAdvisory? {
-            return rules.firstOrNull { it.group == group && it.name == name && mavenVersionCompare(version, it.vulnerableBelow) < 0 }?.advisory
-        }
-    }
-
-    /**
-     * Maven-aware version comparison. Preserves qualifiers (Final, Release, SP1,
-     * RC, etc.) instead of dropping non-numeric tokens: `4.1.108.Final` compares
-     * equal to `4.1.108`, and `1.26.0` < `1.26.1`.
-     */
-    private fun isVersionLessThan(current: String, target: String): Boolean {
-        return mavenVersionCompare(current, target) < 0
-    }
-
-    /** Parse dependency coordinates from a Gradle build script, supporting:
-     * - `implementation("g:a:v")` and `implementation 'g:a:v'`
-     * - named-arg notation `implementation(group = "g", name = "a", version = "v")`
-     * - version-catalog references `implementation(libs.foo.bar)` resolved
-     *   against the supplied libs.versions.toml
-     * - BOM platform imports `implementation(platform("g:a:v"))`
-     * - plugins block `id("g") version "v"` / `kotlin("jvm") version "v"`
-     */
-    private fun extractDependencyCoordinates(content: String, libsToml: String = ""): List<DependencyCoordinate> {
-        val result = mutableListOf<DependencyCoordinate>()
-        val configs = "(?:implementation|api|compileOnly|runtimeOnly|testImplementation|testApi|testRuntimeOnly|annotationProcessor|kapt|ksp|kover|detekt|detektTooling|ktlintTooling)"
-
-        // 1. `implementation("g:a:v")`
-        Regex("""$configs\s*\(\s*["']([^"']+):([^"']+):([^"']+)["']\s*\)""").findAll(content).forEach { m ->
-            result.add(DependencyCoordinate(m.groupValues[1], m.groupValues[2], m.groupValues[3]))
-        }
-
-        // 1b. Gradle lockfile entries: `group:name:version=classpath`
-        Regex("""^([a-zA-Z0-9._-]+):([a-zA-Z0-9._-]+):([a-zA-Z0-9._-]+(?:-[a-zA-Z0-9._-]+)?)=(.*)""", RegexOption.MULTILINE)
-            .findAll(content).forEach { m ->
-                result.add(DependencyCoordinate(m.groupValues[1], m.groupValues[2], m.groupValues[3]))
-            }
-
-        // 2. Named-arg notation: implementation(group = "g", name = "a", version = "v")
-        Regex("""$configs\s*\(\s*group\s*=\s*["']([^"']+)["']\s*,\s*name\s*=\s*["']([^"']+)["']\s*,\s*version\s*=\s*["']([^"']+)["']""")
-            .findAll(content).forEach { m ->
-                result.add(DependencyCoordinate(m.groupValues[1], m.groupValues[2], m.groupValues[3]))
-            }
-
-        // 3. Version-catalog references, resolved against gradle/libs.versions.toml.
-        Regex("""$configs\s*\(\s*libs\.([a-zA-Z0-9_.]+)\s*\)""").findAll(content).forEach { m ->
-            resolveCatalogCoordinate(m.groupValues[1], libsToml)?.let { result.add(it) }
-        }
-
-        // 4. BOM/platform imports.
-        Regex("""$configs\s*\(\s*platform\s*\(\s*["']([^"']+):([^"']+):([^"']+)["']\s*\)\s*\)""").findAll(content).forEach { m ->
-            result.add(DependencyCoordinate(m.groupValues[1], m.groupValues[2], m.groupValues[3]))
-        }
-
-        // 5. plugins block: id("g:a") version "v" or kotlin("jvm") version "v".
-        Regex("""\bid\s*\(\s*["']([^"']+)["']\s*\)\s*version\s+["']([^"']+)["']""").findAll(content).forEach { m ->
-            val id = m.groupValues[1]
-            // `id("g:a")` → group:name; if only a name is given, prefix the standard plugin group.
-            val g = if (":" in id) id.substringBefore(":") else "plugin"
-            val n = if (":" in id) id.substringAfter(":") else id
-            result.add(DependencyCoordinate(g, n, m.groupValues[2]))
-        }
-        Regex("""\bkotlin\s*\(\s*["']([^"']+)["']\s*\)\s*version\s+["']([^"']+)["']""").findAll(content).forEach { m ->
-            result.add(DependencyCoordinate("org.jetbrains.kotlin", "kotlin-gradle-plugin-${m.groupValues[1]}", m.groupValues[2]))
-        }
-
-        return result.distinct().toList()
-    }
-
-    /** Resolve a `libs.xxx.yyy` catalog reference against a version catalog TOML. */
-    private fun resolveCatalogCoordinate(reference: String, libsToml: String): DependencyCoordinate? {
-        if (libsToml.isBlank()) return null
-        // `libs.kotlinx.coroutines.core` → library key `kotlinx-coroutines-core`
-        // (all segments dashed); the library entry carries a `module` and a
-        // `version.ref` pointing into [versions].
-        val libKey = reference.split(".").joinToString("-")
-        // The library line is the one that defines a module mapping — skip the
-        // identically-named version line under [versions].
-        val libLine = libsToml.lineSequence()
-            .firstOrNull { it.trimStart().startsWith("$libKey =") && it.contains("module") }
-            ?: return null
-        val module = Regex("""module\s*=\s*["']([^"']+:[^"']+)["']""").find(libLine)?.groupValues?.get(1)
-            ?: return null
-        val versionRef = Regex("""version\.ref\s*=\s*["']([^"']+)["']""").find(libLine)?.groupValues?.get(1)
-            ?: return null
-        val version = libsToml.lineSequence()
-            .firstOrNull { it.trimStart().startsWith("$versionRef =") }
-            ?.substringAfter("=")?.trim()?.trim('"', '\'')
-            ?: return null
-        return DependencyCoordinate(module.substringBefore(":"), module.substringAfter(":"), version)
+        return vulnerabilityAuditor.checkVulnerabilities(buildScriptContent, projectPath)
     }
 
     /**

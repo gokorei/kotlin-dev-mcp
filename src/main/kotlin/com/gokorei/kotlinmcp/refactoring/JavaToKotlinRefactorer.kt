@@ -56,10 +56,12 @@ class JavaToKotlinRefactorer {
 
         val cls = psiJavaFile?.classes?.firstOrNull()
         val recordComponents = cls?.recordComponents
-        if (cls != null && cls.isRecord && recordComponents != null) {
+        val isRecord = cls != null && (cls.recordHeader != null || cls.text.contains("record "))
+        if (cls != null && isRecord && recordComponents != null && recordComponents.isNotEmpty()) {
             val name = cls.name ?: "ConvertedRecord"
             val params = recordComponents.map { rc ->
-                val type = mapJavaTypeToKotlin(rc.type.presentableText, false)
+                val rawType = rc.typeElement?.text ?: rc.type.presentableText
+                val type = mapJavaTypeToKotlin(rawType, false)
                 "val ${rc.name}: $type"
             }
             val recordDecl = "data class $name(\n${params.joinToString(",\n") { "    $it" }}\n)"
@@ -72,8 +74,9 @@ class JavaToKotlinRefactorer {
         val className = cls?.name ?: "ConvertedClass"
 
         val fields = cls?.fields?.map { field ->
-            val isNullable = field.hasAnnotation("org.jetbrains.annotations.Nullable") || field.hasAnnotation("javax.annotation.Nullable")
-            mapJavaTypeToKotlin(field.type.presentableText, isNullable) to field.name
+            val isNullable = field.isNullableAnnotated()
+            val rawType = field.typeElement?.text ?: field.type.presentableText
+            mapJavaTypeToKotlin(rawType, isNullable) to field.name
         }.orEmpty()
 
         val fieldNames = fields.map { it.second }.toSet()
@@ -136,11 +139,12 @@ class JavaToKotlinRefactorer {
         if (isAccessor) return null
 
         val params = m.parameterList.parameters.joinToString(", ") { p ->
-            val isNullable = p.hasAnnotation("org.jetbrains.annotations.Nullable")
-            "${p.name}: ${mapJavaTypeToKotlin(p.type.presentableText, isNullable)}"
+            val isNullable = p.isNullableAnnotated()
+            val rawType = p.typeElement?.text ?: p.type.presentableText
+            "${p.name}: ${mapJavaTypeToKotlin(rawType, isNullable)}"
         }
-        val retType = m.returnType?.presentableText ?: "void"
-        val isRetNullable = m.hasAnnotation("org.jetbrains.annotations.Nullable")
+        val retType = m.returnTypeElement?.text ?: "void"
+        val isRetNullable = m.isNullableAnnotated()
         val kotlinReturn = if (retType == "void") "Unit" else mapJavaTypeToKotlin(retType, isRetNullable)
 
         val body = m.body ?: return "fun $name($params): $kotlinReturn {\n    TODO(\"translated from Java; verify this body\")\n}"
@@ -150,6 +154,14 @@ class JavaToKotlinRefactorer {
             isSingleReturn -> "fun $name($params): $kotlinReturn = $content"
             content.isNotBlank() -> "fun $name($params): $kotlinReturn {\n${content.prependIndent("    ")}\n}"
             else -> "fun $name($params): $kotlinReturn {\n    TODO(\"translated from Java; verify this body\")\n}"
+        }
+    }
+
+    private fun org.jetbrains.kotlin.com.intellij.psi.PsiModifierListOwner.isNullableAnnotated(): Boolean {
+        val annotations = modifierList?.annotations ?: return false
+        return annotations.any { ann ->
+            val qName = ann.qualifiedName ?: ann.nameReferenceElement?.referenceName
+            qName == "Nullable" || qName?.endsWith(".Nullable") == true || ann.text.contains("Nullable")
         }
     }
 
@@ -244,16 +256,16 @@ class JavaToKotlinRefactorer {
                         }
                         p?.accept(object : JavaRecursiveElementVisitor() {
                             override fun visitAssignmentExpression(expression: org.jetbrains.kotlin.com.intellij.psi.PsiAssignmentExpression) {
-                                val target = (expression.lExpression as? PsiReferenceExpression)?.resolve()
-                                if (target == element) isReassigned = true
+                                val ref = expression.lExpression as? PsiReferenceExpression
+                                if (ref?.referenceName == element.name) isReassigned = true
                                 super.visitAssignmentExpression(expression)
                             }
                             override fun visitUnaryExpression(expression: org.jetbrains.kotlin.com.intellij.psi.PsiUnaryExpression) {
                                 val token = expression.operationTokenType
                                 if (token == org.jetbrains.kotlin.com.intellij.psi.JavaTokenType.PLUSPLUS ||
                                     token == org.jetbrains.kotlin.com.intellij.psi.JavaTokenType.MINUSMINUS) {
-                                    val target = (expression.operand as? PsiReferenceExpression)?.resolve()
-                                    if (target == element) isReassigned = true
+                                    val ref = expression.operand as? PsiReferenceExpression
+                                    if (ref?.referenceName == element.name) isReassigned = true
                                 }
                                 super.visitUnaryExpression(expression)
                             }

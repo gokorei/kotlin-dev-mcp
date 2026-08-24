@@ -105,6 +105,8 @@ class AstMutantGeneratorTest {
         val returnMutants = mutants.filter { it.operator == MutationOperator.RETURN_VALUE }
 
         assertTrue(returnMutants.isNotEmpty(), "Expected return value mutants")
+        assertTrue(returnMutants.any { it.mutatedSource.contains("return \"\"") }, "Expected return empty string mutant")
+        assertTrue(returnMutants.any { it.mutatedSource.contains("return \"mutated\"") }, "Expected return altered string mutant")
     }
 
     @Test
@@ -122,5 +124,40 @@ class AstMutantGeneratorTest {
         assertTrue(voidCallMutants.size >= 2, "Expected void call omission mutants for both statements")
         assertTrue(voidCallMutants.any { !it.mutatedSource.contains("logMessage(item)") && it.mutatedSource.contains("saveToDb(item)") })
         assertTrue(voidCallMutants.any { it.mutatedSource.contains("logMessage(item)") && !it.mutatedSource.contains("saveToDb(item)") })
+    }
+
+    @Test
+    fun `generates extreme condition replacement and literal mutants when extreme mode enabled`() {
+        val code = """
+            fun validate(score: Int): Boolean {
+                if (score > 100) {
+                    return false
+                }
+                return true
+            }
+        """.trimIndent()
+
+        val mutants = generator.generate(code, includeExtremeOperators = true)
+
+        assertTrue(mutants.any { it.operator == MutationOperator.CONDITION_REPLACEMENT })
+        assertTrue(mutants.any { it.operator == MutationOperator.LITERAL_MUTATION })
+        assertTrue(mutants.any { it.mutatedSource.contains("if (true)") || it.mutatedSource.contains("if (false)") })
+        assertTrue(mutants.any { it.mutatedSource.contains("101") || it.mutatedSource.contains("99") })
+    }
+
+    @Test
+    fun `generates higher-order compound mutants combining multiple mutations`() {
+        val code = """
+            fun calculate(x: Int): Int {
+                val factor = 2
+                return if (x > 0) x * factor else 0
+            }
+        """.trimIndent()
+
+        val mutants = generator.generate(code, includeExtremeOperators = true, maxOrder = 2)
+        val hom = mutants.filter { it.order == 2 }
+
+        assertTrue(hom.isNotEmpty(), "Expected 2nd order compound mutants to be generated")
+        assertEquals(MutationOperator.HIGHER_ORDER_COMPOUND, hom.first().operator)
     }
 }

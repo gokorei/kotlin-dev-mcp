@@ -22,7 +22,7 @@ data class LintFinding(
  * Service exposing the real detekt rule engine and ktlint formatting.
  */
 interface LintService {
-    fun prewarm()
+    fun prewarm(): Pair<String?, String?> = Pair(null, null)
     fun runDetekt(
         code: String,
         workspacePath: String? = null,
@@ -96,7 +96,6 @@ class DefaultLintService(
     private val mode: String = System.getenv("LINT_SERVICE_MODE") ?: "SUBPROCESS"
 
     init {
-        System.setProperty("detekt.kotlin.version.disable", "true")
         prewarm()
     }
 
@@ -106,13 +105,8 @@ class DefaultLintService(
         }
     }
 
-    override fun prewarm() {
-        // detekt/ktlint are executed in dedicated subprocess JVMs (each loads its
-        // own embedded compiler), so there is nothing to load inside this JVM.
-        // Resolving the dumped classpath resources here surfaces packaging
-        // problems early.
-        detektClasspath()
-        ktlintClasspath()
+    override fun prewarm(): Pair<String?, String?> {
+        return detektClasspath() to ktlintClasspath()
     }
 
     override fun runDetekt(
@@ -170,7 +164,7 @@ class DefaultLintService(
                 ?.use { it.readText().trim() }
         }
 
-    private data class ToolRun(val exitCode: Int, val tailOutput: String)
+    data class ToolRun(val exitCode: Int, val tailOutput: String)
 
     /**
      * Executes an external CLI tool (detekt/ktlint) in its own JVM. Running
@@ -179,7 +173,7 @@ class DefaultLintService(
      * over the System streams and class-loading lock during a Stdio tool call.
      * A separate process keeps the server's own threads and System.out intact.
      */
-    private fun runJavaTool(
+    fun runJavaTool(
         mainClass: String,
         classpathEntries: List<String>,
         args: List<String>,
@@ -304,8 +298,8 @@ class DefaultLintService(
                 dir = tempDir,
                 timeoutSeconds = 180L
             )
-            if (run.exitCode < 0) {
-                return DetektRun.Failed("DETEKT_EXECUTION_ERROR", "detekt invocation failed: ${run.tailOutput.take(300)}")
+            if (run.exitCode < 0 || (run.exitCode != 0 && !reportFile.exists())) {
+                return DetektRun.Failed("DETEKT_EXECUTION_ERROR", "detekt invocation failed (exit=${run.exitCode}): ${run.tailOutput.take(300)}")
             }
 
             val findings = if (reportFile.exists()) {
@@ -358,9 +352,9 @@ if (apply) {
                     dir = tempDir,
                     timeoutSeconds = 120L
                 )
-                if (run.exitCode < 0) {
+                if (run.exitCode < 0 || (run.exitCode != 0 && run.exitCode != 1)) {
                     return KotlinMcpResult.Error(
-                        message = "ktlint invocation failed: ${run.tailOutput.take(300)}",
+                        message = "ktlint invocation failed (exit=${run.exitCode}): ${run.tailOutput.take(300)}",
                         code = "KTLINT_EXECUTION_ERROR"
                     )
                 }
@@ -453,7 +447,7 @@ if (apply) {
         )
     }
 
-    private fun configToYaml(config: Map<String, Any>): String {
+    fun configToYaml(config: Map<String, Any>): String {
         val sb = StringBuilder()
         fun writeMap(map: Map<*, *>, indent: Int) {
             val prefix = " ".repeat(indent)
@@ -486,7 +480,7 @@ if (apply) {
         return sb.toString()
     }
 
-    private fun parseDetektXml(file: File): List<LintFinding> {
+    fun parseDetektXml(file: File): List<LintFinding> {
         val list = mutableListOf<LintFinding>()
         try {
             val doc = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)

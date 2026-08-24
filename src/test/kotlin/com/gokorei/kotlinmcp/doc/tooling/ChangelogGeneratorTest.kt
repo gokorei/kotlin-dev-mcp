@@ -118,4 +118,46 @@ class ChangelogGeneratorTest {
         assertTrue(changelog.contains("### Added\n- Initial feature\n  Additional line detail"))
         org.junit.jupiter.api.Assertions.assertFalse(changelog.contains("[← Home](Home)"))
     }
+
+    @Test
+    fun `category entries are strictly cleared and do not bleed across releases`() {
+        val bleedTestNotes = """
+            # Release Notes
+
+            ## Next
+            ### Security
+            - Unreleased security advisory
+
+            ## v1.2.0 — 2026-08-20
+            ### Improvements
+            - Changed in 1.2.0
+            ### Security
+            - Security fix in 1.2.0
+
+            ## v1.1.0 — 2026-08-19
+            ### New Features
+            - Added in 1.1.0
+            ### Bug Fixes
+            - Fixed in 1.1.0
+
+            ## v1.0.0 — 2026-08-16
+            ### New Features
+            - Added in 1.0.0
+
+            ## v0.9.0 — 2026-08-01
+            ### Bug Fixes
+            - Fixed in 0.9.0
+        """.trimIndent()
+
+        val changelog = generator.generateFromReleaseNotes(bleedTestNotes)
+        val sec11 = changelog.substringAfter("## [1.1.0]").substringBefore("## [1.0.0]")
+        org.junit.jupiter.api.Assertions.assertFalse(sec11.contains("### Changed"))
+        org.junit.jupiter.api.Assertions.assertFalse(sec11.contains("### Security"))
+
+        val sec10 = changelog.substringAfter("## [1.0.0]").substringBefore("## [0.9.0]")
+        org.junit.jupiter.api.Assertions.assertFalse(sec10.contains("### Fixed"))
+
+        val sec09 = changelog.substringAfter("## [0.9.0]").substringBefore("[Unreleased]")
+        org.junit.jupiter.api.Assertions.assertFalse(sec09.contains("### Added"))
+    }
 }

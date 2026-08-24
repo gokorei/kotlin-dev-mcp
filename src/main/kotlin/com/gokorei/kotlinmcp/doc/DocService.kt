@@ -7,6 +7,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.File
 import java.net.URLDecoder
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 
 enum class DocAction {
     SEARCH,
@@ -879,20 +881,25 @@ class DefaultDocService(private val persistencePath: String? = null) : DocServic
     private val docCache: ConcurrentHashMap<String, String?> = ConcurrentHashMap()
 
     override fun registerDynamicSymbol(symbol: String, content: String) {
-        symbolDatabase[symbol] = content
+        val key = symbol.trim()
+        if (key.isBlank()) return
+        symbolDatabase[key] = content
         docCache.clear()
         persist()
     }
 
     override fun registerDynamicFeature(feature: String, content: String) {
-        featureDatabase[feature] = content
+        val key = feature.trim()
+        if (key.isBlank()) return
+        featureDatabase[key] = content
         docCache.clear()
         persist()
     }
 
     override fun registerDynamicNamespace(namespace: String, content: String) {
-        namespaceDatabase[namespace] = content
-        docCache.clear()
+        val key = namespace.trim()
+        if (key.isBlank()) return
+        namespaceDatabase[key] = content
         persist()
     }
 
@@ -919,37 +926,22 @@ class DefaultDocService(private val persistencePath: String? = null) : DocServic
         loadPersisted()
     }
 
-    @kotlinx.serialization.Serializable
-    private data class PersistedDocs(
-        val version: Int = 1,
-        val symbols: Map<String, String> = emptyMap(),
-        val features: Map<String, String> = emptyMap(),
-        val namespaces: Map<String, String> = emptyMap()
-    )
-
-    @kotlinx.serialization.Serializable
-    private data class SyncedIndexEntry(
-        val name: String = "",
-        val summary: String = ""
-    )
-
     private fun seedFromSyncedIndex() {
         val stream = runCatching {
             DefaultDocService::class.java.classLoader.getResourceAsStream("stdlib-index.json")
                 ?: Thread.currentThread().contextClassLoader?.getResourceAsStream("stdlib-index.json")
-        }.getOrNull()
-        if (stream == null) {
-            logger.warn { "DefaultDocService warning: packaged stdlib-index.json resource not found; using built-in documentation fallback." }
-            return
-        }
+        }.getOrNull() ?: return
 
         stream.use { s ->
             runCatching {
-                val entries = json.decodeFromString<List<SyncedIndexEntry>>(s.readBytes().toString(Charsets.UTF_8))
-                entries.forEach { entry ->
-                    val name = entry.name.trim()
+                val element = json.parseToJsonElement(s.readBytes().toString(Charsets.UTF_8))
+                val array = element as? kotlinx.serialization.json.JsonArray ?: return
+                array.forEach { item ->
+                    val obj = item as? kotlinx.serialization.json.JsonObject ?: return@forEach
+                    val name = (obj["name"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.trim() ?: ""
+                    val summary = (obj["summary"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.trim() ?: ""
                     if (name.isNotBlank() && !symbolDatabase.containsKey(name)) {
-                        symbolDatabase[name] = "# `$name`\n${entry.summary.trim()}"
+                        symbolDatabase[name] = "# `$name`\n$summary"
                     }
                 }
             }
@@ -960,16 +952,21 @@ class DefaultDocService(private val persistencePath: String? = null) : DocServic
     private fun persist() {
         val file = persistenceFile ?: return
         runCatching {
-            val data = PersistedDocs(
-                version = 1,
-                symbols = symbolDatabase.toMap(),
-                features = featureDatabase.toMap(),
-                namespaces = namespaceDatabase.toMap()
-            )
-            val jsonText = json.encodeToString(PersistedDocs.serializer(), data)
+            val jsonObject = kotlinx.serialization.json.buildJsonObject {
+                put("version", kotlinx.serialization.json.JsonPrimitive(1))
+                put("symbols", kotlinx.serialization.json.buildJsonObject {
+                    symbolDatabase.forEach { (k, v) -> put(k, kotlinx.serialization.json.JsonPrimitive(v)) }
+                })
+                put("features", kotlinx.serialization.json.buildJsonObject {
+                    featureDatabase.forEach { (k, v) -> put(k, kotlinx.serialization.json.JsonPrimitive(v)) }
+                })
+                put("namespaces", kotlinx.serialization.json.buildJsonObject {
+                    namespaceDatabase.forEach { (k, v) -> put(k, kotlinx.serialization.json.JsonPrimitive(v)) }
+                })
+            }
             file.parentFile?.mkdirs()
             val tempFile = File.createTempFile("registered-docs", ".tmp", file.parentFile ?: File("."))
-            tempFile.writeText(jsonText)
+            tempFile.writeText(jsonObject.toString())
             java.nio.file.Files.move(
                 tempFile.toPath(),
                 file.toPath(),
@@ -983,10 +980,23 @@ class DefaultDocService(private val persistencePath: String? = null) : DocServic
         val file = persistenceFile ?: return
         if (!file.exists()) return
         runCatching {
-            val data = json.decodeFromString<PersistedDocs>(file.readText())
-            symbolDatabase.putAll(data.symbols)
-            featureDatabase.putAll(data.features)
-            namespaceDatabase.putAll(data.namespaces)
+            val element = json.parseToJsonElement(file.readText())
+            val root = element as? kotlinx.serialization.json.JsonObject ?: return
+            root["symbols"]?.let { symObj ->
+                (symObj as? kotlinx.serialization.json.JsonObject)?.forEach { (k, v) ->
+                    (v as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { symbolDatabase[k] = it }
+                }
+            }
+            root["features"]?.let { featObj ->
+                (featObj as? kotlinx.serialization.json.JsonObject)?.forEach { (k, v) ->
+                    (v as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { featureDatabase[k] = it }
+                }
+            }
+            root["namespaces"]?.let { nsObj ->
+                (nsObj as? kotlinx.serialization.json.JsonObject)?.forEach { (k, v) ->
+                    (v as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { namespaceDatabase[k] = it }
+                }
+            }
             docCache.clear()
         }
     }
@@ -1101,7 +1111,7 @@ class DefaultDocService(private val persistencePath: String? = null) : DocServic
 
     private fun namespaceMatch(q: String): String? {
         val registered = namespaceDatabase.entries
-            .filter { q.startsWith(it.key) || it.key.startsWith(q) || q.contains(it.key) }
+            .filter { it.key.isNotBlank() && (q.startsWith(it.key) || it.key.startsWith(q) || q.contains(it.key)) }
         if (registered.isEmpty()) return null
         val (prefix, content) = registered.maxBy { it.key.length }
         val remainder = q.removePrefix(prefix).trim().trim('.')
