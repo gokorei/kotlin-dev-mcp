@@ -174,16 +174,25 @@ object ToolRegistrar {
 
         // 5. kotlin_check_snippet
         register("kotlin_check_snippet") {
-            description = "READ-ONLY. Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column."
+            description = "Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column, or run in-memory AST mutation testing."
             readOnly = true
-            param("code", "Kotlin code snippet to compile-check")
+            actions("check", "mutate")
+            param("action", "Operation: 'check' (default, embedded compiler diagnostics) or 'mutate' (in-memory AST mutation testing against unit tests)")
+            param("code", "Kotlin code snippet to compile-check or mutation-test")
+            param("testCode", "Optional unit test code containing fun main() assertions to evaluate against generated mutants (used when action='mutate')")
+            param("preset", "Optional response projection for mutation reports: 'compact', 'full' (default), or 'summary'")
             param("classpath", "Optional array of jar/dir paths added to compile classpath", type = "array", itemsType = "string")
             param("projectPath", "Optional workspace root whose compiled classes (build/classes…), generated sources, and build/libs jars are added automatically to the compile classpath (aliases: workspacePath, path)")
             required("code")
             handleSimple { k, a ->
                 val code = a["code"].orEmpty()
-                val cp = a["classpath"]?.split(",", ";")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
-                k.checkSnippet(code, cp, a["projectPath"])
+                val action = a["action"]?.lowercase()?.trim()
+                if (action == "mutate" || action == "mutation_test") {
+                    k.mutationTest(code, a["testCode"], a["preset"])
+                } else {
+                    val cp = a["classpath"]?.split(",", ";")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
+                    k.checkSnippet(code, cp, a["projectPath"])
+                }
             }
         }
     }

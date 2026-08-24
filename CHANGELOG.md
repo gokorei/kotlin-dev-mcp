@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **In-memory K2 PSI mutation testing engine** — added in-process AST mutation testing without external Gradle daemons via `kotlin_check_snippet(action="mutate")`, evaluating Kotlin test suites against synthesized relational, boolean, arithmetic, return-value, and void-call AST mutants with structured diff reporting.
 - **In-memory VFS cache & WatchService invalidation** — added `VfsPsiCache` (`DefaultVfsPsiCache`) providing in-memory LRU caching of parsed K2 `KtFile` ASTs and integrating `java.nio.file.WatchService` to invalidate changed files automatically, dropping warm workspace symbol queries below 10ms.
 - **Fast in-memory snippet execution runner** — added `FastSnippetRunner` (`DefaultFastSnippetRunner`) to execute compiled Kotlin snippets directly in-process via isolated `URLClassLoader` worker pools, reducing snippet run latency from ~1.5s down to sub-50ms with thread-safe output capture and timeout cancellation guards.
 - **Response projection & token optimization presets** — added `ResponseProjection` (`ResponsePreset.COMPACT`, `SUMMARY`, `FULL`) and `ProjectionFilter` across read-heavy MCP tools (`kotlin_docs`, `kotlin_code`, `kotlin_lsp`) to prune verbose AST offsets and metadata, reducing LLM context-window token usage by up to 70%.
@@ -24,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Decoupled housekeeping doc generators** — moved repository build-time doc generators (`McpDocGenerator`, `ChangelogGenerator`) into dedicated `com.gokorei.kotlinmcp.doc.tooling` package, separating repo housekeeping tools from runtime domain doc services (`DocService`).
 
 ### Fixed
+- **Mutation engine compiler diagnostic evaluation & score soundness** — fixed compiler error detection in `MutationExecutionPipeline` by evaluating embedded compiler diagnostics to prevent uncompiled mutants from registering as killed, updated mutation score calculation to return 0% when zero effective mutants compile, added logical `&&`/`||` and string return value mutation operators, and standardized test lifecycle teardown.
 - **Thread-safe VFS cache locking and dynamic directory watching** — fixed read-write lock semantics in `VfsPsiCache` by moving cache mutations under write locks, adding recursive directory registration for runtime-created subdirectories, and ensuring directory invalidation evicts all descendant entries.
 - **Async snippet child thread output capture & stdio protection** — transitioned `ThreadLocalPrintStream` to `InheritableThreadLocal` to capture output from asynchronous threads spawned inside in-memory snippets and guarded global stdio wrappers from accidental closure.
 - **Expanded AST host termination analysis** — updated `SnippetAstSafetyChecker` to detect split variable assignments for `Runtime` and `ProcessHandle` instances, callable references (`::exitProcess`, `System::exit`), and `ProcessHandle.current().destroy()`.

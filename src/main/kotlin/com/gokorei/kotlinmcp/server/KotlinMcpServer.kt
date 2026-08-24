@@ -8,6 +8,9 @@ import com.gokorei.kotlinmcp.linting.*
 import com.gokorei.kotlinmcp.lsp.*
 import com.gokorei.kotlinmcp.project.*
 import com.gokorei.kotlinmcp.refactoring.*
+import com.gokorei.kotlinmcp.mutation.*
+import com.gokorei.kotlinmcp.models.ResponsePreset
+import com.gokorei.kotlinmcp.models.ResponseProjection
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 
@@ -34,7 +37,8 @@ class KotlinMcpServer(
     private val gradleRunService: GradleRunService = DefaultGradleRunService(),
     private val lspService: LspService? = null,
     private val libraryAnalysisService: LibraryAnalysisService = DefaultLibraryAnalysisService(),
-    private val lintService: LintService = DefaultLintService()
+    private val lintService: LintService = DefaultLintService(),
+    private val mutationService: MutationService = DefaultMutationService()
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -136,13 +140,22 @@ class KotlinMcpServer(
             .onFailure { logger.warn(it) { "Failed to close LSP text service during shutdown." } }
         runCatching { semanticEngine.close() }
             .onFailure { logger.warn(it) { "Failed to close K2 semantic engine during shutdown." } }
+        runCatching { mutationService.close() }
+            .onFailure { logger.warn(it) { "Failed to close mutation service during shutdown." } }
     }
 
 
-    // ---- kotlin_check_snippet / project layout ----
+    // ---- kotlin_check_snippet / project layout / mutation ----
 
     fun checkSnippet(code: String, classpath: List<String> = emptyList(), projectPath: String? = null): KotlinMcpResult =
         diagnosticService.execute(DiagnosticAction.CHECK_SNIPPET, code, projectPath = projectPath, classpath = classpath)
+
+    fun mutationTest(
+        code: String,
+        testCode: String? = null,
+        preset: String? = null
+    ): KotlinMcpResult =
+        mutationService.mutateAndTest(code, testCode, ResponseProjection(ResponsePreset.fromString(preset)))
 
     fun runProjectLayout(projectPath: String?): KotlinMcpResult =
         diagnosticService.execute(DiagnosticAction.RUN_PROJECT_LAYOUT, code = "", projectPath = projectPath)

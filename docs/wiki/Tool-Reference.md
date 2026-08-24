@@ -67,11 +67,16 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 
 ### `kotlin_check_snippet`
 
-**Description:** Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column.
+**Description:** Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column, or run in-memory AST mutation testing.
+
+**Supported Actions:** `check`, `mutate`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `code` | `string` | **Yes** | Kotlin code snippet to compile-check |
+| `action` | `string` | No | Operation: 'check' (default, embedded compiler diagnostics) or 'mutate' (in-memory AST mutation testing against unit tests) |
+| `code` | `string` | **Yes** | Kotlin code snippet to compile-check or mutation-test |
+| `testCode` | `string` | No | Optional unit test code containing fun main() assertions to evaluate against generated mutants (used when action='mutate') |
+| `preset` | `string` | No | Optional response projection for mutation reports: 'compact', 'full' (default), or 'summary' |
 | `classpath` | `Array<string>` | No | Optional array of jar/dir paths added to compile classpath |
 | `projectPath` | `string` | No | Optional workspace root whose compiled classes (build/classes…), generated sources, and build/libs jars are added automatically to the compile classpath (aliases: workspacePath, path) |
 
