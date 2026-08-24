@@ -37,7 +37,7 @@ class DefaultVfsPsiCache(
         val file: KtFile,
         val lastModified: Long,
         val contentHash: Int,
-        val content: String? = null
+        val content: String
     )
 
     private val rwLock = ReentrantReadWriteLock()
@@ -58,6 +58,21 @@ class DefaultVfsPsiCache(
     private var watchThread: Thread? = null
     @Volatile
     private var closed = false
+
+    val isClosed: Boolean
+        get() = closed
+
+    val isWatching: Boolean
+        get() = watchService != null
+
+    val watchKeysCount: Int
+        get() = watchKeys.size
+
+    internal fun registerWatchKey(key: WatchKey, path: Path) {
+        watchKeys[key] = path
+    }
+
+    internal fun getWatchPath(key: WatchKey): Path? = watchKeys[key]
 
     override val size: Int
         get() = rwLock.read { cache.size }
@@ -86,7 +101,7 @@ class DefaultVfsPsiCache(
         val contentMatched = rwLock.read {
             if (closed) return@read null
             val existing = cache[normalizedPath]
-            if (existing != null && existing.contentHash == hash && (existing.content == null || existing.content == text || existing.file.text == text)) {
+            if (existing != null && existing.contentHash == hash && existing.content == text) {
                 existing
             } else null
         }
@@ -118,7 +133,7 @@ class DefaultVfsPsiCache(
         val cached = rwLock.read {
             if (closed) return@read null
             val existing = cache[normalizedPath]
-            if (existing != null && existing.contentHash == hash && (existing.content == null || existing.content == content || existing.file.text == content)) {
+            if (existing != null && existing.contentHash == hash && existing.content == content) {
                 existing.file
             } else null
         }
@@ -161,7 +176,7 @@ class DefaultVfsPsiCache(
         }
     }
 
-    private fun registerDirectory(dir: File, ws: WatchService, modifiers: Array<WatchEvent.Modifier>) {
+    internal fun registerDirectory(dir: File, ws: WatchService, modifiers: Array<WatchEvent.Modifier> = emptyArray()) {
         runCatching {
             val path = dir.toPath()
             val key = if (modifiers.isNotEmpty()) {
@@ -203,35 +218,7 @@ class DefaultVfsPsiCache(
                     } catch (_: InterruptedException) {
                         break
                     }
-
-                    val dirPath = watchKeys[key]
-                    val events = key.pollEvents()
-                    if (dirPath != null) {
-                        for (event in events) {
-                            val context = event.context() as? Path
-                            if (context != null) {
-                                val fullPath = dirPath.resolve(context)
-                                val file = fullPath.toFile()
-
-                                // If a new directory was created, recursively register it
-                                if (event.kind() == ENTRY_CREATE && file.isDirectory && !K2ResolutionUtils.isExcludedWorkspaceDir(file)) {
-                                    file.walkTopDown().onEnter { !K2ResolutionUtils.isExcludedWorkspaceDir(it) }.filter { it.isDirectory }.forEach { subDir ->
-                                        registerDirectory(subDir, ws, modifiers)
-                                    }
-                                }
-
-                                val ext = file.extension
-                                if (ext == "kt" || ext == "kts" || ext == "java" || event.kind() == ENTRY_DELETE || file.isDirectory) {
-                                    invalidate(fullPath)
-                                }
-                            }
-                        }
-                    }
-
-                    val valid = key.reset()
-                    if (!valid) {
-                        watchKeys.remove(key)
-                    }
+                    processNextEvent(key, ws, modifiers)
                 }
             }, "VfsPsiCache-Watcher").apply {
                 isDaemon = true
@@ -243,6 +230,49 @@ class DefaultVfsPsiCache(
             runCatching { this.watchService?.close() }
             this.watchService = null
             this.watchKeys.clear()
+        }
+    }
+
+    internal fun processNextEvent(
+        key: WatchKey,
+        ws: WatchService? = watchService,
+        modifiers: Array<WatchEvent.Modifier> = emptyArray()
+    ): Boolean {
+        val dirPath = watchKeys[key]
+        val events = key.pollEvents()
+        if (dirPath != null) {
+            for (event in events) {
+                handleWatchEvent(dirPath, event, ws, modifiers)
+            }
+        }
+        val valid = key.reset()
+        if (!valid) {
+            watchKeys.remove(key)
+        }
+        return valid
+    }
+
+    internal fun handleWatchEvent(
+        dirPath: Path,
+        event: WatchEvent<*>,
+        ws: WatchService? = watchService,
+        modifiers: Array<WatchEvent.Modifier> = emptyArray()
+    ) {
+        val context = event.context() as? Path ?: return
+        val fullPath = dirPath.resolve(context)
+        val file = fullPath.toFile()
+
+        if (event.kind() == ENTRY_CREATE && file.isDirectory && !K2ResolutionUtils.isExcludedWorkspaceDir(file)) {
+            if (ws != null) {
+                file.walkTopDown().onEnter { !K2ResolutionUtils.isExcludedWorkspaceDir(it) }.filter { it.isDirectory }.forEach { subDir ->
+                    registerDirectory(subDir, ws, modifiers)
+                }
+            }
+        }
+
+        val ext = file.extension
+        if (ext == "kt" || ext == "kts" || ext == "java" || event.kind() == ENTRY_DELETE || file.isDirectory) {
+            invalidate(fullPath)
         }
     }
 

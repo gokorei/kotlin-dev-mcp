@@ -19,7 +19,7 @@ import org.jetbrains.kotlin.resolve.scopes.DescriptorKindFilter
 import org.jetbrains.kotlin.resolve.scopes.MemberScope
 import org.jetbrains.kotlin.types.KotlinType
 
-internal object K2CompletionResolver {
+object K2CompletionResolver {
 
     private val logger = KotlinLogging.logger {}
 
@@ -30,10 +30,14 @@ internal object K2CompletionResolver {
 
     fun completionCandidates(session: K2AnalysisSession, prefix: String): KotlinCompletionCandidates {
         val dot = prefix.lastIndexOf('.')
-        val memberPrefix = if (dot >= 0) prefix.substring(dot + 1) else ""
-        val receiver = if (dot >= 0) prefix.substring(0, dot).trim() else ""
-        val members = if (receiver.isNotEmpty()) {
-            receiverType(session, receiver)?.let { memberNamesOf(it, memberPrefix, session.moduleDescriptor) }.orEmpty()
+        val members = if (dot > 0) {
+            val receiver = prefix.substring(0, dot).trim()
+            val memberPrefix = prefix.substring(dot + 1)
+            if (receiver.isNotEmpty()) {
+                receiverType(session, receiver)?.let { memberNamesOf(it, memberPrefix, session.moduleDescriptor) }.orEmpty()
+            } else {
+                emptyList()
+            }
         } else {
             emptyList()
         }
@@ -131,11 +135,6 @@ internal object K2CompletionResolver {
                     declaration.name?.let { names.add(it) }
                 }
                 super.visitNamedDeclaration(declaration)
-            }
-
-            override fun visitParameter(parameter: KtParameter) {
-                parameter.name?.let { names.add(it) }
-                super.visitParameter(parameter)
             }
         })
         session.file.importDirectives.forEach { dir ->

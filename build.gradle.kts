@@ -251,9 +251,11 @@ val stressTest = tasks.register<Test>("stressTest") {
     doFirst {
         testTmpDir.get().asFile.mkdirs()
     }
+    maxHeapSize = "4096m"
     systemProperty("java.io.tmpdir", testTmpDir.get().asFile.path)
     systemProperty("jna.tmpdir", testTmpDir.get().asFile.path)
     systemProperty("kmcp.disable_network_audits", "true")
+    systemProperty("kmcp.include_internal_classpath", "true")
 }
 
 

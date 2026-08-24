@@ -126,8 +126,10 @@ object SnippetAstSafetyChecker {
             override fun visitCallExpression(expression: KtCallExpression) {
                 val callee = expression.calleeExpression
                 val calleeName = callee?.text?.trim()
+                val parent = expression.parent
+                val isQualifiedSelector = parent is KtDotQualifiedExpression && parent.selectorExpression == expression
 
-                if (calleeName != null) {
+                if (!isQualifiedSelector && calleeName != null) {
                     // Check direct exitProcess calls or aliases
                     if (calleeName in exitProcessAliases || (hasWildcardKotlinSystem && calleeName == "exitProcess")) {
                         if (calleeName !in userDeclaredFunctionNames || imports.any { it.importedFqName?.asString() == "kotlin.system.exitProcess" }) {
@@ -143,8 +145,7 @@ object SnippetAstSafetyChecker {
                     }
                 }
 
-                val parent = expression.parent
-                if (parent is KtDotQualifiedExpression && parent.selectorExpression == expression) {
+                if (isQualifiedSelector && parent is KtDotQualifiedExpression) {
                     val receiverExpr = parent.receiverExpression
                     val receiver = receiverExpr.text.trim()
                     val selector = calleeName
@@ -158,13 +159,10 @@ object SnippetAstSafetyChecker {
                         if (receiver == "kotlin.system") {
                             foundDangerous = true
                         }
-                        if (receiver in runtimeInstanceVariables) {
-                            foundDangerous = true
-                        }
                     }
 
                     // Check kotlin.system.exitProcess
-                    if ((selector == "exitProcess" || selector in exitProcessAliases) && receiver == "kotlin.system") {
+                    if (selector in exitProcessAliases && receiver == "kotlin.system") {
                         foundDangerous = true
                     }
 

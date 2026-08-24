@@ -13,7 +13,7 @@ import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.DescriptorUtils
 import java.io.File
 
-internal object K2ResolutionUtils {
+object K2ResolutionUtils {
 
     fun effectiveDescriptor(d: DeclarationDescriptor): DeclarationDescriptor =
         (d as? ClassConstructorDescriptor)?.constructedClass ?: d

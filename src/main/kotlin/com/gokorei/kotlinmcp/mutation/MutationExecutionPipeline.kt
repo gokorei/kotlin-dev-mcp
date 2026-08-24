@@ -52,7 +52,22 @@ class DefaultMutationExecutionPipeline(
         }
 
         val compiledBaseline = baselineCompile as CompileResult.Compiled
-        val baselineResult = runner.run(compiledBaseline.outDir, timeoutMillis = 5000L)
+        val baselineErrors = compiledBaseline.diagnostics.filter { it.severity.equals("ERROR", ignoreCase = true) }
+        if (baselineErrors.isNotEmpty()) {
+            SnippetCompiler.cleanup(compiledBaseline)
+            val dummyMutant = AstMutant("baseline", MutationOperator.RETURN_VALUE, 1, 1, "", "", "", "Baseline Compilation")
+            return MutationReport(
+                score = 0.0,
+                totalMutants = 0,
+                killedCount = 0,
+                survivedCount = 0,
+                compilationErrorCount = 1,
+                timeoutCount = 0,
+                results = listOf(MutantResult(dummyMutant, MutantStatus.COMPILATION_ERROR, "Baseline code failed compilation with errors:\n" + baselineErrors.joinToString("\n") { "  - [Line ${it.line ?: 0}:${it.column ?: 0}] ${it.message}" }))
+            )
+        }
+
+        val baselineResult = runner.run(compiledBaseline.outDir, timeoutMillis = maxOf(15000L, timeoutPerMutantMs * 2))
         SnippetCompiler.cleanup(compiledBaseline)
 
         if (baselineResult.isError) {
@@ -115,6 +130,21 @@ class DefaultMutationExecutionPipeline(
             }
 
             val compiled = compiledMutant as CompileResult.Compiled
+            val mutantErrors = compiled.diagnostics.filter { it.severity.equals("ERROR", ignoreCase = true) }
+            if (mutantErrors.isNotEmpty()) {
+                val durMs = (System.nanoTime() - startNanos) / 1_000_000
+                SnippetCompiler.cleanup(compiled)
+                results.add(
+                    MutantResult(
+                        mutant = mutant,
+                        status = MutantStatus.COMPILATION_ERROR,
+                        details = "Compilation errors: " + mutantErrors.joinToString("; ") { it.message },
+                        durationMs = durMs
+                    )
+                )
+                continue
+            }
+
             val runResult = runner.run(compiled.outDir, timeoutMillis = timeoutPerMutantMs)
             val durMs = (System.nanoTime() - startNanos) / 1_000_000
             SnippetCompiler.cleanup(compiled)

@@ -15,7 +15,7 @@ import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.renderer.DescriptorRenderer
 import org.jetbrains.kotlin.resolve.BindingContext
 
-internal object K2HierarchyResolver {
+object K2HierarchyResolver {
 
     fun typeHierarchy(
         session: K2AnalysisSession,

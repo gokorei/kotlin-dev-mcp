@@ -49,7 +49,8 @@ class DatetimeMigrationSuggestor {
 
                 override fun visitCallExpression(expression: KtCallExpression) {
                     val text = expression.text
-                    if (text.contains("System.currentTimeMillis()")) {
+                    val parentText = expression.parent?.text.orEmpty()
+                    if (text.contains("currentTimeMillis") || parentText.contains("System.currentTimeMillis")) {
                         suggestions.add("`System.currentTimeMillis()` → `Clock.System.now().toEpochMilliseconds()`")
                     }
                     super.visitCallExpression(expression)

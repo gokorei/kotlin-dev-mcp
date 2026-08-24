@@ -71,20 +71,7 @@ class DefaultGradleRunService : GradleRunService {
             val durationMs = (System.nanoTime() - startNanos) / 1_000_000
 
             if (!completed) {
-                val pid = runCatching { process.pid() }.getOrNull()
-                val isWindows = System.getProperty("os.name").lowercase().contains("win")
-
-                process.toHandle().descendants().forEach { runCatching { it.destroyForcibly() } }
                 process.destroyForcibly()
-
-                if (pid != null && pid > 0) {
-                    if (isWindows) {
-                        runCatching { ProcessBuilder("taskkill", "/F", "/T", "/PID", pid.toString()).start().waitFor() }
-                    } else {
-                        runCatching { ProcessBuilder("pkill", "-9", "-P", pid.toString()).start().waitFor() }
-                        runCatching { ProcessBuilder("kill", "-9", "-$pid").start().waitFor() }
-                    }
-                }
                 readerThread.join(1000)
                 KotlinMcpResult.Error(
                     message = "Gradle task '$trimmedTask' timed out after ${timeoutMillis}ms; process tree destroyed.",

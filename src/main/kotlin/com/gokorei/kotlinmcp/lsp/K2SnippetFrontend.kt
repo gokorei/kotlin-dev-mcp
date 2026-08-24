@@ -52,12 +52,12 @@ object K2SnippetFrontend {
                         put(CommonConfigurationKeys.MESSAGE_COLLECTOR_KEY, org.jetbrains.kotlin.cli.common.messages.MessageCollector.NONE)
                         put(CommonConfigurationKeys.MODULE_NAME, "snippet_module")
                     }
-                    addJvmClasspathRoots(
-                        configuration,
-                        SnippetCompiler.resolveDefaultImports(System.getProperty("java.class.path").orEmpty())
-                            .filter { it.isNotBlank() }
-                            .map { java.io.File(it) }
-                    )
+                    val defaultRoots = SnippetCompiler.resolveDefaultImports(System.getProperty("java.class.path").orEmpty())
+                        .filter { it.isNotBlank() }
+                        .map { java.io.File(it) }
+                    if (defaultRoots.isNotEmpty()) {
+                        configuration.addJvmClasspathRoots(defaultRoots)
+                    }
                     env = KotlinCoreEnvironment.createForProduction(
                         rootDisposable,
                         configuration,
@@ -81,45 +81,33 @@ object K2SnippetFrontend {
             }
         }
 
-    /**
-     * Registers library jars (kotlin-stdlib etc.) as JVM classpath roots so the
-     * analysis resolves stdlib symbols. `JvmContentRootsKt.addJvmClasspathRoots`
-     * is a public extension on `CompilerConfiguration`.
-     */
-    private fun addJvmClasspathRoots(configuration: CompilerConfiguration, roots: List<java.io.File>) {
-        if (roots.isEmpty()) return
-        try {
-            configuration.addJvmClasspathRoots(roots)
-        } catch (e: Exception) {
-            logger.warn(e) { "K2SnippetFrontend could not register stdlib classpath roots: ${e.message}" }
-            throw e
-        }
-    }
+    val currentRootDisposable: Disposable
+        get() = rootDisposable
 
     @Volatile
     private var disposed = false
 
+    val isDisposed: Boolean
+        get() = disposed
+
     @Synchronized
     fun dispose() {
-        if (disposed) return
-        try {
+        if (!disposed) {
             Disposer.dispose(rootDisposable)
             disposed = true
             cachedEnvironment = null
             cachedPsiFactory = null
-        } catch (e: Throwable) {
-            logger.warn(e) { "Failed to dispose K2SnippetFrontend rootDisposable" }
-            throw e
         }
     }
 
     @Synchronized
     fun resetEnvironment() {
-        if (disposed) return
-        runCatching { Disposer.dispose(rootDisposable) }
-        rootDisposable = Disposer.newDisposable("K2SnippetFrontend.root")
-        cachedEnvironment = null
-        cachedPsiFactory = null
+        if (!disposed) {
+            Disposer.dispose(rootDisposable)
+            rootDisposable = Disposer.newDisposable("K2SnippetFrontend.root")
+            cachedEnvironment = null
+            cachedPsiFactory = null
+        }
     }
 
     @Synchronized
@@ -149,6 +137,8 @@ object K2SnippetFrontend {
     }
 
     @Synchronized
+    @Suppress("DEPRECATION")
+    @OptIn(org.jetbrains.kotlin.K1Deprecation::class)
     fun analyzeSession(code: String, extraFiles: List<KtFile> = emptyList()): K2AnalysisSession? {
         if (disposed) return null
         val file = parsePsi(code) ?: return null
@@ -156,9 +146,7 @@ object K2SnippetFrontend {
         return try {
             val trace = NoScopeRecordCliBindingTrace(environment.project)
             val analyzeMethod = TopDownAnalyzerFacadeForJVM::class.java.methods
-                .filter { it.name == "analyzeFilesWithJavaIntegration" }
-                .minByOrNull { it.parameterCount } ?: error("No analyzeFilesWithJavaIntegration found")
-
+                .first { it.name == "analyzeFilesWithJavaIntegration" && it.parameterCount == 7 }
             val provider = { scope: org.jetbrains.kotlin.com.intellij.psi.search.GlobalSearchScope ->
                 environment.createPackagePartProvider(scope)
             }
@@ -166,22 +154,16 @@ object K2SnippetFrontend {
                 org.jetbrains.kotlin.resolve.lazy.declarations.FileBasedDeclarationProviderFactory(storageManager, files)
             }
             val scope = org.jetbrains.kotlin.com.intellij.psi.search.GlobalSearchScope.allScope(environment.project)
-
-            val callArgs = mutableListOf<Any?>(
+            val result = analyzeMethod.invoke(
+                null,
                 environment.project,
                 allFiles,
                 trace,
                 environment.configuration,
-                provider
-            )
-            if (analyzeMethod.parameterCount >= 6) {
-                callArgs.add(declProviderFactory)
-            }
-            if (analyzeMethod.parameterCount >= 7) {
-                callArgs.add(scope)
-            }
-
-            val result = analyzeMethod.invoke(null, *callArgs.toTypedArray()) as org.jetbrains.kotlin.analyzer.AnalysisResult
+                provider,
+                declProviderFactory,
+                scope
+            ) as org.jetbrains.kotlin.analyzer.AnalysisResult
             K2AnalysisSession(
                 file = file,
                 bindingContext = result.bindingContext,

@@ -8,7 +8,7 @@ import org.jetbrains.kotlin.psi.KtNamedDeclaration
 import org.jetbrains.kotlin.psi.KtSimpleNameExpression
 import org.jetbrains.kotlin.resolve.BindingContext
 
-internal object K2RenameResolver {
+object K2RenameResolver {
 
     fun renameEditsForSymbol(
         session: K2AnalysisSession,
