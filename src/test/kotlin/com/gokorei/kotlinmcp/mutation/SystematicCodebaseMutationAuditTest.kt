@@ -1,13 +1,21 @@
 package com.gokorei.kotlinmcp.mutation
 
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestInstance
 
 @Tag("hardening")
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class SystematicCodebaseMutationAuditTest {
 
     private val pipeline = DefaultMutationExecutionPipeline()
+
+    @AfterAll
+    fun tearDown() {
+        pipeline.close()
+    }
 
     private fun assertHighMutationScore(
         moduleName: String,
@@ -34,6 +42,7 @@ class SystematicCodebaseMutationAuditTest {
         println("=======================================================\n")
 
         assertTrue(report.totalMutants > 0, "Expected mutants to be generated for $moduleName")
+        assertTrue(report.effectiveMutants > 0, "Expected executable mutants to be generated for $moduleName")
         assertTrue(
             report.score >= minScore,
             "Mutation score for $moduleName (${report.score}%) must be at least $minScore%"

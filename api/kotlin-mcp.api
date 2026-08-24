@@ -1447,67 +1447,9 @@ public final class com/gokorei/kotlinmcp/project/VulnerabilityAuditor {
 	public static final field Companion Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$Companion;
 	public fun <init> ()V
 	public final fun checkVulnerabilities (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
-	public final fun extractDependencyCoordinates (Ljava/lang/String;Ljava/lang/String;)Ljava/util/List;
-	public static synthetic fun extractDependencyCoordinates$default (Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
-	public final fun extractFixedVersion (Lkotlinx/serialization/json/JsonObject;)Ljava/lang/String;
-	public final fun parseOsvBatchResponse (Ljava/lang/String;Ljava/util/List;)Ljava/util/List;
-	public final fun parseSeverity (Lkotlinx/serialization/json/JsonObject;)Ljava/lang/String;
-	public final fun resolveCatalogCoordinate (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$DependencyCoordinate;
 }
 
 public final class com/gokorei/kotlinmcp/project/VulnerabilityAuditor$Companion {
-	public final fun mavenVersionCompare (Ljava/lang/String;Ljava/lang/String;)I
-}
-
-public final class com/gokorei/kotlinmcp/project/VulnerabilityAuditor$DependencyCoordinate {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun component3 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$DependencyCoordinate;
-	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$DependencyCoordinate;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$DependencyCoordinate;
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getCoordinate ()Ljava/lang/String;
-	public final fun getGroup ()Ljava/lang/String;
-	public final fun getName ()Ljava/lang/String;
-	public final fun getVersion ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class com/gokorei/kotlinmcp/project/VulnerabilityAuditor$OfflineVulnerabilityBaseline {
-	public static final field INSTANCE Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$OfflineVulnerabilityBaseline;
-	public final fun check (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityAdvisory;
-}
-
-public final class com/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityAdvisory {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun component3 ()Ljava/lang/String;
-	public final fun component4 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityAdvisory;
-	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityAdvisory;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityAdvisory;
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getFixedVersion ()Ljava/lang/String;
-	public final fun getId ()Ljava/lang/String;
-	public final fun getSeverity ()Ljava/lang/String;
-	public final fun getSummary ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class com/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityFinding {
-	public fun <init> (Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$DependencyCoordinate;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityAdvisory;)V
-	public final fun component1 ()Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$DependencyCoordinate;
-	public final fun component2 ()Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityAdvisory;
-	public final fun copy (Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$DependencyCoordinate;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityAdvisory;)Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityFinding;
-	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityFinding;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$DependencyCoordinate;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityAdvisory;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityFinding;
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getAdvisory ()Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$VulnerabilityAdvisory;
-	public final fun getDependency ()Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor$DependencyCoordinate;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
 }
 
 public final class com/gokorei/kotlinmcp/refactoring/ArrowRefactorer {

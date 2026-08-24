@@ -311,20 +311,23 @@ class AstMutantGenerator {
 
         // Generate Higher-Order Mutants (HOM) if maxOrder >= 2
         if (maxOrder >= 2 && edits.size >= 2) {
-            val nonOverlappingPairs = mutableListOf<Pair<AstEdit, AstEdit>>()
-            for (i in edits.indices) {
-                for (j in (i + 1) until edits.size) {
+            val maxSampled = 20
+            val sampledPairs = mutableListOf<Pair<AstEdit, AstEdit>>()
+            val totalEdits = edits.size
+            val stride = (totalEdits / 10).coerceAtLeast(1)
+
+            outer@ for (i in 0 until totalEdits step stride) {
+                for (j in (i + 1) until totalEdits) {
                     val e1 = edits[i]
                     val e2 = edits[j]
                     // Ensure edits do not overlap in text range
                     if (e1.endOffset <= e2.startOffset || e2.endOffset <= e1.startOffset) {
-                        nonOverlappingPairs.add(Pair(e1, e2))
+                        sampledPairs.add(Pair(e1, e2))
+                        if (sampledPairs.size >= maxSampled) break@outer
                     }
                 }
             }
 
-            // Cap higher-order combinations to maintain sub-second performance
-            val sampledPairs = nonOverlappingPairs.take(20)
             sampledPairs.forEachIndexed { idx, (e1, e2) ->
                 // Apply right-to-left so offsets remain valid
                 val sorted = listOf(e1, e2).sortedByDescending { it.startOffset }

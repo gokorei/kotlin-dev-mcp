@@ -493,8 +493,8 @@ class DefaultProjectService(
         val psi = K2SnippetFrontend.parsePsi(effectiveContent)
 
         val configs = "implementation|api|testImplementation|runtimeOnly|compileOnly|testRuntimeOnly|androidTestImplementation"
-        // Groovy DSL: configuration 'group:artifact:version' or "group:artifact:version"
-        Regex("""($configs)\s+["']([^"']+)["']""").findAll(effectiveContent).forEach {
+        // Groovy DSL fallback on caller-supplied content: configuration 'group:artifact:version' or "group:artifact:version"
+        Regex("""($configs)\s+["']([^"']+)["']""").findAll(content).forEach {
             entries.add("- `${it.groupValues[2]}` (${it.groupValues[1]})")
         }
 

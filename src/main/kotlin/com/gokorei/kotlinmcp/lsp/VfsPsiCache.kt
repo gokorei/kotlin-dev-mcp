@@ -245,7 +245,7 @@ class DefaultVfsPsiCache(
                 handleWatchEvent(dirPath, event, ws, modifiers)
             }
         }
-        val valid = key.reset()
+        val valid = runCatching { key.reset() }.getOrElse { false }
         if (!valid) {
             watchKeys.remove(key)
         }

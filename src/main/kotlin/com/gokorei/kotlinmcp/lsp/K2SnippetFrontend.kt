@@ -137,7 +137,7 @@ object K2SnippetFrontend {
     }
 
     @Synchronized
-    @Suppress("DEPRECATION")
+    @Suppress("DEPRECATION", "DEPRECATION_ERROR", "OPT_IN_USAGE", "OPT_IN_USAGE_ERROR")
     @OptIn(org.jetbrains.kotlin.K1Deprecation::class)
     fun analyzeSession(code: String, extraFiles: List<KtFile> = emptyList()): K2AnalysisSession? {
         if (disposed) return null
@@ -145,25 +145,18 @@ object K2SnippetFrontend {
         val allFiles = listOf(file) + extraFiles
         return try {
             val trace = NoScopeRecordCliBindingTrace(environment.project)
-            val analyzeMethod = TopDownAnalyzerFacadeForJVM::class.java.methods
-                .first { it.name == "analyzeFilesWithJavaIntegration" && it.parameterCount == 7 }
-            val provider = { scope: org.jetbrains.kotlin.com.intellij.psi.search.GlobalSearchScope ->
-                environment.createPackagePartProvider(scope)
-            }
-            val declProviderFactory = { storageManager: org.jetbrains.kotlin.storage.StorageManager, files: Collection<KtFile> ->
-                org.jetbrains.kotlin.resolve.lazy.declarations.FileBasedDeclarationProviderFactory(storageManager, files)
-            }
             val scope = org.jetbrains.kotlin.com.intellij.psi.search.GlobalSearchScope.allScope(environment.project)
-            val result = analyzeMethod.invoke(
-                null,
+            val result = TopDownAnalyzerFacadeForJVM.analyzeFilesWithJavaIntegration(
                 environment.project,
                 allFiles,
                 trace,
                 environment.configuration,
-                provider,
-                declProviderFactory,
+                { s -> environment.createPackagePartProvider(s) },
+                { storageManager, files ->
+                    org.jetbrains.kotlin.resolve.lazy.declarations.FileBasedDeclarationProviderFactory(storageManager, files)
+                },
                 scope
-            ) as org.jetbrains.kotlin.analyzer.AnalysisResult
+            )
             K2AnalysisSession(
                 file = file,
                 bindingContext = result.bindingContext,

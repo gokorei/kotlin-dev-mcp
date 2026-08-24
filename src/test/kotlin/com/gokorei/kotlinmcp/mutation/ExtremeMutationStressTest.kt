@@ -1,13 +1,21 @@
 package com.gokorei.kotlinmcp.mutation
 
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestInstance
 
 @Tag("hardening")
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ExtremeMutationStressTest {
 
     private val pipeline = DefaultMutationExecutionPipeline()
+
+    @AfterAll
+    fun tearDown() {
+        pipeline.close()
+    }
 
     @Test
     fun `extreme mutation test with condition replacements and constant distortions`() {
