@@ -36,15 +36,16 @@ class DefaultMutationExecutionPipeline(
     ): MutationReport {
         val trimmedCode = code.trim()
         val trimmedTest = testCode?.trim().orEmpty()
-        val baselineCombined = mergeSourceAndTest(trimmedCode, trimmedTest)
+        val parsedTest = parseTestCode(trimmedTest)
+        val baselineCombined = mergeSourceWithParsedTest(trimmedCode, parsedTest)
 
         // 1. Verify baseline code & tests pass before mutating
         val baselineCompile = SnippetCompiler.compile(baselineCombined)
-        if (baselineCompile is CompileResult.Failed || (baselineCompile is CompileResult.Compiled && baselineCompile.diagnostics.any { it.severity == "error" })) {
+        if (baselineCompile is CompileResult.Failed || (baselineCompile is CompileResult.Compiled && baselineCompile.diagnostics.any { it.severity.equals("error", ignoreCase = true) })) {
             val msg = if (baselineCompile is CompileResult.Failed) {
                 baselineCompile.message
             } else {
-                (baselineCompile as CompileResult.Compiled).diagnostics.filter { it.severity == "error" }.joinToString("; ") { it.message }
+                (baselineCompile as CompileResult.Compiled).diagnostics.filter { it.severity.equals("error", ignoreCase = true) }.joinToString("; ") { it.message }
             }
             if (baselineCompile is CompileResult.Compiled) {
                 SnippetCompiler.cleanup(baselineCompile)
@@ -62,21 +63,6 @@ class DefaultMutationExecutionPipeline(
         }
 
         val compiledBaseline = baselineCompile as CompileResult.Compiled
-        val baselineErrors = compiledBaseline.diagnostics.filter { it.severity.equals("ERROR", ignoreCase = true) }
-        if (baselineErrors.isNotEmpty()) {
-            SnippetCompiler.cleanup(compiledBaseline)
-            val dummyMutant = AstMutant("baseline", MutationOperator.RETURN_VALUE, 1, 1, "", "", "", "Baseline Compilation")
-            return MutationReport(
-                score = 0.0,
-                totalMutants = 0,
-                killedCount = 0,
-                survivedCount = 0,
-                compilationErrorCount = 1,
-                timeoutCount = 0,
-                results = listOf(MutantResult(dummyMutant, MutantStatus.COMPILATION_ERROR, "Baseline code failed compilation with errors:\n" + baselineErrors.joinToString("\n") { "  - [Line ${it.line ?: 0}:${it.column ?: 0}] ${it.message}" }))
-            )
-        }
-
         val baselineResult = try {
             runner.run(compiledBaseline.outDir, timeoutMillis = maxOf(15000L, timeoutPerMutantMs * 2))
         } finally {
@@ -105,7 +91,7 @@ class DefaultMutationExecutionPipeline(
         )
         if (mutants.isEmpty()) {
             return MutationReport(
-                score = 100.0,
+                score = 0.0,
                 totalMutants = 0,
                 killedCount = 0,
                 survivedCount = 0,
@@ -120,17 +106,17 @@ class DefaultMutationExecutionPipeline(
         val results = mutableListOf<MutantResult>()
 
         for (mutant in mutants) {
-            val mutantSourceCombined = mergeSourceAndTest(mutant.mutatedSource, trimmedTest)
+            val mutantSourceCombined = mergeSourceWithParsedTest(mutant.mutatedSource, parsedTest)
 
             val startNanos = System.nanoTime()
             val compiledMutant = SnippetCompiler.compile(mutantSourceCombined)
 
-            if (compiledMutant is CompileResult.Failed || (compiledMutant is CompileResult.Compiled && compiledMutant.diagnostics.any { it.severity == "error" })) {
+            if (compiledMutant is CompileResult.Failed || (compiledMutant is CompileResult.Compiled && compiledMutant.diagnostics.any { it.severity.equals("error", ignoreCase = true) })) {
                 val durMs = (System.nanoTime() - startNanos) / 1_000_000
                 val msg = if (compiledMutant is CompileResult.Failed) {
                     compiledMutant.message
                 } else {
-                    (compiledMutant as CompileResult.Compiled).diagnostics.filter { it.severity == "error" }.joinToString("; ") { it.message }
+                    (compiledMutant as CompileResult.Compiled).diagnostics.filter { it.severity.equals("error", ignoreCase = true) }.joinToString("; ") { it.message }
                 }
                 if (compiledMutant is CompileResult.Compiled) {
                     SnippetCompiler.cleanup(compiledMutant)
@@ -147,21 +133,6 @@ class DefaultMutationExecutionPipeline(
             }
 
             val compiled = compiledMutant as CompileResult.Compiled
-            val mutantErrors = compiled.diagnostics.filter { it.severity.equals("ERROR", ignoreCase = true) }
-            if (mutantErrors.isNotEmpty()) {
-                val durMs = (System.nanoTime() - startNanos) / 1_000_000
-                SnippetCompiler.cleanup(compiled)
-                results.add(
-                    MutantResult(
-                        mutant = mutant,
-                        status = MutantStatus.COMPILATION_ERROR,
-                        details = "Compilation errors: " + mutantErrors.joinToString("; ") { it.message },
-                        durationMs = durMs
-                    )
-                )
-                continue
-            }
-
             try {
                 val runResult = runner.run(compiled.outDir, timeoutMillis = timeoutPerMutantMs)
                 val durMs = (System.nanoTime() - startNanos) / 1_000_000
@@ -216,25 +187,34 @@ class DefaultMutationExecutionPipeline(
         )
     }
 
-    private fun mergeSourceAndTest(code: String, testCode: String): String {
-        if (testCode.isBlank()) return code
+    private data class ParsedTestCode(
+        val packageDirective: String?,
+        val imports: List<String>,
+        val body: String
+    )
+
+    private fun parseTestCode(testCode: String): ParsedTestCode {
+        if (testCode.isBlank()) return ParsedTestCode(null, emptyList(), "")
+        val testFile = K2SnippetFrontend.parsePsi(testCode)
+        if (testFile == null) return ParsedTestCode(null, emptyList(), testCode)
+        val imports = testFile.importDirectives.map { it.text }
+        val pkg = testFile.packageDirective?.takeIf { it.text.isNotBlank() }?.text
+        val body = stripPackageAndImports(testCode, testFile)
+        return ParsedTestCode(pkg, imports, body)
+    }
+
+    private fun mergeSourceWithParsedTest(code: String, test: ParsedTestCode): String {
+        if (test.body.isBlank()) return code
 
         val codeFile = K2SnippetFrontend.parsePsi(code)
-        val testFile = K2SnippetFrontend.parsePsi(testCode)
-
-        if (codeFile == null || testFile == null) {
-            return "$code\n\n$testCode".trim()
+        if (codeFile == null) {
+            return "$code\n\n${test.body}".trim()
         }
 
         val codeImports = codeFile.importDirectives.map { it.text }
-        val testImports = testFile.importDirectives.map { it.text }
-        val allImports = (codeImports + testImports).distinct()
-
-        val selectedPackage = codeFile.packageDirective?.takeIf { it.text.isNotBlank() }?.text
-            ?: testFile.packageDirective?.takeIf { it.text.isNotBlank() }?.text
-
+        val allImports = (codeImports + test.imports).distinct()
+        val selectedPackage = codeFile.packageDirective?.takeIf { it.text.isNotBlank() }?.text ?: test.packageDirective
         val codeBody = stripPackageAndImports(code, codeFile)
-        val testBody = stripPackageAndImports(testCode, testFile)
 
         val sb = StringBuilder()
         if (selectedPackage != null) {
@@ -247,7 +227,7 @@ class DefaultMutationExecutionPipeline(
         }
         sb.appendLine(codeBody)
         sb.appendLine()
-        sb.appendLine(testBody)
+        sb.appendLine(test.body)
         return sb.toString().trim()
     }
 

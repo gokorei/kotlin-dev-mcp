@@ -58,6 +58,8 @@ class AstMutatorsTest {
         assertTrue(edits.any { it.replacement == "isActive" && it.description.contains("Negation inverted") })
         assertTrue(edits.any { it.replacement == "false" && it.originalText == "true" })
         assertTrue(edits.any { it.replacement == "true" && it.originalText == "false" })
+        assertTrue(edits.any { it.replacement == "&&" && it.description.contains("Replaced || with &&") })
+        assertTrue(edits.any { it.replacement == "||" && it.description.contains("Replaced && with ||") })
     }
 
     @Test
@@ -67,12 +69,17 @@ class AstMutatorsTest {
             fun compute(): Int {
                 return 42
             }
+            fun greet(): String {
+                return "hello"
+            }
         """.trimIndent()
         val edits = parseAndMutate(code, mutator)
 
         assertTrue(edits.isNotEmpty())
         assertTrue(edits.any { it.replacement == "0" })
         assertTrue(edits.any { it.replacement == "false" })
+        assertTrue(edits.any { it.replacement == "\"\"" })
+        assertTrue(edits.any { it.replacement == "\"mutated\"" })
     }
 
     @Test

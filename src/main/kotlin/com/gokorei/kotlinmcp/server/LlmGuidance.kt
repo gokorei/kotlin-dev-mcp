@@ -28,7 +28,7 @@ object LlmGuidance {
         appendLine()
         appendLine("| Tool | Action | Required Parameters | Purpose | Token Cost |")
         appendLine("| :--- | :--- | :--- | :--- | :--- |")
-        appendLine("| `kotlin_check_snippet` | N/A | `code` | Fast in-memory syntax & type check | Low (<200) |")
+        appendLine("| `kotlin_check_snippet` | `check`\\|`mutate` | `code` (required), `testCode` (for `mutate`) | Fast in-memory syntax/type check or in-memory AST mutation testing | Low (<200) |")
         appendLine("| `kotlin_docs_read` | `search`\\|`lookup`\\|`explain` | `query` (optional: `preset=\"compact\"`) | Stdlib & language documentation lookup | Low-Med (Use `preset=\"compact\"`) |")
         appendLine("| `kotlin_code_analyze` | `file_context`\\|`nullability`\\|`coroutines`\\|`symbol_declarations`\\|`ast_dump` | `code` (optional: `filePath`) | Single-file PSI AST analysis | Low-Med |")
         appendLine("| `kotlin_text_lsp_read` | `definition`\\|`references`\\|`type_hierarchy`\\|`call_hierarchy`\\|`workspace_search` | `symbol` + `workspacePath` | Cross-file semantic LSP navigation | Med |")

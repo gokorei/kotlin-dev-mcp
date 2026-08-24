@@ -105,6 +105,8 @@ class AstMutantGeneratorTest {
         val returnMutants = mutants.filter { it.operator == MutationOperator.RETURN_VALUE }
 
         assertTrue(returnMutants.isNotEmpty(), "Expected return value mutants")
+        assertTrue(returnMutants.any { it.mutatedSource.contains("return \"\"") }, "Expected return empty string mutant")
+        assertTrue(returnMutants.any { it.mutatedSource.contains("return \"mutated\"") }, "Expected return altered string mutant")
     }
 
     @Test

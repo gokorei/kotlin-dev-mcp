@@ -247,9 +247,11 @@ class ReturnValueMutator : AstMutator {
         val range = returned.textRange
         val (line, col) = context.lineAndCol(range.startOffset)
         val text = returned.text.trim()
+        val isStringExpr = returned is KtStringTemplateExpression ||
+            (returned is KtBinaryExpression && (returned.left is KtStringTemplateExpression || returned.right is KtStringTemplateExpression))
 
         val replacements = mutableListOf<Pair<String, String>>()
-        if (text.startsWith("\"") || text.contains("\"")) {
+        if (isStringExpr) {
             replacements.add("\"\"" to "Replaced return string with empty string")
             replacements.add("\"mutated\"" to "Replaced return string with altered string")
         } else {
@@ -450,7 +452,7 @@ class MutatorRegistry(
 
     fun mutators(includeExtreme: Boolean = false): List<AstMutator> {
         return if (includeExtreme) {
-            registeredMutators
+            registeredMutators.toList()
         } else {
             registeredMutators.filter { it.category == MutatorCategory.STANDARD }
         }
