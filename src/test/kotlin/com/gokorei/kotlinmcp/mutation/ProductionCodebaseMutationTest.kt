@@ -9171,11 +9171,13 @@ class ProductionCodebaseMutationTest {
     @Test
     fun `mutation test production AstMutantGenerator source file`() {
         val modelsFile = File("src/main/kotlin/com/gokorei/kotlinmcp/mutation/MutationModels.kt")
+        val mutatorsFile = File("src/main/kotlin/com/gokorei/kotlinmcp/mutation/AstMutators.kt")
         val generatorFile = File("src/main/kotlin/com/gokorei/kotlinmcp/mutation/AstMutantGenerator.kt")
         assertTrue(modelsFile.exists(), "Target file must exist: ${modelsFile.absolutePath}")
+        assertTrue(mutatorsFile.exists(), "Target file must exist: ${mutatorsFile.absolutePath}")
         assertTrue(generatorFile.exists(), "Target file must exist: ${generatorFile.absolutePath}")
 
-        val imports = (modelsFile.readLines() + generatorFile.readLines())
+        val imports = (modelsFile.readLines() + mutatorsFile.readLines() + generatorFile.readLines())
             .filter { it.trim().startsWith("import ") }
             .distinct()
             .joinToString("\n")
@@ -9185,12 +9187,17 @@ class ProductionCodebaseMutationTest {
             .filterNot { it.trim().startsWith("import ") }
             .joinToString("\n")
 
+        val mutatorsBody = mutatorsFile.readLines()
+            .filterNot { it.trim().startsWith("package ") }
+            .filterNot { it.trim().startsWith("import ") }
+            .joinToString("\n")
+
         val generatorBody = generatorFile.readLines()
             .filterNot { it.trim().startsWith("package ") }
             .filterNot { it.trim().startsWith("import ") }
             .joinToString("\n")
 
-        val productionCode = imports + "\n\n" + modelsBody + "\n\n" + generatorBody
+        val productionCode = imports + "\n\n" + modelsBody + "\n\n" + mutatorsBody + "\n\n" + generatorBody
 
         val testSuiteCode = """
             fun main() {

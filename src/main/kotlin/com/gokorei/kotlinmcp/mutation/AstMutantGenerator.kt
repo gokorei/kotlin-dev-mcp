@@ -2,30 +2,18 @@ package com.gokorei.kotlinmcp.mutation
 
 import com.gokorei.kotlinmcp.lsp.K2SnippetFrontend
 import org.jetbrains.kotlin.com.intellij.psi.PsiElement
-import org.jetbrains.kotlin.lexer.KtTokens
-import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.psi.KtElement
+import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import java.util.UUID
 
 /**
- * Internal descriptor of a discrete AST replacement edit.
+ * In-memory AST mutation generator using K2 PSI and pluggable AstMutator SPI.
+ * Traverses Kotlin source code in-memory and delegates mutation synthesis to registered
+ * AST mutator rules across standard, extreme structural, and higher-order compound operators.
  */
-private data class AstEdit(
-    val startOffset: Int,
-    val endOffset: Int,
-    val replacement: String,
-    val originalText: String,
-    val operator: MutationOperator,
-    val description: String,
-    val line: Int,
-    val column: Int
-)
-
-/**
- * In-memory AST mutation generator using K2 PSI.
- * Traverses Kotlin source code in-memory and produces syntax mutants
- * across standard, extreme structural, and higher-order compound operators.
- */
-class AstMutantGenerator {
+class AstMutantGenerator(
+    private val registry: MutatorRegistry = MutatorRegistry.default()
+) {
 
     fun generate(
         code: String,
@@ -34,264 +22,24 @@ class AstMutantGenerator {
     ): List<AstMutant> {
         if (code.isBlank()) return emptyList()
         val file = K2SnippetFrontend.parsePsi(code) ?: return emptyList()
+        val context = MutationContext(code, file)
+        val activeMutators = registry.mutators(includeExtremeOperators)
         val edits = mutableListOf<AstEdit>()
 
         file.accept(object : KtTreeVisitorVoid() {
-
-            // 1. Relational Boundary & Arithmetic Mutations
-            override fun visitBinaryExpression(expression: KtBinaryExpression) {
-                val opRef = expression.operationReference
-                val opText = opRef.text
-                val opElement = opRef.operationSignTokenType
-
-                val relationalReplacements = when (opElement) {
-                    KtTokens.LT -> listOf("<=" to "Replaced < with <=")
-                    KtTokens.LTEQ -> listOf("<" to "Replaced <= with <")
-                    KtTokens.GT -> listOf(">=" to "Replaced > with >=")
-                    KtTokens.GTEQ -> listOf(">" to "Replaced >= with >")
-                    KtTokens.EQEQ -> listOf("!=" to "Replaced == with !=")
-                    KtTokens.EXCLEQ -> listOf("==" to "Replaced != with ==")
-                    else -> emptyList()
-                }
-
-                for ((replacement, desc) in relationalReplacements) {
-                    val range = opRef.textRange
-                    val (line, col) = computeLineAndColumn(code, range.startOffset)
-                    edits.add(
-                        AstEdit(
-                            startOffset = range.startOffset,
-                            endOffset = range.endOffset,
-                            replacement = replacement,
-                            originalText = expression.text,
-                            operator = MutationOperator.RELATIONAL_BOUNDARY,
-                            description = desc,
-                            line = line,
-                            column = col
-                        )
-                    )
-                }
-
-                val arithmeticReplacements = when (opElement) {
-                    KtTokens.PLUS -> listOf("-" to "Replaced + with -")
-                    KtTokens.MINUS -> listOf("+" to "Replaced - with +")
-                    KtTokens.MUL -> listOf("/" to "Replaced * with /")
-                    KtTokens.DIV -> listOf("*" to "Replaced / with *")
-                    KtTokens.PERC -> listOf("*" to "Replaced % with *")
-                    else -> emptyList()
-                }
-
-                for ((replacement, desc) in arithmeticReplacements) {
-                    val range = opRef.textRange
-                    val (line, col) = computeLineAndColumn(code, range.startOffset)
-                    edits.add(
-                        AstEdit(
-                            startOffset = range.startOffset,
-                            endOffset = range.endOffset,
-                            replacement = replacement,
-                            originalText = expression.text,
-                            operator = MutationOperator.ARITHMETIC_OPERATOR,
-                            description = desc,
-                            line = line,
-                            column = col
-                        )
-                    )
-                }
-
-                super.visitBinaryExpression(expression)
-            }
-
-            // 2. Boolean Inversions on Prefix Expressions (!flag -> flag)
-            override fun visitPrefixExpression(expression: KtPrefixExpression) {
-                if (expression.operationToken == KtTokens.EXCL) {
-                    val baseExpr = expression.baseExpression
-                    if (baseExpr != null) {
-                        val range = expression.textRange
-                        val replacement = baseExpr.text
-                        val (line, col) = computeLineAndColumn(code, range.startOffset)
-                        edits.add(
-                            AstEdit(
-                                startOffset = range.startOffset,
-                                endOffset = range.endOffset,
-                                replacement = replacement,
-                                originalText = expression.text,
-                                operator = MutationOperator.BOOLEAN_INVERSION,
-                                description = "Negation inverted (removed '!')",
-                                line = line,
-                                column = col
-                            )
-                        )
+            override fun visitElement(element: PsiElement) {
+                for (mutator in activeMutators) {
+                    if (mutator.canMutate(element)) {
+                        edits.addAll(mutator.mutate(element, context))
                     }
                 }
-                super.visitPrefixExpression(expression)
-            }
-
-            // 3. Boolean Literal & Constant Mutations
-            override fun visitConstantExpression(expression: KtConstantExpression) {
-                val text = expression.text
-                val range = expression.textRange
-                val (line, col) = computeLineAndColumn(code, range.startOffset)
-
-                if (text == "true" || text == "false") {
-                    val replacement = if (text == "true") "false" else "true"
-                    edits.add(
-                        AstEdit(
-                            startOffset = range.startOffset,
-                            endOffset = range.endOffset,
-                            replacement = replacement,
-                            originalText = text,
-                            operator = MutationOperator.BOOLEAN_INVERSION,
-                            description = "Inverted boolean literal from '$text' to '$replacement'",
-                            line = line,
-                            column = col
-                        )
-                    )
-                } else if (includeExtremeOperators) {
-                    val intVal = text.toIntOrNull()
-                    if (intVal != null) {
-                        listOf((intVal + 1).toString(), (intVal - 1).toString()).forEach { mutatedNum ->
-                            edits.add(
-                                AstEdit(
-                                    startOffset = range.startOffset,
-                                    endOffset = range.endOffset,
-                                    replacement = mutatedNum,
-                                    originalText = text,
-                                    operator = MutationOperator.LITERAL_MUTATION,
-                                    description = "Altered integer constant $text -> $mutatedNum",
-                                    line = line,
-                                    column = col
-                                )
-                            )
-                        }
-                    }
-                }
-                super.visitConstantExpression(expression)
-            }
-
-            // 4. Return Value Mutations
-            override fun visitReturnExpression(expression: KtReturnExpression) {
-                val returnedExpr = expression.returnedExpression
-                if (returnedExpr != null) {
-                    val range = returnedExpr.textRange
-                    val (line, col) = computeLineAndColumn(code, range.startOffset)
-                    val replacements = listOf(
-                        "0" to "Replaced return value with 0",
-                        "false" to "Replaced return value with false"
-                    )
-
-                    for ((replacement, desc) in replacements) {
-                        if (returnedExpr.text.trim() != replacement) {
-                            edits.add(
-                                AstEdit(
-                                    startOffset = range.startOffset,
-                                    endOffset = range.endOffset,
-                                    replacement = replacement,
-                                    originalText = expression.text,
-                                    operator = MutationOperator.RETURN_VALUE,
-                                    description = desc,
-                                    line = line,
-                                    column = col
-                                )
-                            )
-                        }
-                    }
-                }
-                super.visitReturnExpression(expression)
-            }
-
-            // 5. Void Call Omissions
-            override fun visitCallExpression(expression: KtCallExpression) {
-                val parent = expression.parent
-                val isStandaloneStatement = parent is KtBlockExpression ||
-                    (parent is KtDotQualifiedExpression && parent.parent is KtBlockExpression)
-
-                val targetElement: PsiElement = if (parent is KtDotQualifiedExpression && parent.parent is KtBlockExpression) {
-                    parent
-                } else expression
-
-                if (isStandaloneStatement) {
-                    val range = targetElement.textRange
-                    val (line, col) = computeLineAndColumn(code, range.startOffset)
-                    edits.add(
-                        AstEdit(
-                            startOffset = range.startOffset,
-                            endOffset = range.endOffset,
-                            replacement = "Unit",
-                            originalText = targetElement.text,
-                            operator = MutationOperator.VOID_CALL_REMOVAL,
-                            description = "Omitted statement '${targetElement.text.take(30)}'",
-                            line = line,
-                            column = col
-                        )
-                    )
-                }
-
-                if (includeExtremeOperators) {
-                    val calleeName = expression.calleeExpression?.text
-                    val collectionReplacements = when (calleeName) {
-                        "filter" -> listOf("filterNot" to "Inverted filter -> filterNot")
-                        "filterNot" -> listOf("filter" to "Inverted filterNot -> filter")
-                        "any" -> listOf("all" to "Inverted any -> all")
-                        "all" -> listOf("any" to "Inverted all -> any")
-                        "take" -> listOf("drop" to "Inverted take -> drop")
-                        "drop" -> listOf("take" to "Inverted drop -> take")
-                        "first" -> listOf("last" to "Inverted first -> last")
-                        "last" -> listOf("first" to "Inverted last -> first")
-                        else -> emptyList()
-                    }
-                    val callee = expression.calleeExpression
-                    if (callee != null) {
-                        for ((rep, desc) in collectionReplacements) {
-                            val range = callee.textRange
-                            val (line, col) = computeLineAndColumn(code, range.startOffset)
-                            edits.add(
-                                AstEdit(
-                                    startOffset = range.startOffset,
-                                    endOffset = range.endOffset,
-                                    replacement = rep,
-                                    originalText = callee.text,
-                                    operator = MutationOperator.COLLECTION_OPERATOR,
-                                    description = desc,
-                                    line = line,
-                                    column = col
-                                )
-                            )
-                        }
-                    }
-                }
-
-                super.visitCallExpression(expression)
-            }
-
-            // 6. Extreme: Condition Replacement (if (expr) -> if (true) / if (false))
-            override fun visitIfExpression(expression: KtIfExpression) {
-                if (includeExtremeOperators) {
-                    val cond = expression.condition
-                    if (cond != null && cond.text != "true" && cond.text != "false") {
-                        val range = cond.textRange
-                        val (line, col) = computeLineAndColumn(code, range.startOffset)
-                        listOf("true", "false").forEach { boolRep ->
-                            edits.add(
-                                AstEdit(
-                                    startOffset = range.startOffset,
-                                    endOffset = range.endOffset,
-                                    replacement = boolRep,
-                                    originalText = cond.text,
-                                    operator = MutationOperator.CONDITION_REPLACEMENT,
-                                    description = "Replaced condition '${cond.text}' with '$boolRep'",
-                                    line = line,
-                                    column = col
-                                )
-                            )
-                        }
-                    }
-                }
-                super.visitIfExpression(expression)
+                super.visitElement(element)
             }
         })
 
         val mutants = mutableListOf<AstMutant>()
 
-        // Generate First-Order Mutants (FOM)
+        // 1. Generate First-Order Mutants (FOM)
         edits.forEachIndexed { index, edit ->
             val mutatedSource = replaceRange(code, edit.startOffset, edit.endOffset, edit.replacement)
             mutants.add(
@@ -309,7 +57,7 @@ class AstMutantGenerator {
             )
         }
 
-        // Generate Higher-Order Mutants (HOM) if maxOrder >= 2
+        // 2. Generate Higher-Order Mutants (HOM) if maxOrder >= 2
         if (maxOrder >= 2 && edits.size >= 2) {
             val maxSampled = 20
             val sampledPairs = mutableListOf<Pair<AstEdit, AstEdit>>()
@@ -357,18 +105,5 @@ class AstMutantGenerator {
 
     private fun replaceRange(source: String, start: Int, end: Int, replacement: String): String {
         return source.substring(0, start) + replacement + source.substring(end)
-    }
-
-    private fun computeLineAndColumn(source: String, offset: Int): Pair<Int, Int> {
-        var line = 1
-        var lastLineBreak = -1
-        for (i in 0 until offset.coerceAtMost(source.length)) {
-            if (source[i] == '\n') {
-                line++
-                lastLineBreak = i
-            }
-        }
-        val col = offset - lastLineBreak
-        return Pair(line, col)
     }
 }

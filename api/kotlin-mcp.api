@@ -1143,6 +1143,39 @@ public final class com/gokorei/kotlinmcp/models/ResponseProjection {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/gokorei/kotlinmcp/mutation/ArithmeticOperatorMutator : com/gokorei/kotlinmcp/mutation/AstMutator {
+	public fun <init> ()V
+	public fun canMutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;)Z
+	public fun getCategory ()Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+	public fun getOperator ()Lcom/gokorei/kotlinmcp/mutation/MutationOperator;
+	public fun mutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;Lcom/gokorei/kotlinmcp/mutation/MutationContext;)Ljava/util/List;
+}
+
+public final class com/gokorei/kotlinmcp/mutation/AstEdit {
+	public fun <init> (IILjava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/mutation/MutationOperator;Ljava/lang/String;II)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Lcom/gokorei/kotlinmcp/mutation/MutationOperator;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()I
+	public final fun component8 ()I
+	public final fun copy (IILjava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/mutation/MutationOperator;Ljava/lang/String;II)Lcom/gokorei/kotlinmcp/mutation/AstEdit;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/mutation/AstEdit;IILjava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/mutation/MutationOperator;Ljava/lang/String;IIILjava/lang/Object;)Lcom/gokorei/kotlinmcp/mutation/AstEdit;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getColumn ()I
+	public final fun getDescription ()Ljava/lang/String;
+	public final fun getEndOffset ()I
+	public final fun getLine ()I
+	public final fun getOperator ()Lcom/gokorei/kotlinmcp/mutation/MutationOperator;
+	public final fun getOriginalText ()Ljava/lang/String;
+	public final fun getReplacement ()Ljava/lang/String;
+	public final fun getStartOffset ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/gokorei/kotlinmcp/mutation/AstMutant {
 	public static final field Companion Lcom/gokorei/kotlinmcp/mutation/AstMutant$Companion;
 	public fun <init> (Ljava/lang/String;Lcom/gokorei/kotlinmcp/mutation/MutationOperator;IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V
@@ -1189,8 +1222,41 @@ public final class com/gokorei/kotlinmcp/mutation/AstMutant$Companion {
 
 public final class com/gokorei/kotlinmcp/mutation/AstMutantGenerator {
 	public fun <init> ()V
+	public fun <init> (Lcom/gokorei/kotlinmcp/mutation/MutatorRegistry;)V
+	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/mutation/MutatorRegistry;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun generate (Ljava/lang/String;ZI)Ljava/util/List;
 	public static synthetic fun generate$default (Lcom/gokorei/kotlinmcp/mutation/AstMutantGenerator;Ljava/lang/String;ZIILjava/lang/Object;)Ljava/util/List;
+}
+
+public abstract interface class com/gokorei/kotlinmcp/mutation/AstMutator {
+	public abstract fun canMutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;)Z
+	public abstract fun getCategory ()Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+	public abstract fun getOperator ()Lcom/gokorei/kotlinmcp/mutation/MutationOperator;
+	public abstract fun mutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;Lcom/gokorei/kotlinmcp/mutation/MutationContext;)Ljava/util/List;
+}
+
+public final class com/gokorei/kotlinmcp/mutation/BooleanInversionMutator : com/gokorei/kotlinmcp/mutation/AstMutator {
+	public fun <init> ()V
+	public fun canMutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;)Z
+	public fun getCategory ()Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+	public fun getOperator ()Lcom/gokorei/kotlinmcp/mutation/MutationOperator;
+	public fun mutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;Lcom/gokorei/kotlinmcp/mutation/MutationContext;)Ljava/util/List;
+}
+
+public final class com/gokorei/kotlinmcp/mutation/CollectionOperatorMutator : com/gokorei/kotlinmcp/mutation/AstMutator {
+	public fun <init> ()V
+	public fun canMutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;)Z
+	public fun getCategory ()Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+	public fun getOperator ()Lcom/gokorei/kotlinmcp/mutation/MutationOperator;
+	public fun mutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;Lcom/gokorei/kotlinmcp/mutation/MutationContext;)Ljava/util/List;
+}
+
+public final class com/gokorei/kotlinmcp/mutation/ConditionReplacementMutator : com/gokorei/kotlinmcp/mutation/AstMutator {
+	public fun <init> ()V
+	public fun canMutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;)Z
+	public fun getCategory ()Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+	public fun getOperator ()Lcom/gokorei/kotlinmcp/mutation/MutationOperator;
+	public fun mutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;Lcom/gokorei/kotlinmcp/mutation/MutationContext;)Ljava/util/List;
 }
 
 public final class com/gokorei/kotlinmcp/mutation/DefaultMutationExecutionPipeline : com/gokorei/kotlinmcp/mutation/MutationExecutionPipeline {
@@ -1207,6 +1273,14 @@ public final class com/gokorei/kotlinmcp/mutation/DefaultMutationService : com/g
 	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/mutation/MutationExecutionPipeline;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun close ()V
 	public fun mutateAndTest (Ljava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/models/ResponseProjection;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/mutation/LiteralMutationMutator : com/gokorei/kotlinmcp/mutation/AstMutator {
+	public fun <init> ()V
+	public fun canMutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;)Z
+	public fun getCategory ()Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+	public fun getOperator ()Lcom/gokorei/kotlinmcp/mutation/MutationOperator;
+	public fun mutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;Lcom/gokorei/kotlinmcp/mutation/MutationContext;)Ljava/util/List;
 }
 
 public final class com/gokorei/kotlinmcp/mutation/MutantResult {
@@ -1256,6 +1330,20 @@ public final class com/gokorei/kotlinmcp/mutation/MutantStatus : java/lang/Enum 
 
 public final class com/gokorei/kotlinmcp/mutation/MutantStatus$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/gokorei/kotlinmcp/mutation/MutationContext {
+	public fun <init> (Ljava/lang/String;Lorg/jetbrains/kotlin/psi/KtFile;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lorg/jetbrains/kotlin/psi/KtFile;
+	public final fun copy (Ljava/lang/String;Lorg/jetbrains/kotlin/psi/KtFile;)Lcom/gokorei/kotlinmcp/mutation/MutationContext;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/mutation/MutationContext;Ljava/lang/String;Lorg/jetbrains/kotlin/psi/KtFile;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/mutation/MutationContext;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCode ()Ljava/lang/String;
+	public final fun getFile ()Lorg/jetbrains/kotlin/psi/KtFile;
+	public fun hashCode ()I
+	public final fun lineAndCol (I)Lkotlin/Pair;
+	public fun toString ()Ljava/lang/String;
 }
 
 public abstract interface class com/gokorei/kotlinmcp/mutation/MutationExecutionPipeline : java/lang/AutoCloseable {
@@ -1340,6 +1428,54 @@ public abstract interface class com/gokorei/kotlinmcp/mutation/MutationService :
 
 public final class com/gokorei/kotlinmcp/mutation/MutationService$DefaultImpls {
 	public static synthetic fun mutateAndTest$default (Lcom/gokorei/kotlinmcp/mutation/MutationService;Ljava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/models/ResponseProjection;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/mutation/MutatorCategory : java/lang/Enum {
+	public static final field EXTENDED Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+	public static final field EXTREME Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+	public static final field STANDARD Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+	public static fun values ()[Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+}
+
+public final class com/gokorei/kotlinmcp/mutation/MutatorRegistry {
+	public static final field Companion Lcom/gokorei/kotlinmcp/mutation/MutatorRegistry$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun mutators (Z)Ljava/util/List;
+	public static synthetic fun mutators$default (Lcom/gokorei/kotlinmcp/mutation/MutatorRegistry;ZILjava/lang/Object;)Ljava/util/List;
+	public final fun register (Lcom/gokorei/kotlinmcp/mutation/AstMutator;)Lcom/gokorei/kotlinmcp/mutation/MutatorRegistry;
+}
+
+public final class com/gokorei/kotlinmcp/mutation/MutatorRegistry$Companion {
+	public final fun default ()Lcom/gokorei/kotlinmcp/mutation/MutatorRegistry;
+	public final fun defaultMutators ()Ljava/util/List;
+}
+
+public final class com/gokorei/kotlinmcp/mutation/RelationalBoundaryMutator : com/gokorei/kotlinmcp/mutation/AstMutator {
+	public fun <init> ()V
+	public fun canMutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;)Z
+	public fun getCategory ()Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+	public fun getOperator ()Lcom/gokorei/kotlinmcp/mutation/MutationOperator;
+	public fun mutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;Lcom/gokorei/kotlinmcp/mutation/MutationContext;)Ljava/util/List;
+}
+
+public final class com/gokorei/kotlinmcp/mutation/ReturnValueMutator : com/gokorei/kotlinmcp/mutation/AstMutator {
+	public fun <init> ()V
+	public fun canMutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;)Z
+	public fun getCategory ()Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+	public fun getOperator ()Lcom/gokorei/kotlinmcp/mutation/MutationOperator;
+	public fun mutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;Lcom/gokorei/kotlinmcp/mutation/MutationContext;)Ljava/util/List;
+}
+
+public final class com/gokorei/kotlinmcp/mutation/VoidMethodCallMutator : com/gokorei/kotlinmcp/mutation/AstMutator {
+	public fun <init> ()V
+	public fun canMutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;)Z
+	public fun getCategory ()Lcom/gokorei/kotlinmcp/mutation/MutatorCategory;
+	public fun getOperator ()Lcom/gokorei/kotlinmcp/mutation/MutationOperator;
+	public fun mutate (Lorg/jetbrains/kotlin/com/intellij/psi/PsiElement;Lcom/gokorei/kotlinmcp/mutation/MutationContext;)Ljava/util/List;
 }
 
 public final class com/gokorei/kotlinmcp/project/CoverageReporter {
