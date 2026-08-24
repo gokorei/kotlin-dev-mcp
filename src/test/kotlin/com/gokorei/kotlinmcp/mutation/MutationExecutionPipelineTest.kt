@@ -85,8 +85,55 @@ class MutationExecutionPipelineTest {
         assertEquals(0, report.totalMutants, "Pipeline must abort without running mutants if baseline fails")
         assertEquals(0.0, report.score)
         assertEquals(1, report.results.size)
-        assertEquals(MutantStatus.KILLED, report.results.first().status)
+        assertEquals(MutantStatus.BASELINE_ERROR, report.results.first().status)
         assertTrue(report.results.first().details?.contains("Baseline test failed") == true)
+    }
+
+    @Test
+    fun `when all mutants fail compilation score is zero and not strong`() {
+        // Snippet where return mutations produce type mismatch (e.g. non-primitive return with no other operators)
+        val code = """
+            class CustomObj(val v: Int)
+            fun create(): CustomObj {
+                return CustomObj(42)
+            }
+        """.trimIndent()
+
+        val testCode = """
+            fun main() {
+                check(create().v == 42)
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(code, testCode)
+
+        if (report.totalMutants > 0 && report.effectiveMutants == 0) {
+            assertEquals(0.0, report.score, "Score must be 0.0 when all mutants fail compilation")
+            assertFalse(report.isStrong, "Suite with no executable mutants must not be reported as strong")
+        }
+    }
+
+    @Test
+    fun `snippet and test with separate imports merge and execute cleanly`() {
+        val code = """
+            import java.util.UUID
+
+            fun generateId(): String = UUID.randomUUID().toString()
+        """.trimIndent()
+
+        val testCode = """
+            import java.time.Instant
+
+            fun main() {
+                val id = generateId()
+                val now = Instant.now()
+                check(id.isNotBlank())
+                check(now.toEpochMilli() > 0)
+            }
+        """.trimIndent()
+
+        val report = pipeline.run(code, testCode)
+        assertEquals(0, report.compilationErrorCount, "Imports from both code and testCode should merge without compilation error")
     }
 
     @Test

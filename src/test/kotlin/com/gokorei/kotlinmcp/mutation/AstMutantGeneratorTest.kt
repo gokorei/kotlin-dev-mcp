@@ -76,6 +76,38 @@ class AstMutantGeneratorTest {
     }
 
     @Test
+    fun `generates boolean inversion mutants on logical and or operators`() {
+        val code = """
+            fun checkBoth(a: Boolean, b: Boolean): Boolean {
+                return a && b
+            }
+            fun checkEither(a: Boolean, b: Boolean): Boolean {
+                return a || b
+            }
+        """.trimIndent()
+
+        val mutants = generator.generate(code)
+        val booleanMutants = mutants.filter { it.operator == MutationOperator.BOOLEAN_INVERSION }
+
+        assertTrue(booleanMutants.any { it.mutatedSource.contains("a || b") && it.description.contains("Replaced && with ||") })
+        assertTrue(booleanMutants.any { it.mutatedSource.contains("a && b") && it.description.contains("Replaced || with &&") })
+    }
+
+    @Test
+    fun `generates return value mutators for string literals`() {
+        val code = """
+            fun greet(name: String): String {
+                return "Hello, " + name
+            }
+        """.trimIndent()
+
+        val mutants = generator.generate(code)
+        val returnMutants = mutants.filter { it.operator == MutationOperator.RETURN_VALUE }
+
+        assertTrue(returnMutants.isNotEmpty(), "Expected return value mutants")
+    }
+
+    @Test
     fun `generates void call omission mutants for standalone statements`() {
         val code = """
             fun process(item: String) {

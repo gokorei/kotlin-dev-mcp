@@ -42,7 +42,7 @@ class DefaultMutationService(
         }
 
         // Check if baseline failed
-        if (report.totalMutants == 0 && report.results.isNotEmpty() && report.results.first().mutant.id == "baseline") {
+        if (report.totalMutants == 0 && report.results.isNotEmpty() && report.results.first().status == MutantStatus.BASELINE_ERROR) {
             val first = report.results.first()
             return KotlinMcpResult.Error(
                 message = first.details ?: "Baseline test failed before mutation testing.",
@@ -54,7 +54,12 @@ class DefaultMutationService(
         val content = buildString {
             appendLine("# 🧬 In-Memory Mutation Testing Report")
             appendLine()
-            val badge = if (report.isStrong) "🟢 **STRONG (${report.score}%)**" else "🔴 **NEEDS IMPROVEMENT (${report.score}%)**"
+            val badge = when {
+                report.totalMutants == 0 -> "⚪ **NO MUTANTS GENERATED**"
+                report.effectiveMutants == 0 -> "⚠️ **NO EFFECTIVE MUTANTS (All Discarded / Compilation Errors)**"
+                report.isStrong -> "🟢 **STRONG (${report.score}%)**"
+                else -> "🔴 **NEEDS IMPROVEMENT (${report.score}%)**"
+            }
             appendLine("- **Mutation Score:** $badge")
             appendLine("- **Total Mutants Generated:** ${report.totalMutants}")
             appendLine("- **Mutants Killed:** ${report.killedCount} / ${report.effectiveMutants}")
@@ -83,6 +88,8 @@ class DefaultMutationService(
                     appendLine("```")
                     appendLine()
                 }
+            } else if (report.effectiveMutants == 0) {
+                appendLine("⚠️ **No executable mutants could be compiled.** Generated mutations failed type checking or compilation against this snippet signature.")
             } else {
                 appendLine("✅ **All mutants killed!** Your unit test assertions effectively catch all synthesized boundary, relational, and conditional alterations.")
             }

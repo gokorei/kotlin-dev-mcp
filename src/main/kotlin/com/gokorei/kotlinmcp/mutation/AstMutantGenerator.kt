@@ -33,6 +33,8 @@ class AstMutantGenerator {
                     KtTokens.GTEQ -> listOf(">" to "Replaced >= with >")
                     KtTokens.EQEQ -> listOf("!=" to "Replaced == with !=")
                     KtTokens.EXCLEQ -> listOf("==" to "Replaced != with ==")
+                    KtTokens.ANDAND -> listOf("||" to "Replaced && with ||")
+                    KtTokens.OROR -> listOf("&&" to "Replaced || with &&")
                     else -> emptyList()
                 }
 
@@ -47,10 +49,15 @@ class AstMutantGenerator {
                         range.endOffset - exprStart,
                         replacement
                     )
+                    val operator = if (opElement == KtTokens.ANDAND || opElement == KtTokens.OROR) {
+                        MutationOperator.BOOLEAN_INVERSION
+                    } else {
+                        MutationOperator.RELATIONAL_BOUNDARY
+                    }
                     mutants.add(
                         AstMutant(
                             id = "mutant-${mutants.size + 1}-${UUID.randomUUID().toString().take(6)}",
-                            operator = MutationOperator.RELATIONAL_BOUNDARY,
+                            operator = operator,
                             line = line,
                             column = col,
                             originalSnippet = expression.text,
@@ -153,13 +160,33 @@ class AstMutantGenerator {
                 val returnedExpr = expression.returnedExpression
                 if (returnedExpr != null) {
                     val range = returnedExpr.textRange
-                    val replacements = listOf(
-                        "0" to "Replaced return value with 0",
-                        "false" to "Replaced return value with false"
-                    )
+                    val text = returnedExpr.text.trim()
+                    val replacements = mutableListOf<Pair<String, String>>()
+
+                    if (text.startsWith("\"") && text.endsWith("\"")) {
+                        if (text != "\"\"") {
+                            replacements.add("\"\"" to "Replaced return string with \"\"")
+                        } else {
+                            replacements.add("\"mutated\"" to "Replaced empty return string with \"mutated\"")
+                        }
+                    } else if (text == "true" || text == "false") {
+                        val opposite = if (text == "true") "false" else "true"
+                        replacements.add(opposite to "Replaced return boolean with $opposite")
+                    } else if (text.toIntOrNull() != null || text.toLongOrNull() != null) {
+                        if (text == "0" || text == "0L") {
+                            replacements.add("1" to "Replaced return 0 with 1")
+                        } else {
+                            replacements.add("0" to "Replaced return value with 0")
+                        }
+                    } else {
+                        // General fallback replacements
+                        replacements.add("0" to "Replaced return value with 0")
+                        replacements.add("false" to "Replaced return value with false")
+                        replacements.add("null" to "Replaced return value with null")
+                    }
 
                     for ((replacement, desc) in replacements) {
-                        if (returnedExpr.text.trim() != replacement) {
+                        if (text != replacement) {
                             val mutatedCode = replaceRange(code, range.startOffset, range.endOffset, replacement)
                             val (line, col) = computeLineAndColumn(code, range.startOffset)
                             mutants.add(

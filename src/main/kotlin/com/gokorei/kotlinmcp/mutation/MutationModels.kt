@@ -44,7 +44,10 @@ enum class MutantStatus {
     COMPILATION_ERROR,
 
     /** Execution of the mutant exceeded the specified timeout limit. */
-    TIMEOUT
+    TIMEOUT,
+
+    /** Baseline test suite or snippet compilation failed before mutations were applied. */
+    BASELINE_ERROR
 }
 
 /**
@@ -75,5 +78,5 @@ data class MutationReport(
         get() = totalMutants - compilationErrorCount
 
     val isStrong: Boolean
-        get() = score >= 80.0
+        get() = effectiveMutants > 0 && score >= 80.0
 }
