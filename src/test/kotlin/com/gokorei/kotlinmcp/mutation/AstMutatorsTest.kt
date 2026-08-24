@@ -83,6 +83,22 @@ class AstMutatorsTest {
     }
 
     @Test
+    fun `ReturnValueMutator identifies nested string concatenations as string returns`() {
+        val mutator = ReturnValueMutator()
+        val code = """
+            fun format(prefix: String, name: String): String {
+                return prefix + name + "!"
+            }
+        """.trimIndent()
+        val edits = parseAndMutate(code, mutator)
+
+        assertTrue(edits.isNotEmpty())
+        assertTrue(edits.any { it.replacement == "\"\"" }, "Expected empty string replacement for chained concatenation")
+        assertTrue(edits.any { it.replacement == "\"mutated\"" }, "Expected altered string replacement for chained concatenation")
+        assertFalse(edits.any { it.replacement == "0" }, "Should not propose integer 0 for string return")
+    }
+
+    @Test
     fun `VoidMethodCallMutator omits standalone statement calls`() {
         val mutator = VoidMethodCallMutator()
         val code = """

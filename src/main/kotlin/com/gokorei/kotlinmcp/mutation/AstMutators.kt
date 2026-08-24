@@ -247,8 +247,13 @@ class ReturnValueMutator : AstMutator {
         val range = returned.textRange
         val (line, col) = context.lineAndCol(range.startOffset)
         val text = returned.text.trim()
-        val isStringExpr = returned is KtStringTemplateExpression ||
-            (returned is KtBinaryExpression && (returned.left is KtStringTemplateExpression || returned.right is KtStringTemplateExpression))
+        var isStringExpr = false
+        returned.accept(object : KtTreeVisitorVoid() {
+            override fun visitStringTemplateExpression(expression: KtStringTemplateExpression) {
+                isStringExpr = true
+                super.visitStringTemplateExpression(expression)
+            }
+        })
 
         val replacements = mutableListOf<Pair<String, String>>()
         if (isStringExpr) {
