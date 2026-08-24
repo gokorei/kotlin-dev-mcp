@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-25
+
 ### Added
 - **In-memory K2 PSI mutation testing engine** — added in-process AST mutation testing without external Gradle daemons via `kotlin_check_snippet(action="mutate")`, evaluating Kotlin test suites against synthesized relational, boolean, arithmetic, return-value, and void-call AST mutants with structured diff reporting.
 - **In-memory VFS cache & WatchService invalidation** — added `VfsPsiCache` (`DefaultVfsPsiCache`) providing in-memory LRU caching of parsed K2 `KtFile` ASTs and integrating `java.nio.file.WatchService` to invalidate changed files automatically, dropping warm workspace symbol queries below 10ms.
@@ -111,6 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sandboxed network audits** — network security audits in project inspection disabled by default (`kmcp.disable_network_audits`), guaranteeing safe offline/isolated runs.
 - **Hardened Maven dependency resolution** — handles malformed artifact versions and pre-release markers gracefully during library analysis.
 
-[Unreleased]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/gokorei/kotlin-dev-mcp/releases/tag/v1.0.0

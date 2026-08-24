@@ -6,6 +6,16 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### New Features
 
+### Bug Fixes
+
+### Improvements
+
+---
+
+## v1.2.0 — 2026-08-25
+
+### New Features
+
 - **In-memory K2 PSI mutation testing engine** — added in-process AST mutation testing without external Gradle daemons via `kotlin_check_snippet(action="mutate")`, evaluating Kotlin test suites against synthesized relational, boolean, arithmetic, return-value, and void-call AST mutants with structured diff reporting.
 - **In-memory VFS cache & WatchService invalidation** — added `VfsPsiCache` (`DefaultVfsPsiCache`) providing in-memory LRU caching of parsed K2 `KtFile` ASTs and integrating `java.nio.file.WatchService` to invalidate changed files automatically, dropping warm workspace symbol queries below 10ms.
 - **Fast in-memory snippet execution runner** — added `FastSnippetRunner` (`DefaultFastSnippetRunner`) to execute compiled Kotlin snippets directly in-process via isolated `URLClassLoader` worker pools, reducing snippet run latency from ~1.5s down to sub-50ms with thread-safe output capture and timeout cancellation guards.
