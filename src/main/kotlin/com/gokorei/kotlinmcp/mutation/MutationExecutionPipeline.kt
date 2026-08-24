@@ -4,7 +4,9 @@ import com.gokorei.kotlinmcp.execution.CompileResult
 import com.gokorei.kotlinmcp.execution.DefaultFastSnippetRunner
 import com.gokorei.kotlinmcp.execution.FastSnippetRunner
 import com.gokorei.kotlinmcp.execution.SnippetCompiler
+import com.gokorei.kotlinmcp.lsp.K2SnippetFrontend
 import com.gokorei.kotlinmcp.models.KotlinMcpResult
+import org.jetbrains.kotlin.psi.KtFile
 
 /**
  * Pipeline for executing AST mutation testing in-memory.
@@ -34,20 +36,28 @@ class DefaultMutationExecutionPipeline(
     ): MutationReport {
         val trimmedCode = code.trim()
         val trimmedTest = testCode?.trim().orEmpty()
-        val baselineCombined = if (trimmedTest.isNotBlank()) "$trimmedCode\n\n$trimmedTest" else trimmedCode
+        val baselineCombined = mergeSourceAndTest(trimmedCode, trimmedTest)
 
         // 1. Verify baseline code & tests pass before mutating
         val baselineCompile = SnippetCompiler.compile(baselineCombined)
-        if (baselineCompile is CompileResult.Failed) {
+        if (baselineCompile is CompileResult.Failed || (baselineCompile is CompileResult.Compiled && baselineCompile.diagnostics.any { it.severity == "error" })) {
+            val msg = if (baselineCompile is CompileResult.Failed) {
+                baselineCompile.message
+            } else {
+                (baselineCompile as CompileResult.Compiled).diagnostics.filter { it.severity == "error" }.joinToString("; ") { it.message }
+            }
+            if (baselineCompile is CompileResult.Compiled) {
+                SnippetCompiler.cleanup(baselineCompile)
+            }
             val dummyMutant = AstMutant("baseline", MutationOperator.RETURN_VALUE, 1, 1, "", "", "", "Baseline Compilation")
             return MutationReport(
                 score = 0.0,
                 totalMutants = 0,
                 killedCount = 0,
                 survivedCount = 0,
-                compilationErrorCount = 1,
+                compilationErrorCount = 0,
                 timeoutCount = 0,
-                results = listOf(MutantResult(dummyMutant, MutantStatus.COMPILATION_ERROR, "Baseline code failed compilation: ${baselineCompile.message}"))
+                results = listOf(MutantResult(dummyMutant, MutantStatus.BASELINE_ERROR, "Baseline code failed compilation: $msg"))
             )
         }
 
@@ -83,7 +93,7 @@ class DefaultMutationExecutionPipeline(
                 survivedCount = 0,
                 compilationErrorCount = 0,
                 timeoutCount = 0,
-                results = listOf(MutantResult(dummyMutant, MutantStatus.KILLED, "Baseline test failed before mutation: ${err.message}"))
+                results = listOf(MutantResult(dummyMutant, MutantStatus.BASELINE_ERROR, "Baseline test failed before mutation: ${err.message}"))
             )
         }
 
@@ -110,22 +120,26 @@ class DefaultMutationExecutionPipeline(
         val results = mutableListOf<MutantResult>()
 
         for (mutant in mutants) {
-            val mutantSourceCombined = if (trimmedTest.isNotBlank()) {
-                "${mutant.mutatedSource}\n\n$trimmedTest"
-            } else {
-                mutant.mutatedSource
-            }
+            val mutantSourceCombined = mergeSourceAndTest(mutant.mutatedSource, trimmedTest)
 
             val startNanos = System.nanoTime()
             val compiledMutant = SnippetCompiler.compile(mutantSourceCombined)
 
-            if (compiledMutant is CompileResult.Failed) {
+            if (compiledMutant is CompileResult.Failed || (compiledMutant is CompileResult.Compiled && compiledMutant.diagnostics.any { it.severity == "error" })) {
                 val durMs = (System.nanoTime() - startNanos) / 1_000_000
+                val msg = if (compiledMutant is CompileResult.Failed) {
+                    compiledMutant.message
+                } else {
+                    (compiledMutant as CompileResult.Compiled).diagnostics.filter { it.severity == "error" }.joinToString("; ") { it.message }
+                }
+                if (compiledMutant is CompileResult.Compiled) {
+                    SnippetCompiler.cleanup(compiledMutant)
+                }
                 results.add(
                     MutantResult(
                         mutant = mutant,
                         status = MutantStatus.COMPILATION_ERROR,
-                        details = compiledMutant.message,
+                        details = msg,
                         durationMs = durMs
                     )
                 )
@@ -187,7 +201,7 @@ class DefaultMutationExecutionPipeline(
         val score = if (totalEffective > 0) {
             ((killedCount + timeoutCount).toDouble() / totalEffective.toDouble()) * 100.0
         } else {
-            100.0
+            0.0
         }
 
         return MutationReport(
@@ -200,6 +214,60 @@ class DefaultMutationExecutionPipeline(
             results = results,
             order = maxOrder
         )
+    }
+
+    private fun mergeSourceAndTest(code: String, testCode: String): String {
+        if (testCode.isBlank()) return code
+
+        val codeFile = K2SnippetFrontend.parsePsi(code)
+        val testFile = K2SnippetFrontend.parsePsi(testCode)
+
+        if (codeFile == null || testFile == null) {
+            return "$code\n\n$testCode".trim()
+        }
+
+        val codeImports = codeFile.importDirectives.map { it.text }
+        val testImports = testFile.importDirectives.map { it.text }
+        val allImports = (codeImports + testImports).distinct()
+
+        val selectedPackage = codeFile.packageDirective?.takeIf { it.text.isNotBlank() }?.text
+            ?: testFile.packageDirective?.takeIf { it.text.isNotBlank() }?.text
+
+        val codeBody = stripPackageAndImports(code, codeFile)
+        val testBody = stripPackageAndImports(testCode, testFile)
+
+        val sb = StringBuilder()
+        if (selectedPackage != null) {
+            sb.appendLine(selectedPackage)
+            sb.appendLine()
+        }
+        if (allImports.isNotEmpty()) {
+            allImports.forEach { sb.appendLine(it) }
+            sb.appendLine()
+        }
+        sb.appendLine(codeBody)
+        sb.appendLine()
+        sb.appendLine(testBody)
+        return sb.toString().trim()
+    }
+
+    private fun stripPackageAndImports(source: String, file: KtFile): String {
+        val rangesToRemove = mutableListOf<org.jetbrains.kotlin.com.intellij.openapi.util.TextRange>()
+        file.packageDirective?.takeIf { it.text.isNotBlank() }?.let { rangesToRemove.add(it.textRange) }
+        file.importList?.takeIf { it.text.isNotBlank() }?.let { rangesToRemove.add(it.textRange) }
+
+        if (rangesToRemove.isEmpty()) return source.trim()
+
+        val sortedRanges = rangesToRemove.sortedByDescending { it.startOffset }
+        var result = source
+        for (range in sortedRanges) {
+            val start = range.startOffset.coerceAtLeast(0)
+            val end = range.endOffset.coerceAtMost(result.length)
+            if (start < end) {
+                result = result.substring(0, start) + result.substring(end)
+            }
+        }
+        return result.trim()
     }
 
     override fun close() {

@@ -144,7 +144,8 @@ class ArithmeticOperatorMutator : AstMutator {
 }
 
 /**
- * Mutates boolean prefixes (!flag -> flag) and boolean literals (true <-> false).
+ * Mutates boolean prefixes (!flag -> flag), boolean literals (true <-> false),
+ * and logical operators (&& <-> ||).
  */
 class BooleanInversionMutator : AstMutator {
     override val operator: MutationOperator = MutationOperator.BOOLEAN_INVERSION
@@ -156,6 +157,10 @@ class BooleanInversionMutator : AstMutator {
         }
         if (element is KtConstantExpression && (element.text == "true" || element.text == "false")) {
             return true
+        }
+        if (element is KtBinaryExpression) {
+            val sign = element.operationReference.operationSignTokenType
+            return sign == KtTokens.ANDAND || sign == KtTokens.OROR
         }
         return false
     }
@@ -197,13 +202,36 @@ class BooleanInversionMutator : AstMutator {
                     )
                 )
             }
+            is KtBinaryExpression -> {
+                val opRef = element.operationReference
+                val sign = opRef.operationSignTokenType
+                val (replacement, desc) = if (sign == KtTokens.ANDAND) {
+                    "||" to "Replaced && with ||"
+                } else {
+                    "&&" to "Replaced || with &&"
+                }
+                val range = opRef.textRange
+                val (line, col) = context.lineAndCol(range.startOffset)
+                listOf(
+                    AstEdit(
+                        startOffset = range.startOffset,
+                        endOffset = range.endOffset,
+                        replacement = replacement,
+                        originalText = element.text,
+                        operator = operator,
+                        description = desc,
+                        line = line,
+                        column = col
+                    )
+                )
+            }
             else -> emptyList()
         }
     }
 }
 
 /**
- * Mutates return expressions by substituting default values (0, false).
+ * Mutates return expressions by substituting default values (0, false, empty string).
  */
 class ReturnValueMutator : AstMutator {
     override val operator: MutationOperator = MutationOperator.RETURN_VALUE
@@ -218,12 +246,18 @@ class ReturnValueMutator : AstMutator {
         val returned = returnExpr.returnedExpression ?: return emptyList()
         val range = returned.textRange
         val (line, col) = context.lineAndCol(range.startOffset)
-        val replacements = listOf(
-            "0" to "Replaced return value with 0",
-            "false" to "Replaced return value with false"
-        )
+        val text = returned.text.trim()
 
-        return replacements.filter { returned.text.trim() != it.first }.map { (replacement, desc) ->
+        val replacements = mutableListOf<Pair<String, String>>()
+        if (text.startsWith("\"") || text.contains("\"")) {
+            replacements.add("\"\"" to "Replaced return string with empty string")
+            replacements.add("\"mutated\"" to "Replaced return string with altered string")
+        } else {
+            replacements.add("0" to "Replaced return value with 0")
+            replacements.add("false" to "Replaced return value with false")
+        }
+
+        return replacements.filter { text != it.first }.map { (replacement, desc) ->
             AstEdit(
                 startOffset = range.startOffset,
                 endOffset = range.endOffset,

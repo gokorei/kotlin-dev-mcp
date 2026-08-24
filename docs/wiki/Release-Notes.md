@@ -13,6 +13,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Bug Fixes
 
+- **Mutation engine compiler diagnostic evaluation & score soundness** — fixed compiler error detection in `MutationExecutionPipeline` by evaluating embedded compiler diagnostics to prevent uncompiled mutants from registering as killed, updated mutation score calculation to return 0% when zero effective mutants compile, added logical `&&`/`||` and string return value mutation operators, and standardized test lifecycle teardown.
 - **Thread-safe VFS cache locking and dynamic directory watching** — fixed read-write lock semantics in `VfsPsiCache` by moving cache mutations under write locks, adding recursive directory registration for runtime-created subdirectories, and ensuring directory invalidation evicts all descendant entries.
 - **Async snippet child thread output capture & stdio protection** — transitioned `ThreadLocalPrintStream` to `InheritableThreadLocal` to capture output from asynchronous threads spawned inside in-memory snippets and guarded global stdio wrappers from accidental closure.
 - **Expanded AST host termination analysis** — updated `SnippetAstSafetyChecker` to detect split variable assignments for `Runtime` and `ProcessHandle` instances, callable references (`::exitProcess`, `System::exit`), and `ProcessHandle.current().destroy()`.

@@ -174,7 +174,7 @@ object ToolRegistrar {
 
         // 5. kotlin_check_snippet
         register("kotlin_check_snippet") {
-            description = "READ-ONLY. Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column, or run in-memory AST mutation testing."
+            description = "Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column, or run in-memory AST mutation testing."
             readOnly = true
             actions("check", "mutate")
             param("action", "Operation: 'check' (default, embedded compiler diagnostics) or 'mutate' (in-memory AST mutation testing against unit tests)")

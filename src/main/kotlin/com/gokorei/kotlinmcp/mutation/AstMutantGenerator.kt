@@ -42,12 +42,13 @@ class AstMutantGenerator(
         // 1. Generate First-Order Mutants (FOM)
         edits.forEachIndexed { index, edit ->
             val mutatedSource = replaceRange(code, edit.startOffset, edit.endOffset, edit.replacement)
+            val lineCol = computeLineAndColumn(code, edit.startOffset)
             mutants.add(
                 AstMutant(
                     id = "mutant-1st-${index + 1}-${UUID.randomUUID().toString().take(6)}",
                     operator = edit.operator,
-                    line = edit.line,
-                    column = edit.column,
+                    line = lineCol.first,
+                    column = lineCol.second,
                     originalSnippet = edit.originalText,
                     mutatedSnippet = edit.replacement,
                     mutatedSource = mutatedSource,

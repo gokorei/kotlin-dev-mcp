@@ -1318,6 +1318,7 @@ public final class com/gokorei/kotlinmcp/mutation/MutantResult$Companion {
 }
 
 public final class com/gokorei/kotlinmcp/mutation/MutantStatus : java/lang/Enum {
+	public static final field BASELINE_ERROR Lcom/gokorei/kotlinmcp/mutation/MutantStatus;
 	public static final field COMPILATION_ERROR Lcom/gokorei/kotlinmcp/mutation/MutantStatus;
 	public static final field Companion Lcom/gokorei/kotlinmcp/mutation/MutantStatus$Companion;
 	public static final field KILLED Lcom/gokorei/kotlinmcp/mutation/MutantStatus;
