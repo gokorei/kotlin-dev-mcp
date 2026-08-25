@@ -39,6 +39,7 @@ class CoroutinesSafetyAnalyzer {
         inspectBlockingCallsAndGlobalScope(psi, findings)
         inspectHardcodedDispatchers(psi, findings)
         inspectUnboundedLoops(psi, lineOf, findings)
+        inspectAndroidCoroutinesScopes(psi, findings)
 
         val content = if (findings.isNotEmpty()) {
             "# Coroutine Scope & Safety Analysis\n" + findings.distinct().joinToString("\n\n")
@@ -164,6 +165,59 @@ class CoroutinesSafetyAnalyzer {
         })
     }
 
+
+    private fun inspectAndroidCoroutinesScopes(psi: KtFile, findings: MutableList<String>) {
+        psi.accept(object : KtTreeVisitorVoid() {
+            override fun visitClass(ktClass: org.jetbrains.kotlin.psi.KtClass) {
+                val superNames = ktClass.superTypeListEntries.mapNotNull { it.typeReference?.text?.trim() }
+                val isViewModel = superNames.any { it.contains("ViewModel") }
+                val isAndroidUi = superNames.any { it.contains("Activity") || it.contains("Fragment") }
+
+                if (isViewModel) {
+                    ktClass.accept(object : KtTreeVisitorVoid() {
+                        override fun visitCallExpression(call: org.jetbrains.kotlin.psi.KtCallExpression) {
+                            val callee = call.calleeExpression?.text
+                            if (callee == "launch" || callee == "async") {
+                                val parentDot = call.parent as? org.jetbrains.kotlin.psi.KtDotQualifiedExpression
+                                val receiverText = parentDot?.receiverExpression?.text.orEmpty()
+                                if (!receiverText.contains("viewModelScope")) {
+                                    findings.add("⚠️ Coroutine launched in ViewModel `${ktClass.name}` without `viewModelScope`. Use `viewModelScope.launch { ... }` so coroutines cancel automatically when the ViewModel is cleared.")
+                                }
+                            }
+                            super.visitCallExpression(call)
+                        }
+                    })
+                }
+
+                if (isAndroidUi) {
+                    ktClass.accept(object : KtTreeVisitorVoid() {
+                        override fun visitCallExpression(call: org.jetbrains.kotlin.psi.KtCallExpression) {
+                            val callee = call.calleeExpression?.text
+                            if (callee == "collect" || callee == "collectLatest") {
+                                var inRepeatOnLifecycle = false
+                                var p: org.jetbrains.kotlin.com.intellij.psi.PsiElement? = call.parent
+                                while (p != null && !inRepeatOnLifecycle) {
+                                    if (p is org.jetbrains.kotlin.psi.KtCallExpression) {
+                                        val pCallee = p.calleeExpression?.text.orEmpty()
+                                        if (pCallee == "repeatOnLifecycle" || pCallee == "flowWithLifecycle") {
+                                            inRepeatOnLifecycle = true
+                                        }
+                                    }
+                                    p = p.parent
+                                }
+                                if (!inRepeatOnLifecycle) {
+                                    findings.add("⚠️ Flow collection in Android UI component `${ktClass.name}` detected without `repeatOnLifecycle(Lifecycle.State.STARTED)`. Wrap collection in `lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED) { ... } }` to prevent UI leaks and background collection.")
+                                }
+                            }
+                            super.visitCallExpression(call)
+                        }
+                    })
+                }
+
+                super.visitClass(ktClass)
+            }
+        })
+    }
 
     private fun hasSuspendPoint(loop: KtLoopExpression): Boolean {
         var found = false

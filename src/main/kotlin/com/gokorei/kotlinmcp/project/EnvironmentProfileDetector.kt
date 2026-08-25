@@ -42,6 +42,7 @@ class EnvironmentProfileDetector {
         if (text.contains("datetime") || text.contains("kotlinx-datetime")) active.add(FrameworkFeature.DATETIME)
         if (text.contains("exposed") || text.contains("org.jetbrains.exposed")) active.add(FrameworkFeature.EXPOSED)
         if (text.contains("room") || text.contains("androidx.room")) active.add(FrameworkFeature.ROOM)
+        if (text.contains("com.android.") || text.contains("android {") || text.contains("kotlin(\"android\")") || text.contains("androidtarget")) active.add(FrameworkFeature.ANDROID)
 
         val isKmp = text.contains("multiplatform")
 

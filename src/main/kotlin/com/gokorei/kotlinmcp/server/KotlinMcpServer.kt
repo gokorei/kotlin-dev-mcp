@@ -218,6 +218,12 @@ class KotlinMcpServer(
     fun projectCoverageReport(projectPath: String?): KotlinMcpResult =
         projectService.coverageReport(projectPath)
 
+    fun projectInspectAndroidManifest(contentOrPath: String, projectPath: String? = null): KotlinMcpResult =
+        projectService.execute(ProjectAction.INSPECT_ANDROID_MANIFEST, buildScriptContent = contentOrPath, projectPath = projectPath)
+
+    fun projectAuditAndroidConfig(buildScriptContent: String): KotlinMcpResult =
+        projectService.execute(ProjectAction.AUDIT_ANDROID_CONFIG, buildScriptContent = buildScriptContent)
+
 
 
     // ---- kotlin_refactor ----
@@ -257,6 +263,9 @@ class KotlinMcpServer(
     fun routeMap(code: String): KotlinMcpResult =
         libraryAnalysisService.execute(LibraryAnalysisAction.ROUTE_MAP, code)
 
+    fun analyzeAndroidDi(code: String): KotlinMcpResult =
+        libraryAnalysisService.execute(LibraryAnalysisAction.ANALYZE_ANDROID_DI, code)
+
     // ---- kotlin_lint ----
 
     fun runDetekt(
@@ -279,4 +288,7 @@ class KotlinMcpServer(
 
     fun baselineDump(workspacePath: String, findings: List<LintFinding>? = null): KotlinMcpResult =
         lintService.baselineDump(workspacePath, findings)
+
+    fun parseAndroidLint(xmlContentOrPath: String, workspacePath: String? = null): KotlinMcpResult =
+        lintService.parseAndroidLintReport(xmlContentOrPath, workspacePath)
 }

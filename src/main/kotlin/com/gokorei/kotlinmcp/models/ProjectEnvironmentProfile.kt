@@ -11,13 +11,16 @@ enum class FrameworkFeature(val id: String) {
     TURBINE("turbine"),
     DATETIME("datetime"),
     EXPOSED("exposed"),
-    ROOM("room")
+    ROOM("room"),
+    ANDROID("android")
 }
 
 data class ProjectEnvironmentProfile(
     val activeFrameworks: Set<FrameworkFeature> = emptySet(),
     val isKmp: Boolean = false
 ) {
+    val isAndroid: Boolean get() = hasFramework(FrameworkFeature.ANDROID)
+
     fun hasFramework(feature: FrameworkFeature): Boolean = feature in activeFrameworks
 
     companion object {

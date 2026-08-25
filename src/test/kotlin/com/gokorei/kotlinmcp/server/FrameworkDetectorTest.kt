@@ -40,8 +40,37 @@ class FrameworkDetectorTest {
     }
 
     @Test
+    fun `detectFromBuildScript identifies android application and library plugins`() {
+        val script = """
+            plugins {
+                id("com.android.application")
+                kotlin("android")
+            }
+        """.trimIndent()
+
+        val profile = detector.detectFromBuildScript(script)
+        assertTrue(profile.hasFramework(FrameworkFeature.ANDROID), "expected ANDROID detected")
+        assertTrue(profile.isAndroid, "isAndroid helper should be true")
+    }
+
+    @Test
+    fun `detectFromBuildScript identifies android block in build script`() {
+        val script = """
+            android {
+                namespace = "com.example.app"
+                compileSdk = 35
+            }
+        """.trimIndent()
+
+        val profile = detector.detectFromBuildScript(script)
+        assertTrue(profile.hasFramework(FrameworkFeature.ANDROID), "expected ANDROID detected from android block")
+        assertTrue(profile.isAndroid)
+    }
+
+    @Test
     fun `detectFromBuildScript handles empty or blank build scripts gracefully`() {
         val profile = detector.detectFromBuildScript("")
         assertTrue(profile.activeFrameworks.isEmpty())
+        assertFalse(profile.isAndroid)
     }
 }

@@ -31,6 +31,7 @@ class DefaultFrameworkDetector : FrameworkDetector {
         if (text.contains("exposed")) active.add(FrameworkFeature.EXPOSED)
         if (text.contains("room")) active.add(FrameworkFeature.ROOM)
         if (text.contains("coroutines")) active.add(FrameworkFeature.COROUTINES)
+        if (text.contains("com.android.") || text.contains("android {") || text.contains("kotlin(\"android\")") || text.contains("androidtarget")) active.add(FrameworkFeature.ANDROID)
 
         val isKmp = text.contains("kotlin(\"multiplatform\")") || text.contains("kotlin-multiplatform") || text.contains("kotlin(\"kmp\")")
 

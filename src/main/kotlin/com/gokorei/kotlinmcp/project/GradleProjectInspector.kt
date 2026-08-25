@@ -154,6 +154,38 @@ class GradleProjectInspector {
         )
     }
 
+    fun auditAndroidConfig(buildScriptContent: String): KotlinMcpResult {
+        val issues = mutableListOf<String>()
+        val text = buildScriptContent.lowercase()
+
+        if (text.contains("kotlincompilerextensionversion")) {
+            issues.add("`composeOptions { kotlinCompilerExtensionVersion = ... }` is deprecated with Kotlin 2.0+. In Kotlin 2.x, Compose compiler is configured via the Compose compiler plugin (`kotlin(\"plugin.compose\")` / `id(\"org.jetbrains.kotlin.plugin.compose\")`). Remove `kotlinCompilerExtensionVersion`.")
+        }
+
+        if (text.contains("android {") || text.contains("com.android.")) {
+            if (!text.contains("compilesdk")) {
+                issues.add("`android { ... }` block does not specify `compileSdk`. Explicitly declare `compileSdk = 35` (or target API level).")
+            }
+            if (!text.contains("minsdk") && !text.contains("androidtarget")) {
+                issues.add("`minSdk` is not explicitly declared in `defaultConfig { ... }`. Specify `minSdk = 26` (or minimum supported API level).")
+            }
+        }
+
+        val content = buildString {
+            appendLine("# Android & AGP Build Configuration Audit")
+            if (issues.isNotEmpty()) {
+                issues.forEach { appendLine("- ⚠️ $it") }
+            } else {
+                appendLine("✅ Android build script configuration is modern and aligned with Kotlin 2.x / AGP guidelines.")
+            }
+        }
+
+        return KotlinMcpResult.Success(
+            content = content,
+            metadata = mapOf("issueCount" to issues.size.toString())
+        )
+    }
+
     private fun extractPlugins(content: String): List<String> {
         val plugins = mutableListOf<String>()
         // Kotlin DSL: id("...") / id('...')

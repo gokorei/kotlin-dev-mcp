@@ -6,6 +6,18 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### New Features
 
+- **Android framework detection & progressive discovery gating** — added `FrameworkFeature.ANDROID` and updated `EnvironmentProfileDetector` and `DefaultFrameworkDetector` to detect Android application (`com.android.application`), library (`com.android.library`), dynamic feature, and KMP Android targets, ensuring Android-specific tooling and diagnostics are strictly gated to Android projects without context bloat for pure JVM or backend projects.
+- **Compose lifecycle & background collection protection** — added K2 PSI AST inspection in `ComposeAnalyzer` (`kotlin_code_analyze(action="compose")`) detecting `flow.collectAsState()` and recommending `androidx.lifecycle.compose.collectAsStateWithLifecycle()` to prevent background flow emissions and battery drain in Android applications.
+- **Compose Modifier parameter conventions** — added AST checks enforcing that custom UI `@Composable` functions provide `modifier: Modifier = Modifier` as the first optional parameter and provide default value `= Modifier`.
+- **Edge-to-Edge window insets advisory (Android 15+)** — added static AST detection flagging deprecated system UI visibility and status/navigation bar manipulation, guiding AI models toward `enableEdgeToEdge()` and modern Compose insets modifiers (`safeDrawingPadding()`, `imePadding()`).
+- **Context & Activity memory leak analyzer** — added K2 PSI inspection in `SymbolInspector` (`kotlin_code_analyze(action="inspect")`) flagging retention of `Activity`, `View`, and UI `Context` references within `ViewModel` and `@Singleton` declarations across configuration changes.
+- **Android ViewModel & UI Coroutines scope safety** — enhanced `CoroutinesSafetyAnalyzer` (`kotlin_code_analyze(action="coroutines")`) to flag non-`viewModelScope` launches in ViewModels and verify that Activity/Fragment flow collections are wrapped in `repeatOnLifecycle`.
+- **Hilt & Dagger Android DI annotation wiring validation** — added `kotlin_library_analyze(action="android_di")` to statically verify `@HiltViewModel`, `@AndroidEntryPoint`, and `@InstallIn` annotation consistency across Android architecture components.
+- **Static AndroidManifest.xml inspector** — added `kotlin_project_inspect(action="android_manifest")` to parse manifest XML and enforce `android:exported="true|false"` on components with intent-filters (Android 12+ requirement) and `android:foregroundServiceType` on Android 14+ foreground services.
+- **AGP & Kotlin 2.0+ Compose compiler audit** — added `kotlin_project_inspect(action="android_config")` to audit Gradle build scripts for deprecated `kotlinCompilerExtensionVersion`, `compileSdk`, and `minSdk` configurations.
+- **Android Lint XML report ingestion** — added `kotlin_lint(action="android_lint")` to parse official `lint-results.xml` reports into structured error and warning summaries with source location coordinates.
+- **Modern Android & Jetpack documentation catalog** — expanded `FrameworkFeatureCatalog` and `kotlin_docs_read` with Jetpack Compose lifecycle state collection, edge-to-edge window insets, Hilt dependency injection, and Room patterns.
+
 ### Bug Fixes
 
 ### Improvements

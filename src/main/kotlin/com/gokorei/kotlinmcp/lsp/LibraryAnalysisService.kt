@@ -7,7 +7,8 @@ enum class LibraryAnalysisAction {
     ANALYZE_KTOR,
     ANALYZE_SERIALIZATION,
     ANALYZE_TESTS,
-    ROUTE_MAP
+    ROUTE_MAP,
+    ANALYZE_ANDROID_DI
 }
 
 /**
@@ -32,6 +33,7 @@ class DefaultLibraryAnalysisService : LibraryAnalysisService {
             LibraryAnalysisAction.ANALYZE_SERIALIZATION -> analyzeSerialization(code, dataSources)
             LibraryAnalysisAction.ANALYZE_TESTS -> analyzeTests(code)
             LibraryAnalysisAction.ROUTE_MAP -> routeMap(code)
+            LibraryAnalysisAction.ANALYZE_ANDROID_DI -> analyzeAndroidDi(code)
         }
     }
 
@@ -424,6 +426,58 @@ class DefaultLibraryAnalysisService : LibraryAnalysisService {
         return KotlinMcpResult.Success(
             content = content,
             metadata = mapOf("routeCount" to routes.distinct().size.toString())
+        )
+    }
+
+    private fun analyzeAndroidDi(code: String): KotlinMcpResult {
+        val advisories = mutableListOf<String>()
+        val psi = K2SnippetFrontend.parsePsi(code)
+
+        if (psi != null) {
+            psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+                override fun visitClassOrObject(classOrObject: org.jetbrains.kotlin.psi.KtClassOrObject) {
+                    val className = classOrObject.name ?: "Anonymous"
+                    val annotations = classOrObject.annotationEntries.mapNotNull { it.shortName?.asString() }.toSet()
+                    val superNames = (classOrObject as? org.jetbrains.kotlin.psi.KtClass)?.superTypeListEntries?.mapNotNull { it.typeReference?.text?.trim() }.orEmpty()
+
+                    val isModule = "Module" in annotations
+                    if (isModule && "InstallIn" !in annotations) {
+                        advisories.add("⚠️ Class `$className` is annotated with `@Module` but lacks `@InstallIn(...)`. Hilt requires an `@InstallIn` annotation (e.g. `@InstallIn(SingletonComponent::class)`) to determine component binding scope.")
+                    }
+
+                    val isViewModel = superNames.any { it.contains("ViewModel") }
+                    if (isViewModel) {
+                        val hasInjectCtor = classOrObject.primaryConstructor?.annotationEntries?.any { it.shortName?.asString() == "Inject" } == true ||
+                            classOrObject.secondaryConstructors.any { it.annotationEntries.any { a -> a.shortName?.asString() == "Inject" } }
+                        if (hasInjectCtor && "HiltViewModel" !in annotations) {
+                            advisories.add("⚠️ ViewModel `$className` has `@Inject constructor` but lacks `@HiltViewModel`. Add `@HiltViewModel` to allow Hilt to provide this ViewModel in `@AndroidEntryPoint` classes or `hiltViewModel()` calls.")
+                        }
+                    }
+
+                    val isAndroidComponent = superNames.any { it.contains("Activity") || it.contains("Fragment") || it.contains("Service") || it.contains("Receiver") }
+                    if (isAndroidComponent) {
+                        val hasInjectFields = classOrObject.declarations.filterIsInstance<org.jetbrains.kotlin.psi.KtProperty>().any { prop ->
+                            prop.annotationEntries.any { it.shortName?.asString() == "Inject" }
+                        }
+                        if (hasInjectFields && "AndroidEntryPoint" !in annotations) {
+                            advisories.add("⚠️ Android component `$className` contains `@Inject` properties but lacks `@AndroidEntryPoint`. Add `@AndroidEntryPoint` to enable field injection.")
+                        }
+                    }
+
+                    super.visitClassOrObject(classOrObject)
+                }
+            })
+        }
+
+        val content = if (advisories.isNotEmpty()) {
+            "# Android Dependency Injection (Hilt/Dagger) Findings\n" + advisories.distinct().joinToString("\n\n")
+        } else {
+            "# Android Dependency Injection (Hilt/Dagger) Findings\nNo obvious DI annotation wiring issues detected."
+        }
+
+        return KotlinMcpResult.Success(
+            content = content,
+            metadata = mapOf("advisoriesCount" to advisories.distinct().size.toString())
         )
     }
 }

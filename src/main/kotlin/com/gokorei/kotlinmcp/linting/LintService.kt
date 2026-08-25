@@ -38,6 +38,10 @@ interface LintService {
 
     fun baselineRead(workspacePath: String): KotlinMcpResult
     fun baselineDump(workspacePath: String, findings: List<LintFinding>? = null): KotlinMcpResult
+
+    /** Ingests and formats an Android Lint XML report (lint-results.xml). */
+    fun parseAndroidLintReport(xmlContentOrPath: String, workspacePath: String? = null): KotlinMcpResult =
+        AndroidLintParser().parseReport(xmlContentOrPath, workspacePath)
 }
 
 class ChildFirstClassLoader(
