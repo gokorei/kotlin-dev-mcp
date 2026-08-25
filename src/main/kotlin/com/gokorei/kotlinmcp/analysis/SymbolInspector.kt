@@ -64,24 +64,34 @@ class SymbolInspector {
 
             // Check for Context / Activity / View memory leaks in ViewModel or Singleton classes
             val superTypeNames = (decl as? KtClass)?.superTypeListEntries?.mapNotNull { it.typeReference?.text?.trim() }.orEmpty()
-            val isViewModel = superTypeNames.any { it.contains("ViewModel") }
-            val isAndroidViewModel = superTypeNames.any { it.contains("AndroidViewModel") }
+            val knownViewModelBases = setOf("ViewModel", "androidx.lifecycle.ViewModel")
+            val knownAndroidViewModelBases = setOf("AndroidViewModel", "androidx.lifecycle.AndroidViewModel")
+            val isViewModel = superTypeNames.any { it in knownViewModelBases || it.endsWith(".ViewModel") }
+            val isAndroidViewModel = superTypeNames.any { it in knownAndroidViewModelBases || it.endsWith(".AndroidViewModel") }
             val isSingleton = decl.annotationEntries.any {
                 val shortName = it.shortName?.asString()
                 shortName == "Singleton" || shortName == "ActivityRetainedScoped"
             }
 
             if ((isViewModel || isSingleton) && !isAndroidViewModel) {
-                val leakyTypes = setOf("Context", "Activity", "View", "Context?", "Activity?", "View?")
+                fun isLeakyType(typeRef: org.jetbrains.kotlin.psi.KtTypeReference?): Boolean {
+                    if (typeRef == null) return false
+                    val rawType = typeRef.text.trim().removeSuffix("?")
+                    val userType = typeRef.typeElement as? org.jetbrains.kotlin.psi.KtUserType
+                    val baseName = userType?.referencedName ?: rawType.substringAfterLast('.')
+                    return baseName in setOf("Context", "Activity", "View") ||
+                        baseName.endsWith("Activity") ||
+                        baseName.endsWith("View") ||
+                        rawType in setOf("android.content.Context", "android.app.Activity", "android.view.View")
+                }
+
                 val leakyParams = decl.primaryConstructorParameters.filter { param ->
-                    val typeText = param.typeReference?.text?.trim().orEmpty()
                     val hasAppContext = param.annotationEntries.any { it.shortName?.asString() == "ApplicationContext" }
-                    !hasAppContext && (typeText in leakyTypes || typeText.endsWith("Activity") || typeText.endsWith("View") || typeText.endsWith("Activity?") || typeText.endsWith("View?"))
+                    !hasAppContext && isLeakyType(param.typeReference)
                 }
                 val leakyProps = decl.declarations.filterIsInstance<KtProperty>().filter { prop ->
-                    val typeText = prop.typeReference?.text?.trim().orEmpty()
                     val hasAppContext = prop.annotationEntries.any { it.shortName?.asString() == "ApplicationContext" }
-                    !hasAppContext && (typeText in leakyTypes || typeText.endsWith("Activity") || typeText.endsWith("View") || typeText.endsWith("Activity?") || typeText.endsWith("View?"))
+                    !hasAppContext && isLeakyType(prop.typeReference)
                 }
 
                 (leakyParams.map { it.name to it.typeReference?.text } + leakyProps.map { it.name to it.typeReference?.text }).forEach { (name, type) ->

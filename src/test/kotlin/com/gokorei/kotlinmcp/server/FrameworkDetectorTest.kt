@@ -68,6 +68,23 @@ class FrameworkDetectorTest {
     }
 
     @Test
+    fun `detectFromBuildScript ignores comments and string literals containing android mentions`() {
+        val script = """
+            // android {
+            //     compileSdk = 35
+            // }
+            val dummy = "com.android.application"
+            plugins {
+                kotlin("jvm")
+            }
+        """.trimIndent()
+
+        val profile = detector.detectFromBuildScript(script)
+        assertFalse(profile.hasFramework(FrameworkFeature.ANDROID))
+        assertFalse(profile.isAndroid)
+    }
+
+    @Test
     fun `detectFromBuildScript handles empty or blank build scripts gracefully`() {
         val profile = detector.detectFromBuildScript("")
         assertTrue(profile.activeFrameworks.isEmpty())

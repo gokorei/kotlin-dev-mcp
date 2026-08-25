@@ -95,4 +95,21 @@ class ComposeAnalyzerTest {
         val success = result as KotlinMcpResult.Success
         assertTrue(success.content.contains("enableEdgeToEdge"), "expected edge-to-edge recommendation in: ${success.content}")
     }
+
+    @Test
+    fun `analyzeCompose warns on non-plain modifier default value like Modifier padding`() {
+        val snippet = """
+            @Composable
+            fun ProfileCard(userName: String, modifier: Modifier = Modifier.padding(8.dp)) {
+                Card(modifier = modifier) {
+                    Text(userName)
+                }
+            }
+        """.trimIndent()
+
+        val result = analyzer.analyzeCompose(snippet)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("does not declare a default value `= Modifier`"), "non-plain modifier default should be warned: ${success.content}")
+    }
 }

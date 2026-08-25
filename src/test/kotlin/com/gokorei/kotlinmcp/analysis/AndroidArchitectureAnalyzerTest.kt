@@ -90,4 +90,48 @@ class AndroidArchitectureAnalyzerTest {
         val success = result as KotlinMcpResult.Success
         assertTrue(success.content.contains("repeatOnLifecycle"), "expected repeatOnLifecycle recommendation: ${success.content}")
     }
+
+    @Test
+    fun `explain_coroutines allows flowWithLifecycle chaining in Activity`() {
+        val snippet = """
+            class MainActivity : AppCompatActivity() {
+                override fun onCreate(savedInstanceState: Bundle?) {
+                    super.onCreate(savedInstanceState)
+                    lifecycleScope.launch {
+                        viewModel.state.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { state ->
+                            updateUi(state)
+                        }
+                    }
+                }
+            }
+        """.trimIndent()
+
+        val result = coroutinesSafetyAnalyzer.explainCoroutines(snippet)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertFalse(success.content.contains("repeatOnLifecycle(Lifecycle.State.STARTED)"), "flowWithLifecycle should satisfy lifecycle awareness: ${success.content}")
+    }
+
+    @Test
+    fun `explain_coroutines allows nested launches inside viewModelScope launch`() {
+        val snippet = """
+            class UserViewModel : ViewModel() {
+                fun loadData() {
+                    viewModelScope.launch {
+                        launch {
+                            fetchUser()
+                        }
+                        async {
+                            fetchStats()
+                        }
+                    }
+                }
+            }
+        """.trimIndent()
+
+        val result = coroutinesSafetyAnalyzer.explainCoroutines(snippet)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertFalse(success.content.contains("without `viewModelScope`"), "nested launches inside viewModelScope should not be warned: ${success.content}")
+    }
 }

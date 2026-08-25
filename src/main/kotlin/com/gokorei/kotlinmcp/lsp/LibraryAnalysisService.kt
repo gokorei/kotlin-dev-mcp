@@ -441,11 +441,12 @@ class DefaultLibraryAnalysisService : LibraryAnalysisService {
                     val superNames = (classOrObject as? org.jetbrains.kotlin.psi.KtClass)?.superTypeListEntries?.mapNotNull { it.typeReference?.text?.trim() }.orEmpty()
 
                     val isModule = "Module" in annotations
-                    if (isModule && "InstallIn" !in annotations) {
-                        advisories.add("⚠️ Class `$className` is annotated with `@Module` but lacks `@InstallIn(...)`. Hilt requires an `@InstallIn` annotation (e.g. `@InstallIn(SingletonComponent::class)`) to determine component binding scope.")
+                    if (isModule && "InstallIn" !in annotations && "TestInstallIn" !in annotations) {
+                        advisories.add("⚠️ Class `$className` is annotated with `@Module` but lacks `@InstallIn(...)` (or `@TestInstallIn(...)`). Hilt requires an installation annotation (e.g. `@InstallIn(SingletonComponent::class)`) to determine component binding scope.")
                     }
 
-                    val isViewModel = superNames.any { it.contains("ViewModel") }
+                    val knownViewModelTypes = setOf("ViewModel", "AndroidViewModel", "androidx.lifecycle.ViewModel", "androidx.lifecycle.AndroidViewModel")
+                    val isViewModel = superNames.any { it in knownViewModelTypes || it.endsWith(".ViewModel") || it.endsWith(".AndroidViewModel") }
                     if (isViewModel) {
                         val hasInjectCtor = classOrObject.primaryConstructor?.annotationEntries?.any { it.shortName?.asString() == "Inject" } == true ||
                             classOrObject.secondaryConstructors.any { it.annotationEntries.any { a -> a.shortName?.asString() == "Inject" } }
@@ -454,7 +455,16 @@ class DefaultLibraryAnalysisService : LibraryAnalysisService {
                         }
                     }
 
-                    val isAndroidComponent = superNames.any { it.contains("Activity") || it.contains("Fragment") || it.contains("Service") || it.contains("Receiver") }
+                    val knownAndroidComponentTypes = setOf(
+                        "Activity", "ComponentActivity", "AppCompatActivity", "FragmentActivity",
+                        "Fragment", "DialogFragment",
+                        "Service", "IntentService", "JobService",
+                        "BroadcastReceiver"
+                    )
+                    val isAndroidComponent = superNames.any { superName ->
+                        val rawName = superName.substringBefore('<').substringAfterLast('.')
+                        rawName in knownAndroidComponentTypes || superName in knownAndroidComponentTypes
+                    }
                     if (isAndroidComponent) {
                         val hasInjectFields = classOrObject.declarations.filterIsInstance<org.jetbrains.kotlin.psi.KtProperty>().any { prop ->
                             prop.annotationEntries.any { it.shortName?.asString() == "Inject" }

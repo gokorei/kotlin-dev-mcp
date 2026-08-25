@@ -154,19 +154,83 @@ class GradleProjectInspector {
         )
     }
 
+    /**
+     * Statically audits an Android Gradle build script (Kotlin DSL or Groovy) for Kotlin 2.x and AGP alignment,
+     * including deprecation of `kotlinCompilerExtensionVersion` and missing SDK declarations.
+     *
+     * @param buildScriptContent The raw content of build.gradle.kts or build.gradle
+     * @return [KotlinMcpResult] containing audit findings and issue counts
+     */
     fun auditAndroidConfig(buildScriptContent: String): KotlinMcpResult {
         val issues = mutableListOf<String>()
-        val text = buildScriptContent.lowercase()
+        val psi = com.gokorei.kotlinmcp.lsp.K2SnippetFrontend.parsePsi(buildScriptContent)
 
-        if (text.contains("kotlincompilerextensionversion")) {
+        var isAndroidProject = false
+        var hasCompileSdk = false
+        var hasMinSdk = false
+        var hasDeprecatedComposeCompiler = false
+
+        if (psi != null) {
+            psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+                override fun visitCallExpression(expression: org.jetbrains.kotlin.psi.KtCallExpression) {
+                    val callee = expression.calleeExpression?.text.orEmpty()
+                    val args = expression.valueArguments.mapNotNull { it.getArgumentExpression()?.text?.trim('"', '\'') }
+
+                    when (callee) {
+                        "android", "androidTarget" -> isAndroidProject = true
+                        "id", "plugin" -> {
+                            if (args.any { it.startsWith("com.android.") || it == "android" }) isAndroidProject = true
+                        }
+                        "kotlin" -> {
+                            if (args.any { it == "android" }) isAndroidProject = true
+                        }
+                        "compileSdk" -> hasCompileSdk = true
+                        "minSdk" -> hasMinSdk = true
+                    }
+                    super.visitCallExpression(expression)
+                }
+
+                override fun visitBinaryExpression(expression: org.jetbrains.kotlin.psi.KtBinaryExpression) {
+                    val leftText = expression.left?.text.orEmpty()
+                    if (leftText == "compileSdk" || leftText.endsWith(".compileSdk")) hasCompileSdk = true
+                    if (leftText == "minSdk" || leftText.endsWith(".minSdk")) hasMinSdk = true
+                    if (leftText == "kotlinCompilerExtensionVersion" || leftText.endsWith(".kotlinCompilerExtensionVersion")) {
+                        hasDeprecatedComposeCompiler = true
+                    }
+                    super.visitBinaryExpression(expression)
+                }
+
+                override fun visitSimpleNameExpression(expression: org.jetbrains.kotlin.psi.KtSimpleNameExpression) {
+                    if (expression.getReferencedName() == "kotlinCompilerExtensionVersion") {
+                        hasDeprecatedComposeCompiler = true
+                    }
+                    super.visitSimpleNameExpression(expression)
+                }
+            })
+        } else {
+            // Groovy fallback with stripped comments
+            val noComments = buildScriptContent
+                .replace(Regex("""//.*"""), "")
+                .replace(Regex("""/\*[\s\S]*?\*/"""), "")
+            val text = noComments.lowercase()
+
+            if (text.contains("com.android.") || text.contains("android {") || text.contains("androidtarget")) {
+                isAndroidProject = true
+            }
+            if (text.contains("compilesdk")) hasCompileSdk = true
+            if (text.contains("minsdk")) hasMinSdk = true
+            if (text.contains("kotlincompilerextensionversion")) hasDeprecatedComposeCompiler = true
+        }
+
+        if (hasDeprecatedComposeCompiler) {
             issues.add("`composeOptions { kotlinCompilerExtensionVersion = ... }` is deprecated with Kotlin 2.0+. In Kotlin 2.x, Compose compiler is configured via the Compose compiler plugin (`kotlin(\"plugin.compose\")` / `id(\"org.jetbrains.kotlin.plugin.compose\")`). Remove `kotlinCompilerExtensionVersion`.")
         }
 
-        if (text.contains("android {") || text.contains("com.android.")) {
-            if (!text.contains("compilesdk")) {
+        if (isAndroidProject) {
+            if (!hasCompileSdk) {
                 issues.add("`android { ... }` block does not specify `compileSdk`. Explicitly declare `compileSdk = 35` (or target API level).")
             }
-            if (!text.contains("minsdk") && !text.contains("androidtarget")) {
+            if (!hasMinSdk) {
                 issues.add("`minSdk` is not explicitly declared in `defaultConfig { ... }`. Specify `minSdk = 26` (or minimum supported API level).")
             }
         }

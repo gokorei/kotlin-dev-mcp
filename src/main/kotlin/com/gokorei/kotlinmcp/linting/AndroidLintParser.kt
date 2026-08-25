@@ -13,12 +13,34 @@ import javax.xml.parsers.DocumentBuilderFactory
  */
 class AndroidLintParser {
 
+    /**
+     * Parses an Android Lint XML report (`lint-results.xml`) into structured diagnostic findings with file, line, and category coordinates.
+     *
+     * @param xmlContentOrPath XML report string or file path to lint-results.xml
+     * @param workspacePath Optional root workspace directory to search for lint-results.xml
+     * @return [KotlinMcpResult] containing formatted findings or structured error
+     */
     fun parseReport(xmlContentOrPath: String, workspacePath: String? = null): KotlinMcpResult {
-        val effectiveXml = resolveXml(xmlContentOrPath, workspacePath)
-        if (effectiveXml.isBlank()) {
-            return KotlinMcpResult.Success(
-                content = "# Android Lint Analysis Report\nNo Android Lint report (`lint-results.xml`) found or provided.",
-                metadata = mapOf("issuesCount" to "0")
+        val effectiveXml: String
+        try {
+            effectiveXml = resolveXml(xmlContentOrPath, workspacePath)
+            if (effectiveXml.isBlank()) {
+                return if (xmlContentOrPath.isNotBlank() && !xmlContentOrPath.trim().startsWith("<")) {
+                    KotlinMcpResult.Error(
+                        code = "FILE_NOT_FOUND",
+                        message = "Android Lint report file not found at path: $xmlContentOrPath"
+                    )
+                } else {
+                    KotlinMcpResult.Success(
+                        content = "# Android Lint Analysis Report\nNo Android Lint report (`lint-results.xml`) found or provided.",
+                        metadata = mapOf("issuesCount" to "0")
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            return KotlinMcpResult.Error(
+                code = "IO_ERROR",
+                message = "Failed to read Android Lint report file: ${e.message}"
             )
         }
 

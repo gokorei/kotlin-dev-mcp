@@ -1524,6 +1524,7 @@ public final class com/gokorei/kotlinmcp/project/EnvironmentProfileDetector {
 	public fun <init> ()V
 	public final fun detectEnvironmentProfile (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun detectProfile (Ljava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/project/GradleProjectInspector;)Lcom/gokorei/kotlinmcp/models/ProjectEnvironmentProfile;
+	public static synthetic fun detectProfile$default (Lcom/gokorei/kotlinmcp/project/EnvironmentProfileDetector;Ljava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/project/GradleProjectInspector;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/ProjectEnvironmentProfile;
 }
 
 public final class com/gokorei/kotlinmcp/project/GradleProjectInspector {
@@ -1699,6 +1700,8 @@ public final class com/gokorei/kotlinmcp/refactoring/RxJavaToCoroutinesRefactore
 
 public final class com/gokorei/kotlinmcp/server/DefaultFrameworkDetector : com/gokorei/kotlinmcp/server/FrameworkDetector {
 	public fun <init> ()V
+	public fun <init> (Lcom/gokorei/kotlinmcp/project/EnvironmentProfileDetector;)V
+	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/project/EnvironmentProfileDetector;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun detectFromBuildScript (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/ProjectEnvironmentProfile;
 	public fun detectFromProjectDir (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/ProjectEnvironmentProfile;
 }

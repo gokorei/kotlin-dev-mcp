@@ -83,4 +83,38 @@ class AndroidDiAnalysisTest {
         val success = result as KotlinMcpResult.Success
         assertFalse(success.content.contains("⚠️"), "valid Hilt DI should have no warnings: ${success.content}")
     }
+
+    @Test
+    fun `analyze_android_di allows Module with TestInstallIn annotation`() {
+        val snippet = """
+            @Module
+            @TestInstallIn(
+                components = [SingletonComponent::class],
+                replaces = [NetworkModule::class]
+            )
+            object FakeNetworkModule
+        """.trimIndent()
+
+        val result = libraryService.execute(LibraryAnalysisAction.ANALYZE_ANDROID_DI, snippet)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertFalse(success.content.contains("@InstallIn"), "TestInstallIn should satisfy module installation: ${success.content}")
+    }
+
+    @Test
+    fun `analyze_android_di does not flag unrelated supertypes mentioning activity or viewmodel`() {
+        val snippet = """
+            class CustomActivityHandler {
+                @Inject
+                lateinit var tracker: String
+            }
+
+            class CustomViewModelStore @Inject constructor(val name: String)
+        """.trimIndent()
+
+        val result = libraryService.execute(LibraryAnalysisAction.ANALYZE_ANDROID_DI, snippet)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertFalse(success.content.contains("⚠️"), "unrelated classes should not trigger DI warnings: ${success.content}")
+    }
 }

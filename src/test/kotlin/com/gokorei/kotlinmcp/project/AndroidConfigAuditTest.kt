@@ -88,4 +88,29 @@ class AndroidConfigAuditTest {
         val success = result as KotlinMcpResult.Success
         assertFalse(success.content.contains("⚠️"), "valid Android 2.x config should have no warnings: ${success.content}")
     }
+
+    @Test
+    fun `android_config flags missing minSdk in KMP project with androidTarget`() {
+        val buildScript = """
+            plugins {
+                kotlin("multiplatform") version "2.1.0"
+                id("com.android.library") version "8.5.2"
+            }
+            kotlin {
+                androidTarget()
+            }
+            android {
+                compileSdk = 35
+            }
+        """.trimIndent()
+
+        val result = projectService.execute(
+            action = ProjectAction.AUDIT_ANDROID_CONFIG,
+            buildScriptContent = buildScript
+        )
+
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("minSdk"), "expected missing minSdk warning in: ${success.content}")
+    }
 }

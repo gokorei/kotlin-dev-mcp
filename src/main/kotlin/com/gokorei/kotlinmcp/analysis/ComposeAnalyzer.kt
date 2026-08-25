@@ -111,12 +111,15 @@ class ComposeAnalyzer {
             val typeElement = typeRef?.typeElement
             val isFunctionType = typeElement is KtFunctionType || typeText.startsWith("(")
             val userType = typeElement as? KtUserType
-            val typeName = userType?.referencedName.orEmpty()
+            val typeName = userType?.referencedName ?: typeText.substringAfterLast('.').removeSuffix("?")
             val isContainerType = typeName in containerTypeNames || (userType?.typeArgumentList != null && typeName in containerTypeNames)
+            val isModifierType = typeName == "Modifier" || typeText == "androidx.compose.ui.Modifier" || typeText.endsWith(".Modifier")
 
-            if (typeName == "Modifier" || typeText.endsWith(".Modifier")) {
+            if (isModifierType) {
                 hasModifierParam = true
-                if (!param.hasDefaultValue()) {
+                val defaultExprText = param.defaultValue?.text?.trim()
+                val isDirectModifier = defaultExprText == "Modifier" || defaultExprText == "androidx.compose.ui.Modifier"
+                if (!isDirectModifier) {
                     findings.add("⚠️ Parameter `$paramName` in `@Composable $fnName` does not declare a default value `= Modifier`. Provide `= Modifier` to allow callers to omit modifier argument.")
                 }
             }
@@ -127,7 +130,7 @@ class ComposeAnalyzer {
             } || typeName in stableDeclaredTypes || typeText in stableDeclaredTypes
 
             if (typeText.isNotEmpty() && typeText !in stablePrimitiveTypes &&
-                !isFunctionType && !isContainerType && !isAnnotatedStable && typeName != "Modifier" && !typeText.endsWith(".Modifier")
+                !isFunctionType && !isContainerType && !isAnnotatedStable && !isModifierType
             ) {
                 findings.add("⚠️ `@Composable $fnName` takes parameter `$paramName` of type `$typeText`, which is not a known stable type. Annotate the type with `@Stable`/`@Immutable` or derive it from stable state to avoid recomposition waste.")
             }

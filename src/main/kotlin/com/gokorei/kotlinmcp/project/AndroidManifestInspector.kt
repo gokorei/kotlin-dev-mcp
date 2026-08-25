@@ -14,12 +14,28 @@ import javax.xml.parsers.DocumentBuilderFactory
  */
 class AndroidManifestInspector {
 
+    /**
+     * Statically inspects an AndroidManifest.xml file or snippet for security and configuration hygiene,
+     * including explicit `android:exported` on components with intent-filters and foreground service types.
+     *
+     * @param contentOrPath XML string content or path to AndroidManifest.xml
+     * @param projectPath Optional root path of the project workspace
+     * @return [KotlinMcpResult] containing formatted inspection findings or structured error
+     */
     fun inspectManifest(contentOrPath: String, projectPath: String?): KotlinMcpResult {
-        val effectiveXml = resolveManifestXml(contentOrPath, projectPath)
-        if (effectiveXml.isBlank()) {
-            return KotlinMcpResult.Success(
-                content = "# Android Manifest Inspection\nNo `AndroidManifest.xml` found or provided.",
-                metadata = mapOf("findingsCount" to "0")
+        val effectiveXml: String
+        try {
+            effectiveXml = resolveManifestXml(contentOrPath, projectPath)
+            if (effectiveXml.isBlank()) {
+                return KotlinMcpResult.Error(
+                    code = "FILE_NOT_FOUND",
+                    message = "No `AndroidManifest.xml` found or provided. Specify an XML snippet or a path to AndroidManifest.xml."
+                )
+            }
+        } catch (e: Exception) {
+            return KotlinMcpResult.Error(
+                code = "FILE_NOT_FOUND",
+                message = "Failed to resolve AndroidManifest.xml: ${e.message}"
             )
         }
 
@@ -67,13 +83,16 @@ class AndroidManifestInspector {
                             elem.getAttributeNS("http://schemas.android.com/apk/res/android", "foregroundServiceType")
                         }
                         if (fgType.isBlank()) {
-                            findings.add("⚠️ Manifest requests `FOREGROUND_SERVICE` permission but `<service android:name=\"$name\">` lacks `android:foregroundServiceType=\"...\"`. Android 14+ (SDK 34+) requires explicit foreground service types (e.g. `dataSync`, `mediaPlayback`, `location`).")
+                            findings.add("ℹ️ Advisory: Manifest declares `FOREGROUND_SERVICE` permission. If `<service android:name=\"$name\">` is started via `startForeground()`, ensure it declares `android:foregroundServiceType=\"...\"` (e.g. `dataSync`, `mediaPlayback`, `location`) as required by Android 14+ (SDK 34+).")
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            findings.add("⚠️ Failed to parse AndroidManifest.xml: ${e.message}")
+            return KotlinMcpResult.Error(
+                code = "XML_PARSE_ERROR",
+                message = "Failed to parse AndroidManifest.xml: ${e.message}"
+            )
         }
 
         val content = if (findings.isNotEmpty()) {

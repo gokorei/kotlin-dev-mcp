@@ -68,6 +68,22 @@ class EnvironmentProfileDetectorTest {
     }
 
     @Test
+    fun `detectProfile ignores comments and unrelated string literals mentioning android or plugins`() {
+        val nonAndroidScript = """
+            // This is a comment mentioning com.android.application and android {
+            /* multi-line comment mentioning androidTarget() */
+            plugins {
+                kotlin("jvm") version "2.1.0"
+            }
+            val note = "com.android.library is not used here"
+        """.trimIndent()
+
+        val profile = detector.detectProfile(nonAndroidScript, null, GradleProjectInspector())
+        assertFalse(profile.hasFramework(FrameworkFeature.ANDROID), "Comments or string literals must not trigger Android detection")
+        assertFalse(profile.isAndroid)
+    }
+
+    @Test
     fun `detectEnvironmentProfile renders structured markdown summary`() {
         val script = """
             plugins {

@@ -71,4 +71,20 @@ class AndroidLintParserTest {
         assertTrue(success.content.contains("No Android Lint issues found"))
         assertEquals("0", success.metadata["issuesCount"])
     }
+
+    @Test
+    fun `parseAndroidLintReport returns FILE_NOT_FOUND error on non-existent file path`() {
+        val result = (lintService as DefaultLintService).parseAndroidLintReport("/non/existent/lint-results.xml")
+        assertFalse(result.isSuccess)
+        val error = result as KotlinMcpResult.Error
+        assertEquals("FILE_NOT_FOUND", error.code)
+    }
+
+    @Test
+    fun `parseAndroidLintReport returns XML_PARSE_ERROR on malformed XML`() {
+        val result = (lintService as DefaultLintService).parseAndroidLintReport("<issues><unclosed></issues>")
+        assertFalse(result.isSuccess)
+        val error = result as KotlinMcpResult.Error
+        assertEquals("XML_PARSE_ERROR", error.code)
+    }
 }

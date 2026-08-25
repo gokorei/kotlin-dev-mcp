@@ -170,17 +170,47 @@ class CoroutinesSafetyAnalyzer {
         psi.accept(object : KtTreeVisitorVoid() {
             override fun visitClass(ktClass: org.jetbrains.kotlin.psi.KtClass) {
                 val superNames = ktClass.superTypeListEntries.mapNotNull { it.typeReference?.text?.trim() }
-                val isViewModel = superNames.any { it.contains("ViewModel") }
-                val isAndroidUi = superNames.any { it.contains("Activity") || it.contains("Fragment") }
+                val isViewModel = superNames.any { it == "ViewModel" || it == "AndroidViewModel" || it.endsWith(".ViewModel") || it.endsWith(".AndroidViewModel") }
+                val isAndroidUi = superNames.any {
+                    it in setOf("Activity", "ComponentActivity", "AppCompatActivity", "Fragment", "DialogFragment") ||
+                        it.endsWith("Activity") || it.endsWith("Fragment")
+                }
 
                 if (isViewModel) {
                     ktClass.accept(object : KtTreeVisitorVoid() {
+                        override fun visitClass(nestedClass: org.jetbrains.kotlin.psi.KtClass) {
+                            if (nestedClass != ktClass) return // Do not traverse nested classes as part of the outer ViewModel
+                            super.visitClass(nestedClass)
+                        }
+
                         override fun visitCallExpression(call: org.jetbrains.kotlin.psi.KtCallExpression) {
                             val callee = call.calleeExpression?.text
                             if (callee == "launch" || callee == "async") {
+                                var hasViewModelScope = false
+
+                                // Check direct receiver
                                 val parentDot = call.parent as? org.jetbrains.kotlin.psi.KtDotQualifiedExpression
-                                val receiverText = parentDot?.receiverExpression?.text.orEmpty()
-                                if (!receiverText.contains("viewModelScope")) {
+                                if (parentDot?.receiverExpression?.text?.contains("viewModelScope") == true) {
+                                    hasViewModelScope = true
+                                }
+
+                                // Check ancestor scopes (inherited CoroutineScope in viewModelScope.launch { ... })
+                                var ancestor: org.jetbrains.kotlin.com.intellij.psi.PsiElement? = call.parent
+                                while (ancestor != null && ancestor != ktClass && !hasViewModelScope) {
+                                    if (ancestor is org.jetbrains.kotlin.psi.KtDotQualifiedExpression) {
+                                        if (ancestor.receiverExpression.text.contains("viewModelScope")) {
+                                            hasViewModelScope = true
+                                        }
+                                    } else if (ancestor is org.jetbrains.kotlin.psi.KtCallExpression) {
+                                        val ancCallee = ancestor.calleeExpression?.text
+                                        if (ancCallee in setOf("coroutineScope", "supervisorScope", "withContext")) {
+                                            hasViewModelScope = true
+                                        }
+                                    }
+                                    ancestor = ancestor.parent
+                                }
+
+                                if (!hasViewModelScope) {
                                     findings.add("⚠️ Coroutine launched in ViewModel `${ktClass.name}` without `viewModelScope`. Use `viewModelScope.launch { ... }` so coroutines cancel automatically when the ViewModel is cleared.")
                                 }
                             }
@@ -191,12 +221,28 @@ class CoroutinesSafetyAnalyzer {
 
                 if (isAndroidUi) {
                     ktClass.accept(object : KtTreeVisitorVoid() {
+                        override fun visitClass(nestedClass: org.jetbrains.kotlin.psi.KtClass) {
+                            if (nestedClass != ktClass) return
+                            super.visitClass(nestedClass)
+                        }
+
                         override fun visitCallExpression(call: org.jetbrains.kotlin.psi.KtCallExpression) {
                             val callee = call.calleeExpression?.text
                             if (callee == "collect" || callee == "collectLatest") {
                                 var inRepeatOnLifecycle = false
+
+                                // Check receiver chain for .flowWithLifecycle(...)
+                                val parentDot = call.parent as? org.jetbrains.kotlin.psi.KtDotQualifiedExpression
+                                val receiverExpr = parentDot?.receiverExpression
+                                if (receiverExpr is org.jetbrains.kotlin.psi.KtCallExpression && receiverExpr.calleeExpression?.text == "flowWithLifecycle") {
+                                    inRepeatOnLifecycle = true
+                                } else if (receiverExpr is org.jetbrains.kotlin.psi.KtDotQualifiedExpression && receiverExpr.selectorExpression?.text?.startsWith("flowWithLifecycle") == true) {
+                                    inRepeatOnLifecycle = true
+                                }
+
+                                // Check ancestor calls for repeatOnLifecycle or flowWithLifecycle
                                 var p: org.jetbrains.kotlin.com.intellij.psi.PsiElement? = call.parent
-                                while (p != null && !inRepeatOnLifecycle) {
+                                while (p != null && p != ktClass && !inRepeatOnLifecycle) {
                                     if (p is org.jetbrains.kotlin.psi.KtCallExpression) {
                                         val pCallee = p.calleeExpression?.text.orEmpty()
                                         if (pCallee == "repeatOnLifecycle" || pCallee == "flowWithLifecycle") {
@@ -205,6 +251,7 @@ class CoroutinesSafetyAnalyzer {
                                     }
                                     p = p.parent
                                 }
+
                                 if (!inRepeatOnLifecycle) {
                                     findings.add("⚠️ Flow collection in Android UI component `${ktClass.name}` detected without `repeatOnLifecycle(Lifecycle.State.STARTED)`. Wrap collection in `lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED) { ... } }` to prevent UI leaks and background collection.")
                                 }
