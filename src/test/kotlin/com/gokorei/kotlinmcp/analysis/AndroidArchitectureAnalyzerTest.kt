@@ -53,6 +53,24 @@ class AndroidArchitectureAnalyzerTest {
     }
 
     @Test
+    fun `inspect_symbol flags Activity retention in AndroidViewModel`() {
+        val snippet = """
+            class UserViewModel(
+                application: Application,
+                private val activity: MainActivity
+            ) : AndroidViewModel(application) {
+                val title = "Profile"
+            }
+        """.trimIndent()
+
+        val result = codeAnalysisService.execute(CodeAnalysisAction.INSPECT_SYMBOL, snippet)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("Memory leak risk"), "retained Activity in AndroidViewModel should be flagged: ${success.content}")
+        assertTrue(success.content.contains("MainActivity"))
+    }
+
+    @Test
     fun `explain_coroutines flags non-viewModelScope launch in ViewModel`() {
         val snippet = """
             class UserViewModel : ViewModel() {

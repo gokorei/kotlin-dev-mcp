@@ -438,7 +438,7 @@ class DefaultLibraryAnalysisService : LibraryAnalysisService {
                 override fun visitClassOrObject(classOrObject: org.jetbrains.kotlin.psi.KtClassOrObject) {
                     val className = classOrObject.name ?: "Anonymous"
                     val annotations = classOrObject.annotationEntries.mapNotNull { it.shortName?.asString() }.toSet()
-                    val superNames = (classOrObject as? org.jetbrains.kotlin.psi.KtClass)?.superTypeListEntries?.mapNotNull { it.typeReference?.text?.trim() }.orEmpty()
+                    val superTypeListEntries = (classOrObject as? org.jetbrains.kotlin.psi.KtClass)?.superTypeListEntries.orEmpty()
 
                     val isModule = "Module" in annotations
                     if (isModule && "InstallIn" !in annotations && "TestInstallIn" !in annotations) {
@@ -446,7 +446,12 @@ class DefaultLibraryAnalysisService : LibraryAnalysisService {
                     }
 
                     val knownViewModelTypes = setOf("ViewModel", "AndroidViewModel", "androidx.lifecycle.ViewModel", "androidx.lifecycle.AndroidViewModel")
-                    val isViewModel = superNames.any { it in knownViewModelTypes || it.endsWith(".ViewModel") || it.endsWith(".AndroidViewModel") }
+                    val isViewModel = superTypeListEntries.any { entry ->
+                        val typeRef = entry.typeReference
+                        val userType = typeRef?.typeElement as? org.jetbrains.kotlin.psi.KtUserType
+                        val typeName = userType?.referencedName ?: typeRef?.text?.trim().orEmpty()
+                        typeName in knownViewModelTypes
+                    }
                     if (isViewModel) {
                         val hasInjectCtor = classOrObject.primaryConstructor?.annotationEntries?.any { it.shortName?.asString() == "Inject" } == true ||
                             classOrObject.secondaryConstructors.any { it.annotationEntries.any { a -> a.shortName?.asString() == "Inject" } }
@@ -461,9 +466,11 @@ class DefaultLibraryAnalysisService : LibraryAnalysisService {
                         "Service", "IntentService", "JobService",
                         "BroadcastReceiver"
                     )
-                    val isAndroidComponent = superNames.any { superName ->
-                        val rawName = superName.substringBefore('<').substringAfterLast('.')
-                        rawName in knownAndroidComponentTypes || superName in knownAndroidComponentTypes
+                    val isAndroidComponent = superTypeListEntries.any { entry ->
+                        val typeRef = entry.typeReference
+                        val userType = typeRef?.typeElement as? org.jetbrains.kotlin.psi.KtUserType
+                        val typeName = userType?.referencedName ?: typeRef?.text?.trim().orEmpty()
+                        typeName in knownAndroidComponentTypes
                     }
                     if (isAndroidComponent) {
                         val hasInjectFields = classOrObject.declarations.filterIsInstance<org.jetbrains.kotlin.psi.KtProperty>().any { prop ->

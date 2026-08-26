@@ -49,7 +49,19 @@ class EnvironmentProfileDetector {
         val active = mutableSetOf<FrameworkFeature>()
         var isKmp = false
 
+        var hasParserErrors = false
         if (psi != null) {
+            psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+                override fun visitElement(element: org.jetbrains.kotlin.com.intellij.psi.PsiElement) {
+                    if (element is org.jetbrains.kotlin.com.intellij.psi.PsiErrorElement) {
+                        hasParserErrors = true
+                    }
+                    if (!hasParserErrors) super.visitElement(element)
+                }
+            })
+        }
+
+        if (psi != null && !hasParserErrors) {
             psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
                 override fun visitCallExpression(expression: org.jetbrains.kotlin.psi.KtCallExpression) {
                     val callee = expression.calleeExpression?.text.orEmpty()
@@ -118,7 +130,7 @@ class EnvironmentProfileDetector {
             if (text.contains("datetime") || text.contains("kotlinx-datetime")) active.add(FrameworkFeature.DATETIME)
             if (text.contains("exposed") || text.contains("org.jetbrains.exposed")) active.add(FrameworkFeature.EXPOSED)
             if (text.contains("room") || text.contains("androidx.room")) active.add(FrameworkFeature.ROOM)
-            if (text.contains("com.android.") || text.contains("apply plugin: 'com.android.") || text.contains("apply plugin: \"com.android.")) active.add(FrameworkFeature.ANDROID)
+            if (text.contains("com.android.") || text.contains("apply plugin: 'com.android.") || text.contains("apply plugin: \"com.android.") || text.contains("android {")) active.add(FrameworkFeature.ANDROID)
 
             isKmp = text.contains("multiplatform")
         }

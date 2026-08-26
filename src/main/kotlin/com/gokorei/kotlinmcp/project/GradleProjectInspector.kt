@@ -170,7 +170,20 @@ class GradleProjectInspector {
         var hasMinSdk = false
         var hasDeprecatedComposeCompiler = false
 
+        var hasParserErrors = false
         if (psi != null) {
+            psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+                override fun visitElement(element: org.jetbrains.kotlin.com.intellij.psi.PsiElement) {
+                    if (element is org.jetbrains.kotlin.com.intellij.psi.PsiErrorElement) {
+                        hasParserErrors = true
+                    }
+                    if (!hasParserErrors) super.visitElement(element)
+                }
+            })
+        }
+
+        if (psi != null && !hasParserErrors) {
+            val scopeStack = mutableListOf<String>()
             psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
                 override fun visitCallExpression(expression: org.jetbrains.kotlin.psi.KtCallExpression) {
                     val callee = expression.calleeExpression?.text.orEmpty()
@@ -184,24 +197,44 @@ class GradleProjectInspector {
                         "kotlin" -> {
                             if (args.any { it == "android" }) isAndroidProject = true
                         }
-                        "compileSdk" -> hasCompileSdk = true
-                        "minSdk" -> hasMinSdk = true
+                        "compileSdk" -> {
+                            if ("android" in scopeStack) hasCompileSdk = true
+                        }
+                        "minSdk" -> {
+                            if ("android" in scopeStack || "defaultConfig" in scopeStack) hasMinSdk = true
+                        }
                     }
-                    super.visitCallExpression(expression)
+
+                    if (callee in setOf("android", "defaultConfig", "composeOptions")) {
+                        scopeStack.add(callee)
+                        super.visitCallExpression(expression)
+                        scopeStack.removeAt(scopeStack.lastIndex)
+                    } else {
+                        super.visitCallExpression(expression)
+                    }
                 }
 
                 override fun visitBinaryExpression(expression: org.jetbrains.kotlin.psi.KtBinaryExpression) {
                     val leftText = expression.left?.text.orEmpty()
-                    if (leftText == "compileSdk" || leftText.endsWith(".compileSdk")) hasCompileSdk = true
-                    if (leftText == "minSdk" || leftText.endsWith(".minSdk")) hasMinSdk = true
-                    if (leftText == "kotlinCompilerExtensionVersion" || leftText.endsWith(".kotlinCompilerExtensionVersion")) {
+                    if (leftText == "compileSdk" && "android" in scopeStack) hasCompileSdk = true
+                    if (leftText.endsWith(".compileSdk")) hasCompileSdk = true
+
+                    if (leftText == "minSdk" && ("android" in scopeStack || "defaultConfig" in scopeStack)) hasMinSdk = true
+                    if (leftText.endsWith(".minSdk")) hasMinSdk = true
+
+                    if (leftText == "kotlinCompilerExtensionVersion" && ("composeOptions" in scopeStack || "android" in scopeStack)) {
+                        hasDeprecatedComposeCompiler = true
+                    }
+                    if (leftText.endsWith(".kotlinCompilerExtensionVersion")) {
                         hasDeprecatedComposeCompiler = true
                     }
                     super.visitBinaryExpression(expression)
                 }
 
                 override fun visitSimpleNameExpression(expression: org.jetbrains.kotlin.psi.KtSimpleNameExpression) {
-                    if (expression.getReferencedName() == "kotlinCompilerExtensionVersion") {
+                    if (expression.getReferencedName() == "kotlinCompilerExtensionVersion" &&
+                        ("composeOptions" in scopeStack || "android" in scopeStack)
+                    ) {
                         hasDeprecatedComposeCompiler = true
                     }
                     super.visitSimpleNameExpression(expression)

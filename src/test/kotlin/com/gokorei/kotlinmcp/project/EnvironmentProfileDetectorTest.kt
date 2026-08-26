@@ -84,6 +84,22 @@ class EnvironmentProfileDetectorTest {
     }
 
     @Test
+    fun `detectProfile correctly identifies Android in Groovy build script`() {
+        val groovyScript = """
+            apply plugin: 'com.android.application'
+            apply plugin: 'kotlin-android'
+
+            android {
+                compileSdkVersion 34
+            }
+        """.trimIndent()
+
+        val profile = detector.detectProfile(groovyScript, null, GradleProjectInspector())
+        assertTrue(profile.hasFramework(FrameworkFeature.ANDROID), "Groovy build.gradle with Android plugin should be detected")
+        assertTrue(profile.isAndroid)
+    }
+
+    @Test
     fun `detectEnvironmentProfile renders structured markdown summary`() {
         val script = """
             plugins {

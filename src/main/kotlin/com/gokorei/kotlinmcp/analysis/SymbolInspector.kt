@@ -73,7 +73,7 @@ class SymbolInspector {
                 shortName == "Singleton" || shortName == "ActivityRetainedScoped"
             }
 
-            if ((isViewModel || isSingleton) && !isAndroidViewModel) {
+            if (isViewModel || isAndroidViewModel || isSingleton) {
                 fun isLeakyType(typeRef: org.jetbrains.kotlin.psi.KtTypeReference?): Boolean {
                     if (typeRef == null) return false
                     val rawType = typeRef.text.trim().removeSuffix("?")

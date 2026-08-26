@@ -113,4 +113,31 @@ class AndroidConfigAuditTest {
         val success = result as KotlinMcpResult.Success
         assertTrue(success.content.contains("minSdk"), "expected missing minSdk warning in: ${success.content}")
     }
+
+    @Test
+    fun `android_config ignores top-level or unrelated compileSdk variables when android block is missing compileSdk`() {
+        val buildScript = """
+            val compileSdk = 35
+            val minSdk = 26
+            val kotlinCompilerExtensionVersion = "1.5.14"
+
+            plugins {
+                id("com.android.application")
+            }
+            android {
+                namespace = "com.example.app"
+            }
+        """.trimIndent()
+
+        val result = projectService.execute(
+            action = ProjectAction.AUDIT_ANDROID_CONFIG,
+            buildScriptContent = buildScript
+        )
+
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("compileSdk"), "unrelated top-level compileSdk must not satisfy android { compileSdk }: ${success.content}")
+        assertTrue(success.content.contains("minSdk"), "unrelated top-level minSdk must not satisfy defaultConfig { minSdk }: ${success.content}")
+        assertFalse(success.content.contains("composeOptions"), "top-level variable must not trigger composeOptions deprecation warning: ${success.content}")
+    }
 }
