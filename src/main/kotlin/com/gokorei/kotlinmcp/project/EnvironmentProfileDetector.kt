@@ -134,7 +134,23 @@ class EnvironmentProfileDetector {
             if (text.contains("datetime") || text.contains("kotlinx-datetime")) active.add(FrameworkFeature.DATETIME)
             if (text.contains("exposed") || text.contains("org.jetbrains.exposed")) active.add(FrameworkFeature.EXPOSED)
             if (text.contains("room") || text.contains("androidx.room")) active.add(FrameworkFeature.ROOM)
-            if (text.contains("com.android.") || text.contains("apply plugin: 'com.android.") || text.contains("apply plugin: \"com.android.") || textNoStrings.contains("android {")) active.add(FrameworkFeature.ANDROID)
+
+            val hasGroovyAndroidPlugin = text.contains("apply plugin: 'com.android.") ||
+                text.contains("apply plugin: \"com.android.") ||
+                text.contains("apply plugin: 'kotlin-android'") ||
+                text.contains("apply plugin: \"kotlin-android\"") ||
+                text.contains("id 'com.android.") ||
+                text.contains("id \"com.android.") ||
+                text.contains("id 'org.jetbrains.kotlin.android'") ||
+                text.contains("id \"org.jetbrains.kotlin.android\"") ||
+                text.contains("id('com.android.") ||
+                text.contains("id(\"com.android.") ||
+                text.contains("classpath 'com.android.tools.build:gradle") ||
+                text.contains("classpath \"com.android.tools.build:gradle")
+
+            if (hasGroovyAndroidPlugin || textNoStrings.contains("android {")) {
+                active.add(FrameworkFeature.ANDROID)
+            }
 
             isKmp = text.contains("multiplatform")
         }

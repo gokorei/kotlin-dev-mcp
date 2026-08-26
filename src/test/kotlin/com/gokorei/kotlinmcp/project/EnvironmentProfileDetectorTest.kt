@@ -114,6 +114,21 @@ class EnvironmentProfileDetectorTest {
     }
 
     @Test
+    fun `detectProfile ignores quoted com android values outside plugin declarations in Groovy`() {
+        val groovyScript = """
+            apply plugin: 'java'
+            ext {
+                description = 'Reference to com.android.tools for documentation'
+                sdkPackage = "com.android.support:support-v4:28.0.0"
+            }
+        """.trimIndent()
+
+        val profile = detector.detectProfile(groovyScript, null, GradleProjectInspector())
+        assertFalse(profile.hasFramework(FrameworkFeature.ANDROID), "Arbitrary com.android.* string in Groovy must not trigger Android detection")
+        assertFalse(profile.isAndroid)
+    }
+
+    @Test
     fun `detectEnvironmentProfile renders structured markdown summary`() {
         val script = """
             plugins {
