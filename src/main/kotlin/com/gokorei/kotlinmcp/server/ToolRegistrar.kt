@@ -135,9 +135,9 @@ object ToolRegistrar {
         register("kotlin_project_inspect") {
             description = "READ-ONLY. Gradle build script and project layout inspection."
             readOnly = true
-            actions("structure", "kmp_targets", "dependencies", "schema_digest", "diagnose_build", "layout_inventory", "vulnerabilities", "package_api", "coverage_report")
-            param("action", "Inspection action: 'structure' (default, plugins & source sets), 'kmp_targets', 'dependencies', 'schema_digest' (API/DB schema digest from SQL DDL, Exposed tables, @Serializable DTOs, OpenAPI), 'diagnose_build' (pre-build check), 'layout_inventory' (disk layout listing), 'vulnerabilities' (security advisory audit), 'package_api' (public API surface of a package), 'coverage_report' (JaCoCo test coverage summary)")
-            param("buildScriptContent", "Content of build.gradle.kts")
+            actions("structure", "kmp_targets", "dependencies", "schema_digest", "diagnose_build", "layout_inventory", "vulnerabilities", "package_api", "coverage_report", "android_manifest", "android_config")
+            param("action", "Project action: 'structure' (default), 'kmp_targets', 'dependencies', 'schema_digest', 'diagnose_build', 'layout_inventory', 'vulnerabilities', 'package_api', 'coverage_report', 'android_manifest', 'android_config'")
+            param("buildScriptContent", "Content of build.gradle.kts (or AndroidManifest.xml for android_manifest)")
             param("projectPath", "Path to Gradle project root directory (aliases: workspacePath, path)")
             param("packageName", "Target package for package_api (e.g. com.example.app)")
             param("settingsContent", "Optional settings.gradle.kts content for diagnose_build")
@@ -166,7 +166,9 @@ object ToolRegistrar {
                             k.projectCheckVulnerabilities(script, projectPath, connectTimeout, readTimeout, retries)
                         },
                         "package_api" to { k.projectPackageApi(projectPath, a["packageName"]) },
-                        "coverage_report" to { k.projectCoverageReport(projectPath) }
+                        "coverage_report" to { k.projectCoverageReport(projectPath) },
+                        "android_manifest" to { k.projectInspectAndroidManifest(script, projectPath) },
+                        "android_config" to { k.projectAuditAndroidConfig(script) }
                     )
                 )
             }
@@ -280,11 +282,11 @@ object ToolRegistrar {
 
         // 4. kotlin_library_analyze
         register("kotlin_library_analyze") {
-            description = "MUTATING. Library anti-pattern checks, modernization suggestions, and code-transforming refactors (e.g. Arrow)."
+            description = "MUTATING. Library anti-pattern checks, modernization suggestions, and code-transforming refactors (e.g. Arrow, Android DI)."
             readOnly = false
-            actions("ktor", "serialization", "tests", "route_map", "arrow", "datetime")
-            param("action", "Primary library analysis action: 'ktor' (default), 'serialization', 'tests', 'route_map', 'arrow', 'datetime'")
-            param("domain", "Deprecated backward-compatible alias for 'action'. Domain alias ('ktor', 'serialization', 'tests', 'arrow', 'datetime')")
+            actions("ktor", "serialization", "tests", "route_map", "arrow", "datetime", "android_di")
+            param("action", "Primary library analysis action: 'ktor' (default), 'serialization', 'tests', 'route_map', 'arrow', 'datetime', 'android_di'")
+            param("domain", "Deprecated backward-compatible alias for 'action'. Domain alias ('ktor', 'serialization', 'tests', 'arrow', 'datetime', 'android_di')")
             param("code", "Kotlin code snippet to analyze")
             param("dataSources", "Optional schema-diff links for serialization analysis")
             param("legacy", "Optional 'true' for Arrow 1.x monad mode in arrow refactoring")
@@ -305,7 +307,9 @@ object ToolRegistrar {
                         "tests" to { k.analyzeTests(code) },
                         "route_map" to { k.routeMap(code) },
                         "arrow" to { k.refactorToArrow(code, a["legacy"]) },
-                        "datetime" to { k.suggestKotlinxDatetime(code) }
+                        "datetime" to { k.suggestKotlinxDatetime(code) },
+                        "android_di" to { k.analyzeAndroidDi(code) },
+                        "android" to { k.analyzeAndroidDi(code) }
                     )
                 )
             }
@@ -313,11 +317,11 @@ object ToolRegistrar {
 
         // 5. kotlin_lint
         register("kotlin_lint") {
-            description = "MUTATING. Detekt and KtLint static analysis, baseline management, and code formatting."
+            description = "MUTATING. Detekt, KtLint, and Android Lint static analysis, baseline management, and code formatting."
             readOnly = false
-            actions("lint", "detekt", "format", "format_ktlint", "baseline_read", "baseline_dump")
-            param("action", "Lint action: 'lint' (default, alias: 'detekt'), 'format' (alias: 'format_ktlint'), 'baseline_read', 'baseline_dump'")
-            param("code", "Kotlin source code snippet to lint or format")
+            actions("lint", "detekt", "format", "format_ktlint", "baseline_read", "baseline_dump", "android_lint")
+            param("action", "Lint action: 'lint' (default, alias: 'detekt'), 'format' (alias: 'format_ktlint'), 'baseline_read', 'baseline_dump', 'android_lint'")
+            param("code", "Kotlin source code snippet to lint or format (or XML content / file path for android_lint)")
             param("workspacePath", "Optional root directory path of workspace")
             handleSimple { k, a ->
                 val code = a["code"].orEmpty()
@@ -332,7 +336,9 @@ object ToolRegistrar {
                         "format" to { k.formatKtlint(code, true) },
                         "format_ktlint" to { k.formatKtlint(code, true) },
                         "baseline_read" to { k.baselineRead(ws) },
-                        "baseline_dump" to { k.baselineDump(ws) }
+                        "baseline_dump" to { k.baselineDump(ws) },
+                        "android_lint" to { k.parseAndroidLint(code, a["workspacePath"]) },
+                        "android" to { k.parseAndroidLint(code, a["workspacePath"]) }
                     )
                 )
             }

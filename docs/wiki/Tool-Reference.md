@@ -51,12 +51,12 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 
 **Description:** Gradle build script and project layout inspection.
 
-**Supported Actions:** `structure`, `kmp_targets`, `dependencies`, `schema_digest`, `diagnose_build`, `layout_inventory`, `vulnerabilities`, `package_api`, `coverage_report`
+**Supported Actions:** `structure`, `kmp_targets`, `dependencies`, `schema_digest`, `diagnose_build`, `layout_inventory`, `vulnerabilities`, `package_api`, `coverage_report`, `android_manifest`, `android_config`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | Inspection action: 'structure' (default, plugins & source sets), 'kmp_targets', 'dependencies', 'schema_digest' (API/DB schema digest from SQL DDL, Exposed tables, @Serializable DTOs, OpenAPI), 'diagnose_build' (pre-build check), 'layout_inventory' (disk layout listing), 'vulnerabilities' (security advisory audit), 'package_api' (public API surface of a package), 'coverage_report' (JaCoCo test coverage summary) |
-| `buildScriptContent` | `string` | No | Content of build.gradle.kts |
+| `action` | `string` | No | Project action: 'structure' (default), 'kmp_targets', 'dependencies', 'schema_digest', 'diagnose_build', 'layout_inventory', 'vulnerabilities', 'package_api', 'coverage_report', 'android_manifest', 'android_config' |
+| `buildScriptContent` | `string` | No | Content of build.gradle.kts (or AndroidManifest.xml for android_manifest) |
 | `projectPath` | `string` | No | Path to Gradle project root directory (aliases: workspacePath, path) |
 | `packageName` | `string` | No | Target package for package_api (e.g. com.example.app) |
 | `settingsContent` | `string` | No | Optional settings.gradle.kts content for diagnose_build |
@@ -126,28 +126,28 @@ Mutating tools generate code diffs, format files, rename symbols across workspac
 
 ### `kotlin_library_analyze`
 
-**Description:** Library anti-pattern checks, modernization suggestions, and code-transforming refactors (e.g. Arrow).
+**Description:** Library anti-pattern checks, modernization suggestions, and code-transforming refactors (e.g. Arrow, Android DI).
 
-**Supported Actions:** `ktor`, `serialization`, `tests`, `route_map`, `arrow`, `datetime`
+**Supported Actions:** `ktor`, `serialization`, `tests`, `route_map`, `arrow`, `datetime`, `android_di`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | Primary library analysis action: 'ktor' (default), 'serialization', 'tests', 'route_map', 'arrow', 'datetime' |
-| `domain` | `string` | No | Deprecated backward-compatible alias for 'action'. Domain alias ('ktor', 'serialization', 'tests', 'arrow', 'datetime') |
+| `action` | `string` | No | Primary library analysis action: 'ktor' (default), 'serialization', 'tests', 'route_map', 'arrow', 'datetime', 'android_di' |
+| `domain` | `string` | No | Deprecated backward-compatible alias for 'action'. Domain alias ('ktor', 'serialization', 'tests', 'arrow', 'datetime', 'android_di') |
 | `code` | `string` | **Yes** | Kotlin code snippet to analyze |
 | `dataSources` | `string` | No | Optional schema-diff links for serialization analysis |
 | `legacy` | `string` | No | Optional 'true' for Arrow 1.x monad mode in arrow refactoring |
 
 ### `kotlin_lint`
 
-**Description:** Detekt and KtLint static analysis, baseline management, and code formatting.
+**Description:** Detekt, KtLint, and Android Lint static analysis, baseline management, and code formatting.
 
-**Supported Actions:** `lint`, `detekt`, `format`, `format_ktlint`, `baseline_read`, `baseline_dump`
+**Supported Actions:** `lint`, `detekt`, `format`, `format_ktlint`, `baseline_read`, `baseline_dump`, `android_lint`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | Lint action: 'lint' (default, alias: 'detekt'), 'format' (alias: 'format_ktlint'), 'baseline_read', 'baseline_dump' |
-| `code` | `string` | No | Kotlin source code snippet to lint or format |
+| `action` | `string` | No | Lint action: 'lint' (default, alias: 'detekt'), 'format' (alias: 'format_ktlint'), 'baseline_read', 'baseline_dump', 'android_lint' |
+| `code` | `string` | No | Kotlin source code snippet to lint or format (or XML content / file path for android_lint) |
 | `workspacePath` | `string` | No | Optional root directory path of workspace |
 
 ### `kotlin_run`

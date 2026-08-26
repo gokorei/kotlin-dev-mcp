@@ -218,6 +218,18 @@ class KotlinMcpServer(
     fun projectCoverageReport(projectPath: String?): KotlinMcpResult =
         projectService.coverageReport(projectPath)
 
+    /**
+     * Statically inspects an AndroidManifest.xml file or snippet for exported attributes and foreground service types.
+     */
+    fun projectInspectAndroidManifest(contentOrPath: String, projectPath: String? = null): KotlinMcpResult =
+        projectService.execute(ProjectAction.INSPECT_ANDROID_MANIFEST, buildScriptContent = contentOrPath, projectPath = projectPath)
+
+    /**
+     * Statically audits an Android Gradle build script for Kotlin 2.x and AGP configuration alignment.
+     */
+    fun projectAuditAndroidConfig(buildScriptContent: String): KotlinMcpResult =
+        projectService.execute(ProjectAction.AUDIT_ANDROID_CONFIG, buildScriptContent = buildScriptContent)
+
 
 
     // ---- kotlin_refactor ----
@@ -257,6 +269,12 @@ class KotlinMcpServer(
     fun routeMap(code: String): KotlinMcpResult =
         libraryAnalysisService.execute(LibraryAnalysisAction.ROUTE_MAP, code)
 
+    /**
+     * Statically inspects Kotlin code for Hilt and Dagger Android DI annotation wiring consistency.
+     */
+    fun analyzeAndroidDi(code: String): KotlinMcpResult =
+        libraryAnalysisService.execute(LibraryAnalysisAction.ANALYZE_ANDROID_DI, code)
+
     // ---- kotlin_lint ----
 
     fun runDetekt(
@@ -279,4 +297,10 @@ class KotlinMcpServer(
 
     fun baselineDump(workspacePath: String, findings: List<LintFinding>? = null): KotlinMcpResult =
         lintService.baselineDump(workspacePath, findings)
+
+    /**
+     * Parses an Android Lint XML report into structured findings with coordinates.
+     */
+    fun parseAndroidLint(xmlContentOrPath: String, workspacePath: String? = null): KotlinMcpResult =
+        lintService.parseAndroidLintReport(xmlContentOrPath, workspacePath)
 }

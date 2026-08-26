@@ -154,6 +154,160 @@ class GradleProjectInspector {
         )
     }
 
+    /**
+     * Statically audits an Android Gradle build script (Kotlin DSL or Groovy) for Kotlin 2.x and AGP alignment,
+     * including deprecation of `kotlinCompilerExtensionVersion` and missing SDK declarations.
+     *
+     * @param buildScriptContent The raw content of build.gradle.kts or build.gradle
+     * @param scriptPath Optional file path to identify build script dialect (.gradle.kts vs .gradle)
+     * @return [KotlinMcpResult] containing audit findings and issue counts
+     */
+    fun auditAndroidConfig(buildScriptContent: String, scriptPath: String? = null): KotlinMcpResult {
+        val issues = mutableListOf<String>()
+        val isExplicitKts = scriptPath?.endsWith(".gradle.kts") == true ||
+            (scriptPath == null && (buildScriptContent.contains("plugins {") || buildScriptContent.contains("val ") || buildScriptContent.contains("var ")))
+
+        val psi = com.gokorei.kotlinmcp.lsp.K2SnippetFrontend.parsePsi(buildScriptContent)
+
+        var isAndroidProject = false
+        var hasCompileSdk = false
+        var hasMinSdk = false
+        var hasDeprecatedComposeCompiler = false
+
+        var hasParserErrors = false
+        if (psi != null) {
+            psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+                override fun visitElement(element: org.jetbrains.kotlin.com.intellij.psi.PsiElement) {
+                    if (element is org.jetbrains.kotlin.com.intellij.psi.PsiErrorElement) {
+                        hasParserErrors = true
+                    }
+                    if (!hasParserErrors) super.visitElement(element)
+                }
+            })
+        }
+
+        if (isExplicitKts && (psi == null || hasParserErrors)) {
+            return KotlinMcpResult.Error(
+                code = "KOTLIN_SCRIPT_PARSE_ERROR",
+                message = "Failed to parse Kotlin DSL build script with K2 PSI."
+            )
+        }
+
+        if (psi != null && !hasParserErrors) {
+            val scopeStack = mutableListOf<String>()
+            psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+                override fun visitCallExpression(expression: org.jetbrains.kotlin.psi.KtCallExpression) {
+                    val callee = expression.calleeExpression?.text.orEmpty()
+                    val args = expression.valueArguments.mapNotNull { it.getArgumentExpression()?.text?.trim('"', '\'') }
+
+                    when (callee) {
+                        "android", "androidTarget" -> isAndroidProject = true
+                        "id", "plugin" -> {
+                            if (args.any { it.startsWith("com.android.") || it == "android" }) isAndroidProject = true
+                        }
+                        "kotlin" -> {
+                            if (args.any { it == "android" }) isAndroidProject = true
+                        }
+                        "compileSdk" -> {
+                            if ("android" in scopeStack) hasCompileSdk = true
+                        }
+                        "minSdk" -> {
+                            if ("android" in scopeStack || "defaultConfig" in scopeStack) hasMinSdk = true
+                        }
+                    }
+
+                    if (callee in setOf("android", "defaultConfig", "composeOptions")) {
+                        scopeStack.add(callee)
+                        super.visitCallExpression(expression)
+                        scopeStack.removeAt(scopeStack.lastIndex)
+                    } else {
+                        super.visitCallExpression(expression)
+                    }
+                }
+
+                override fun visitBinaryExpression(expression: org.jetbrains.kotlin.psi.KtBinaryExpression) {
+                    if (expression.operationToken == org.jetbrains.kotlin.lexer.KtTokens.EQ) {
+                        val leftExpr = expression.left
+                        if (leftExpr is org.jetbrains.kotlin.psi.KtDotQualifiedExpression) {
+                            val receiverText = leftExpr.receiverExpression.text
+                            val selectorText = leftExpr.selectorExpression?.text.orEmpty()
+                            val validAndroidReceivers = setOf("android", "defaultConfig", "composeOptions")
+
+                            if (selectorText == "compileSdk" && (receiverText == "android" || receiverText.endsWith(".android") || "android" in scopeStack)) {
+                                hasCompileSdk = true
+                            }
+                            if (selectorText == "minSdk" && (receiverText in validAndroidReceivers || receiverText.endsWith(".defaultConfig") || "android" in scopeStack || "defaultConfig" in scopeStack)) {
+                                hasMinSdk = true
+                            }
+                            if (selectorText == "kotlinCompilerExtensionVersion" && (receiverText in validAndroidReceivers || receiverText.endsWith(".composeOptions") || "composeOptions" in scopeStack || "android" in scopeStack)) {
+                                hasDeprecatedComposeCompiler = true
+                            }
+                        } else {
+                            val leftText = leftExpr?.text.orEmpty()
+                            if (leftText == "compileSdk" && "android" in scopeStack) hasCompileSdk = true
+                            if (leftText == "minSdk" && ("android" in scopeStack || "defaultConfig" in scopeStack)) hasMinSdk = true
+                            if (leftText == "kotlinCompilerExtensionVersion" && ("composeOptions" in scopeStack || "android" in scopeStack)) {
+                                hasDeprecatedComposeCompiler = true
+                            }
+                        }
+                    }
+                    super.visitBinaryExpression(expression)
+                }
+            })
+        } else {
+            // Groovy fallback with stripped comments and string literals
+            val noComments = buildScriptContent
+                .replace(Regex("""//.*"""), "")
+                .replace(Regex("""/\*[\s\S]*?\*/"""), "")
+            val noStrings = noComments
+                .replace(Regex(""""(?:[^"\\]|\\.)*""""), "")
+                .replace(Regex("""'(?:[^'\\]|\\.)*'"""), "")
+            val textNoStrings = noStrings.lowercase()
+
+            val hasGroovyAndroidPlugin = noComments.lines().any { rawLine ->
+                val line = rawLine.trim()
+                val lower = line.lowercase()
+                (lower.startsWith("apply plugin:") && (lower.contains("com.android.") || lower.contains("kotlin-android"))) ||
+                ((lower.startsWith("id ") || lower.startsWith("id(")) && (lower.contains("com.android.") || lower.contains("org.jetbrains.kotlin.android") || lower.contains("'android'") || lower.contains("\"android\""))) ||
+                (lower.startsWith("classpath ") && lower.contains("com.android.tools.build:gradle"))
+            }
+
+            if (hasGroovyAndroidPlugin || textNoStrings.contains("android {") || textNoStrings.contains("androidtarget")) {
+                isAndroidProject = true
+            }
+            if (textNoStrings.contains("compilesdk")) hasCompileSdk = true
+            if (textNoStrings.contains("minsdk")) hasMinSdk = true
+            if (textNoStrings.contains("kotlincompilerextensionversion")) hasDeprecatedComposeCompiler = true
+        }
+
+        if (hasDeprecatedComposeCompiler) {
+            issues.add("`composeOptions { kotlinCompilerExtensionVersion = ... }` is deprecated with Kotlin 2.0+. In Kotlin 2.x, Compose compiler is configured via the Compose compiler plugin (`kotlin(\"plugin.compose\")` / `id(\"org.jetbrains.kotlin.plugin.compose\")`). Remove `kotlinCompilerExtensionVersion`.")
+        }
+
+        if (isAndroidProject) {
+            if (!hasCompileSdk) {
+                issues.add("`android { ... }` block does not specify `compileSdk`. Explicitly declare `compileSdk = 35` (or target API level).")
+            }
+            if (!hasMinSdk) {
+                issues.add("`minSdk` is not explicitly declared in `defaultConfig { ... }`. Specify `minSdk = 26` (or minimum supported API level).")
+            }
+        }
+
+        val content = buildString {
+            appendLine("# Android & AGP Build Configuration Audit")
+            if (issues.isNotEmpty()) {
+                issues.forEach { appendLine("- ⚠️ $it") }
+            } else {
+                appendLine("✅ Android build script configuration is modern and aligned with Kotlin 2.x / AGP guidelines.")
+            }
+        }
+
+        return KotlinMcpResult.Success(
+            content = content,
+            metadata = mapOf("issueCount" to issues.size.toString())
+        )
+    }
+
     private fun extractPlugins(content: String): List<String> {
         val plugins = mutableListOf<String>()
         // Kotlin DSL: id("...") / id('...')

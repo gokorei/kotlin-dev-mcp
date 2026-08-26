@@ -12,10 +12,61 @@ object FrameworkFeatureCatalog {
         FrameworkFeature.DATETIME to listOf("kotlinx-datetime"),
         FrameworkFeature.KTOR to listOf("ktor"),
         FrameworkFeature.TURBINE to listOf("turbine"),
-        FrameworkFeature.MOCKK to listOf("mockk")
+        FrameworkFeature.MOCKK to listOf("mockk"),
+        FrameworkFeature.ANDROID to listOf("android", "androidx"),
+        FrameworkFeature.COMPOSE to listOf("compose"),
+        FrameworkFeature.SPRING to listOf("spring", "springframework"),
+        FrameworkFeature.EXPOSED to listOf("exposed"),
+        FrameworkFeature.ROOM to listOf("room")
     )
 
     val featureDocs: Map<FrameworkFeature, String> = mapOf(
+        FrameworkFeature.ANDROID to """
+            # Modern Android Development with Kotlin Guide
+            Guidelines for building robust, leak-free Android apps using Jetpack Compose, Lifecycle, and Hilt.
+
+            ## Jetpack Compose Best Practices
+            - **Lifecycle-aware State Collection**: Use `flow.collectAsStateWithLifecycle()` from `androidx.lifecycle.compose` instead of `collectAsState()` to pause collection when the UI is in the background.
+            - **Modifier Parameter Conventions**: Every custom UI `@Composable` should accept `modifier: Modifier = Modifier` as the first optional parameter and chain it to the root layout element.
+            - **Edge-to-Edge Compliance (Android 15+)**: Call `enableEdgeToEdge()` in `Activity.onCreate()` and handle window insets via Compose modifiers (`Modifier.safeDrawingPadding()`, `Modifier.imePadding()`).
+
+            ## Architecture & Concurrency
+            - **ViewModel Coroutine Scopes**: Always launch coroutines via `viewModelScope.launch { ... }` so work cancels automatically when the ViewModel clears.
+            - **No Leaked UI References**: Never hold direct references to `Activity`, `View`, or UI `Context` inside `ViewModel` or `@Singleton` classes. Use `@ApplicationContext` or state callbacks instead.
+            - **Hilt Dependency Injection**: Annotate injected ViewModels with `@HiltViewModel` and Activity/Fragment injection targets with `@AndroidEntryPoint`.
+        """.trimIndent(),
+        FrameworkFeature.COMPOSE to """
+            # Jetpack Compose Guide
+            Declarative modern UI toolkit for Kotlin applications.
+            
+            ## State & Recomposition
+            - Use `remember { mutableStateOf(...) }` to preserve UI state across recompositions.
+            - Provide `modifier: Modifier = Modifier` on reusable custom composables.
+        """.trimIndent(),
+        FrameworkFeature.SPRING to """
+            # Spring Boot with Kotlin Guide
+            Building reactive and web services using Spring Framework and Kotlin.
+            
+            ## Best Practices
+            - Leverage constructor injection and Kotlin data classes for DTOs.
+            - Use `org.springframework.web.reactive.function.server.coRouter` for coroutine routing.
+        """.trimIndent(),
+        FrameworkFeature.EXPOSED to """
+            # JetBrains Exposed SQL ORM Guide
+            Type-safe SQL library for Kotlin.
+            
+            ## Patterns
+            - Declare schema with `object Users : IntIdTable("users")`.
+            - Execute queries inside `transaction { ... }` or `suspendTransaction { ... }`.
+        """.trimIndent(),
+        FrameworkFeature.ROOM to """
+            # Android Jetpack Room Guide
+            SQLite object mapping library for Android.
+            
+            ## Coroutines & Flow
+            - Declare DAO suspend functions for one-shot reads/writes.
+            - Return `Flow<T>` from DAO methods for observable queries.
+        """.trimIndent(),
         FrameworkFeature.COROUTINES to """
             # Kotlin Coroutines Guide
             Coroutines provide lightweight cooperative multitasking built directly into Kotlin.

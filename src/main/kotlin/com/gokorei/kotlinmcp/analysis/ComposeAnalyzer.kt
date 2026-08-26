@@ -53,6 +53,17 @@ class ComposeAnalyzer {
                 inspectComposableCall(expression, lineOf, findings)
                 super.visitCallExpression(expression)
             }
+
+            override fun visitBinaryExpression(expression: org.jetbrains.kotlin.psi.KtBinaryExpression) {
+                if (expression.operationToken == org.jetbrains.kotlin.lexer.KtTokens.EQ) {
+                    val leftText = expression.left?.text.orEmpty()
+                    if (leftText.endsWith(".systemUiVisibility") || leftText.endsWith(".statusBarColor") || leftText.endsWith(".navigationBarColor")) {
+                        val line = lineOf(expression.textRange.startOffset)
+                        findings.add("⚠️ Property assignment `$leftText` at line $line manipulates legacy system UI visibility/insets. In modern Android (Android 15+ / SDK 35), call `enableEdgeToEdge()` in Activity.onCreate and use Compose window insets modifiers (`Modifier.safeDrawingPadding()`, `Modifier.imePadding()`) instead.")
+                    }
+                }
+                super.visitBinaryExpression(expression)
+            }
         })
 
         val content = if (findings.isNotEmpty()) {
@@ -88,6 +99,11 @@ class ComposeAnalyzer {
         }
 
         val fnName = function.name ?: "anonymous"
+        val isPreview = function.annotationEntries.any { it.shortName?.asString() == "Preview" }
+        val explicitReturnType = function.typeReference?.text?.trim()
+        val returnsUnit = explicitReturnType == null || explicitReturnType == "Unit"
+        var hasModifierParam = false
+
         function.valueParameters.forEach { param ->
             val typeRef = param.typeReference
             val typeText = typeRef?.text?.trim().orEmpty()
@@ -95,8 +111,18 @@ class ComposeAnalyzer {
             val typeElement = typeRef?.typeElement
             val isFunctionType = typeElement is KtFunctionType || typeText.startsWith("(")
             val userType = typeElement as? KtUserType
-            val typeName = userType?.referencedName.orEmpty()
+            val typeName = userType?.referencedName ?: typeText.substringAfterLast('.').removeSuffix("?")
             val isContainerType = typeName in containerTypeNames || (userType?.typeArgumentList != null && typeName in containerTypeNames)
+            val isModifierType = typeName == "Modifier" || typeText == "androidx.compose.ui.Modifier" || typeText.endsWith(".Modifier")
+
+            if (isModifierType) {
+                hasModifierParam = true
+                val defaultExprText = param.defaultValue?.text?.trim()
+                val isDirectModifier = defaultExprText == "Modifier" || defaultExprText == "androidx.compose.ui.Modifier"
+                if (!isDirectModifier) {
+                    findings.add("⚠️ Parameter `$paramName` in `@Composable $fnName` does not declare a default value `= Modifier`. Provide `= Modifier` to allow callers to omit modifier argument.")
+                }
+            }
 
             val isAnnotatedStable = param.annotationEntries.any {
                 val name = it.shortName?.asString()
@@ -104,16 +130,28 @@ class ComposeAnalyzer {
             } || typeName in stableDeclaredTypes || typeText in stableDeclaredTypes
 
             if (typeText.isNotEmpty() && typeText !in stablePrimitiveTypes &&
-                !isFunctionType && !isContainerType && !isAnnotatedStable
+                !isFunctionType && !isContainerType && !isAnnotatedStable && !isModifierType
             ) {
                 findings.add("⚠️ `@Composable $fnName` takes parameter `$paramName` of type `$typeText`, which is not a known stable type. Annotate the type with `@Stable`/`@Immutable` or derive it from stable state to avoid recomposition waste.")
             }
+        }
+
+        if (returnsUnit && !isPreview && !hasModifierParam && fnName != "anonymous" && !fnName.startsWith("Preview")) {
+            findings.add("⚠️ `@Composable $fnName` does not declare a `modifier: Modifier = Modifier` parameter. Custom UI composables should accept a `modifier` parameter as the first optional parameter to allow callers to customize layout attributes.")
         }
     }
 
     private fun inspectComposableCall(expression: KtCallExpression, lineOf: (Int) -> Int, findings: MutableList<String>) {
         val callee = expression.calleeExpression?.text.orEmpty()
         val line = lineOf(expression.textRange.startOffset)
+
+        if (callee == "collectAsState") {
+            findings.add("⚠️ `collectAsState()` called at line $line. In Android Compose applications, use `collectAsStateWithLifecycle()` from `androidx.lifecycle.compose` instead to stop Flow emissions when the app is in the background and prevent battery drain.")
+        }
+
+        if (callee in setOf("setSystemUiVisibility", "setStatusBarColor", "setNavigationBarColor", "setDecorFitsSystemWindows")) {
+            findings.add("⚠️ Call `$callee` at line $line manipulates legacy system UI visibility/insets. In modern Android (Android 15+ / SDK 35), call `enableEdgeToEdge()` in Activity.onCreate and use Compose window insets modifiers (`Modifier.safeDrawingPadding()`, `Modifier.imePadding()`) instead.")
+        }
 
         if (callee == "remember") {
             val valueArgs = expression.valueArguments.filter { it !is KtLambdaArgument }
@@ -136,7 +174,6 @@ class ComposeAnalyzer {
                 }
             }
         }
-
 
         if (callee == "derivedStateOf") {
             var inRemember = false

@@ -23,7 +23,9 @@ enum class ProjectAction {
     AUDIT_VULNERABILITIES,
     EXPORT_PACKAGE_API,
     REPORT_COVERAGE,
-    DETECT_ENVIRONMENT_PROFILE
+    DETECT_ENVIRONMENT_PROFILE,
+    INSPECT_ANDROID_MANIFEST,
+    AUDIT_ANDROID_CONFIG
 }
 
 /**
@@ -53,12 +55,21 @@ interface ProjectService : CommandService<ProjectAction> {
 
     /** Parses JaCoCo coverage reports under build/reports/jacoco/. */
     fun coverageReport(projectPath: String? = null): KotlinMcpResult
+
+    /** Statically inspects AndroidManifest.xml for exported tags and permissions compliance. */
+    fun inspectAndroidManifest(contentOrPath: String, projectPath: String? = null): KotlinMcpResult =
+        AndroidManifestInspector().inspectManifest(contentOrPath, projectPath)
+
+    /** Statically audits Gradle build scripts for AGP and Kotlin 2.x Compose compiler alignment. */
+    fun auditAndroidConfig(buildScriptContent: String, projectPath: String? = null): KotlinMcpResult =
+        GradleProjectInspector().auditAndroidConfig(buildScriptContent, projectPath)
 }
 
 class DefaultProjectService(
     private val indexer: WorkspaceSemanticIndexer = WorkspaceSemanticIndexer(),
     private val schemaScanner: SchemaScanner = SchemaScanner(),
-    private val vulnerabilityAuditor: VulnerabilityAuditor = VulnerabilityAuditor()
+    private val vulnerabilityAuditor: VulnerabilityAuditor = VulnerabilityAuditor(),
+    private val androidManifestInspector: AndroidManifestInspector = AndroidManifestInspector()
 ) : ProjectService {
 
     override fun execute(action: ProjectAction, buildScriptContent: String, projectPath: String?, packageName: String?): KotlinMcpResult {
@@ -72,6 +83,19 @@ class DefaultProjectService(
             ProjectAction.PACKAGE_API, ProjectAction.EXPORT_PACKAGE_API -> packageApi(projectPath, packageName)
             ProjectAction.COVERAGE_REPORT, ProjectAction.REPORT_COVERAGE -> coverageReport(projectPath)
             ProjectAction.DETECT_ENVIRONMENT_PROFILE -> KotlinMcpResult.Success(detectProfile(buildScriptContent, projectPath).toString())
+            ProjectAction.INSPECT_ANDROID_MANIFEST -> androidManifestInspector.inspectManifest(buildScriptContent, projectPath)
+            ProjectAction.AUDIT_ANDROID_CONFIG -> {
+                val scriptPath = if (projectPath != null) {
+                    val file = File(projectPath)
+                    if (file.isFile) {
+                        file.absolutePath
+                    } else {
+                        val kts = File(file, "build.gradle.kts")
+                        if (kts.exists()) kts.absolutePath else File(file, "build.gradle").takeIf { it.exists() }?.absolutePath
+                    }
+                } else null
+                GradleProjectInspector().auditAndroidConfig(buildScriptContent, scriptPath)
+            }
         }
     }
 

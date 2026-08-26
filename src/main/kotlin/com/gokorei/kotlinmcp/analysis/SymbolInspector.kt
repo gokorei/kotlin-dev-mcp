@@ -61,6 +61,69 @@ class SymbolInspector {
                 builder.appendLine("- Nested classes: ${nestedClasses.joinToString(", ") { it.name.orEmpty() }}")
                 nestedClasses.forEach { renderClass(it, nested = true) }
             }
+
+            // Check for Context / Activity / View memory leaks in ViewModel or Singleton classes
+            val superEntries = (decl as? KtClass)?.superTypeListEntries.orEmpty()
+            val knownViewModelBases = setOf("ViewModel", "androidx.lifecycle.ViewModel")
+            val knownAndroidViewModelBases = setOf("AndroidViewModel", "androidx.lifecycle.AndroidViewModel")
+
+            fun matchesSuperType(entry: org.jetbrains.kotlin.psi.KtSuperTypeListEntry, targetNames: Set<String>): Boolean {
+                val typeRef = entry.typeReference ?: return false
+                val userType = typeRef.typeElement as? org.jetbrains.kotlin.psi.KtUserType ?: return false
+                val refName = userType.referencedName.orEmpty()
+                return refName in targetNames
+            }
+
+            val isViewModel = superEntries.any { matchesSuperType(it, knownViewModelBases) }
+            val isAndroidViewModel = superEntries.any { matchesSuperType(it, knownAndroidViewModelBases) }
+            val isSingleton = decl.annotationEntries.any {
+                val shortName = it.shortName?.asString()
+                shortName == "Singleton" || shortName == "ActivityRetainedScoped"
+            }
+
+            if (isViewModel || isAndroidViewModel || isSingleton) {
+                val knownLeakySimpleNames = setOf(
+                    "Context", "Activity", "View", "ComponentActivity", "AppCompatActivity", "FragmentActivity"
+                )
+                val knownLeakyFqNames = setOf(
+                    "android.content.Context", "android.app.Activity", "android.view.View",
+                    "androidx.activity.ComponentActivity", "androidx.appcompat.app.AppCompatActivity", "androidx.fragment.app.FragmentActivity"
+                )
+
+                fun isLeakyType(typeRef: org.jetbrains.kotlin.psi.KtTypeReference?): Boolean {
+                    if (typeRef == null) return false
+                    var element = typeRef.typeElement
+                    if (element is org.jetbrains.kotlin.psi.KtNullableType) {
+                        element = element.innerType
+                    }
+                    val userType = element as? org.jetbrains.kotlin.psi.KtUserType ?: return false
+                    val referencedName = userType.referencedName.orEmpty()
+                    if (referencedName in knownLeakySimpleNames) return true
+                    if (referencedName.endsWith("Activity") || referencedName.endsWith("View")) return true
+                    val qualifier = userType.qualifier
+                    if (qualifier != null && "${qualifier.text}.$referencedName" in knownLeakyFqNames) return true
+                    return false
+                }
+
+                val leakyParams = decl.primaryConstructorParameters.filter { param ->
+                    val hasAppContext = param.annotationEntries.any { it.shortName?.asString() == "ApplicationContext" }
+                    !hasAppContext && isLeakyType(param.typeReference)
+                }
+                val leakyProps = decl.declarations.filterIsInstance<KtProperty>().filter { prop ->
+                    val hasAppContext = prop.annotationEntries.any { it.shortName?.asString() == "ApplicationContext" }
+                    !hasAppContext && isLeakyType(prop.typeReference)
+                }
+
+                val recommendation = if (isAndroidViewModel) {
+                    "Use `getApplication<Application>()`, `@ApplicationContext`, or pass callbacks/state instead."
+                } else {
+                    "Use `@ApplicationContext`, `AndroidViewModel(application)`, or pass callbacks/state instead."
+                }
+
+                (leakyParams.map { it.name to it.typeReference?.text } + leakyProps.map { it.name to it.typeReference?.text }).forEach { (name, type) ->
+                    builder.appendLine("⚠️ Memory leak risk: Class `${decl.name}` retains reference to `$type` in property/parameter `$name`. Holding `Activity`, `View`, or UI `Context` references inside a ViewModel or Singleton leaks the Activity across configuration changes. $recommendation")
+                }
+            }
         }
 
         if (psi != null) {
