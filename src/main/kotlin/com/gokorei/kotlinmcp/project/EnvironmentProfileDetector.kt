@@ -135,18 +135,13 @@ class EnvironmentProfileDetector {
             if (text.contains("exposed") || text.contains("org.jetbrains.exposed")) active.add(FrameworkFeature.EXPOSED)
             if (text.contains("room") || text.contains("androidx.room")) active.add(FrameworkFeature.ROOM)
 
-            val hasGroovyAndroidPlugin = text.contains("apply plugin: 'com.android.") ||
-                text.contains("apply plugin: \"com.android.") ||
-                text.contains("apply plugin: 'kotlin-android'") ||
-                text.contains("apply plugin: \"kotlin-android\"") ||
-                text.contains("id 'com.android.") ||
-                text.contains("id \"com.android.") ||
-                text.contains("id 'org.jetbrains.kotlin.android'") ||
-                text.contains("id \"org.jetbrains.kotlin.android\"") ||
-                text.contains("id('com.android.") ||
-                text.contains("id(\"com.android.") ||
-                text.contains("classpath 'com.android.tools.build:gradle") ||
-                text.contains("classpath \"com.android.tools.build:gradle")
+            val hasGroovyAndroidPlugin = noComments.lines().any { rawLine ->
+                val line = rawLine.trim()
+                val lower = line.lowercase()
+                (lower.startsWith("apply plugin:") && (lower.contains("com.android.") || lower.contains("kotlin-android"))) ||
+                ((lower.startsWith("id ") || lower.startsWith("id(")) && (lower.contains("com.android.") || lower.contains("org.jetbrains.kotlin.android") || lower.contains("'android'") || lower.contains("\"android\""))) ||
+                (lower.startsWith("classpath ") && lower.contains("com.android.tools.build:gradle"))
+            }
 
             if (hasGroovyAndroidPlugin || textNoStrings.contains("android {")) {
                 active.add(FrameworkFeature.ANDROID)

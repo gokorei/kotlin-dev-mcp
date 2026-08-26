@@ -84,7 +84,18 @@ class DefaultProjectService(
             ProjectAction.COVERAGE_REPORT, ProjectAction.REPORT_COVERAGE -> coverageReport(projectPath)
             ProjectAction.DETECT_ENVIRONMENT_PROFILE -> KotlinMcpResult.Success(detectProfile(buildScriptContent, projectPath).toString())
             ProjectAction.INSPECT_ANDROID_MANIFEST -> androidManifestInspector.inspectManifest(buildScriptContent, projectPath)
-            ProjectAction.AUDIT_ANDROID_CONFIG -> GradleProjectInspector().auditAndroidConfig(buildScriptContent, projectPath)
+            ProjectAction.AUDIT_ANDROID_CONFIG -> {
+                val scriptPath = if (projectPath != null) {
+                    val file = File(projectPath)
+                    if (file.isFile) {
+                        file.absolutePath
+                    } else {
+                        val kts = File(file, "build.gradle.kts")
+                        if (kts.exists()) kts.absolutePath else File(file, "build.gradle").takeIf { it.exists() }?.absolutePath
+                    }
+                } else null
+                GradleProjectInspector().auditAndroidConfig(buildScriptContent, scriptPath)
+            }
         }
     }
 

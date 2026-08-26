@@ -227,18 +227,28 @@ class GradleProjectInspector {
 
                 override fun visitBinaryExpression(expression: org.jetbrains.kotlin.psi.KtBinaryExpression) {
                     if (expression.operationToken == org.jetbrains.kotlin.lexer.KtTokens.EQ) {
-                        val leftText = expression.left?.text.orEmpty()
-                        if (leftText == "compileSdk" && "android" in scopeStack) hasCompileSdk = true
-                        if (leftText.endsWith(".compileSdk")) hasCompileSdk = true
+                        val leftExpr = expression.left
+                        if (leftExpr is org.jetbrains.kotlin.psi.KtDotQualifiedExpression) {
+                            val receiverText = leftExpr.receiverExpression.text
+                            val selectorText = leftExpr.selectorExpression?.text.orEmpty()
+                            val validAndroidReceivers = setOf("android", "defaultConfig", "composeOptions")
 
-                        if (leftText == "minSdk" && ("android" in scopeStack || "defaultConfig" in scopeStack)) hasMinSdk = true
-                        if (leftText.endsWith(".minSdk")) hasMinSdk = true
-
-                        if (leftText == "kotlinCompilerExtensionVersion" && ("composeOptions" in scopeStack || "android" in scopeStack)) {
-                            hasDeprecatedComposeCompiler = true
-                        }
-                        if (leftText.endsWith(".kotlinCompilerExtensionVersion")) {
-                            hasDeprecatedComposeCompiler = true
+                            if (selectorText == "compileSdk" && (receiverText == "android" || receiverText.endsWith(".android") || "android" in scopeStack)) {
+                                hasCompileSdk = true
+                            }
+                            if (selectorText == "minSdk" && (receiverText in validAndroidReceivers || receiverText.endsWith(".defaultConfig") || "android" in scopeStack || "defaultConfig" in scopeStack)) {
+                                hasMinSdk = true
+                            }
+                            if (selectorText == "kotlinCompilerExtensionVersion" && (receiverText in validAndroidReceivers || receiverText.endsWith(".composeOptions") || "composeOptions" in scopeStack || "android" in scopeStack)) {
+                                hasDeprecatedComposeCompiler = true
+                            }
+                        } else {
+                            val leftText = leftExpr?.text.orEmpty()
+                            if (leftText == "compileSdk" && "android" in scopeStack) hasCompileSdk = true
+                            if (leftText == "minSdk" && ("android" in scopeStack || "defaultConfig" in scopeStack)) hasMinSdk = true
+                            if (leftText == "kotlinCompilerExtensionVersion" && ("composeOptions" in scopeStack || "android" in scopeStack)) {
+                                hasDeprecatedComposeCompiler = true
+                            }
                         }
                     }
                     super.visitBinaryExpression(expression)
@@ -252,15 +262,22 @@ class GradleProjectInspector {
             val noStrings = noComments
                 .replace(Regex(""""(?:[^"\\]|\\.)*""""), "")
                 .replace(Regex("""'(?:[^'\\]|\\.)*'"""), "")
-            val text = noComments.lowercase()
             val textNoStrings = noStrings.lowercase()
 
-            if (text.contains("com.android.") || textNoStrings.contains("android {") || text.contains("androidtarget")) {
+            val hasGroovyAndroidPlugin = noComments.lines().any { rawLine ->
+                val line = rawLine.trim()
+                val lower = line.lowercase()
+                (lower.startsWith("apply plugin:") && (lower.contains("com.android.") || lower.contains("kotlin-android"))) ||
+                ((lower.startsWith("id ") || lower.startsWith("id(")) && (lower.contains("com.android.") || lower.contains("org.jetbrains.kotlin.android") || lower.contains("'android'") || lower.contains("\"android\""))) ||
+                (lower.startsWith("classpath ") && lower.contains("com.android.tools.build:gradle"))
+            }
+
+            if (hasGroovyAndroidPlugin || textNoStrings.contains("android {") || textNoStrings.contains("androidtarget")) {
                 isAndroidProject = true
             }
-            if (text.contains("compilesdk")) hasCompileSdk = true
-            if (text.contains("minsdk")) hasMinSdk = true
-            if (text.contains("kotlincompilerextensionversion")) hasDeprecatedComposeCompiler = true
+            if (textNoStrings.contains("compilesdk")) hasCompileSdk = true
+            if (textNoStrings.contains("minsdk")) hasMinSdk = true
+            if (textNoStrings.contains("kotlincompilerextensionversion")) hasDeprecatedComposeCompiler = true
         }
 
         if (hasDeprecatedComposeCompiler) {

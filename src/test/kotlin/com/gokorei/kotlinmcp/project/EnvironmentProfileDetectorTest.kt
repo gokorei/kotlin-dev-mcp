@@ -120,11 +120,13 @@ class EnvironmentProfileDetectorTest {
             ext {
                 description = 'Reference to com.android.tools for documentation'
                 sdkPackage = "com.android.support:support-v4:28.0.0"
+                note1 = "apply plugin: 'com.android.library'"
+                note2 = "id 'com.android.application'"
             }
         """.trimIndent()
 
         val profile = detector.detectProfile(groovyScript, null, GradleProjectInspector())
-        assertFalse(profile.hasFramework(FrameworkFeature.ANDROID), "Arbitrary com.android.* string in Groovy must not trigger Android detection")
+        assertFalse(profile.hasFramework(FrameworkFeature.ANDROID), "Plugin-shaped text inside Groovy string literal must not trigger Android detection")
         assertFalse(profile.isAndroid)
     }
 
