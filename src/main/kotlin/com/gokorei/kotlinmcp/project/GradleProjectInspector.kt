@@ -159,10 +159,14 @@ class GradleProjectInspector {
      * including deprecation of `kotlinCompilerExtensionVersion` and missing SDK declarations.
      *
      * @param buildScriptContent The raw content of build.gradle.kts or build.gradle
+     * @param scriptPath Optional file path to identify build script dialect (.gradle.kts vs .gradle)
      * @return [KotlinMcpResult] containing audit findings and issue counts
      */
-    fun auditAndroidConfig(buildScriptContent: String): KotlinMcpResult {
+    fun auditAndroidConfig(buildScriptContent: String, scriptPath: String? = null): KotlinMcpResult {
         val issues = mutableListOf<String>()
+        val isExplicitKts = scriptPath?.endsWith(".gradle.kts") == true ||
+            (scriptPath == null && (buildScriptContent.contains("plugins {") || buildScriptContent.contains("val ") || buildScriptContent.contains("var ")))
+
         val psi = com.gokorei.kotlinmcp.lsp.K2SnippetFrontend.parsePsi(buildScriptContent)
 
         var isAndroidProject = false
@@ -180,6 +184,13 @@ class GradleProjectInspector {
                     if (!hasParserErrors) super.visitElement(element)
                 }
             })
+        }
+
+        if (isExplicitKts && (psi == null || hasParserErrors)) {
+            return KotlinMcpResult.Error(
+                code = "KOTLIN_SCRIPT_PARSE_ERROR",
+                message = "Failed to parse Kotlin DSL build script with K2 PSI."
+            )
         }
 
         if (psi != null && !hasParserErrors) {
@@ -215,39 +226,36 @@ class GradleProjectInspector {
                 }
 
                 override fun visitBinaryExpression(expression: org.jetbrains.kotlin.psi.KtBinaryExpression) {
-                    val leftText = expression.left?.text.orEmpty()
-                    if (leftText == "compileSdk" && "android" in scopeStack) hasCompileSdk = true
-                    if (leftText.endsWith(".compileSdk")) hasCompileSdk = true
+                    if (expression.operationToken == org.jetbrains.kotlin.lexer.KtTokens.EQ) {
+                        val leftText = expression.left?.text.orEmpty()
+                        if (leftText == "compileSdk" && "android" in scopeStack) hasCompileSdk = true
+                        if (leftText.endsWith(".compileSdk")) hasCompileSdk = true
 
-                    if (leftText == "minSdk" && ("android" in scopeStack || "defaultConfig" in scopeStack)) hasMinSdk = true
-                    if (leftText.endsWith(".minSdk")) hasMinSdk = true
+                        if (leftText == "minSdk" && ("android" in scopeStack || "defaultConfig" in scopeStack)) hasMinSdk = true
+                        if (leftText.endsWith(".minSdk")) hasMinSdk = true
 
-                    if (leftText == "kotlinCompilerExtensionVersion" && ("composeOptions" in scopeStack || "android" in scopeStack)) {
-                        hasDeprecatedComposeCompiler = true
-                    }
-                    if (leftText.endsWith(".kotlinCompilerExtensionVersion")) {
-                        hasDeprecatedComposeCompiler = true
+                        if (leftText == "kotlinCompilerExtensionVersion" && ("composeOptions" in scopeStack || "android" in scopeStack)) {
+                            hasDeprecatedComposeCompiler = true
+                        }
+                        if (leftText.endsWith(".kotlinCompilerExtensionVersion")) {
+                            hasDeprecatedComposeCompiler = true
+                        }
                     }
                     super.visitBinaryExpression(expression)
                 }
-
-                override fun visitSimpleNameExpression(expression: org.jetbrains.kotlin.psi.KtSimpleNameExpression) {
-                    if (expression.getReferencedName() == "kotlinCompilerExtensionVersion" &&
-                        ("composeOptions" in scopeStack || "android" in scopeStack)
-                    ) {
-                        hasDeprecatedComposeCompiler = true
-                    }
-                    super.visitSimpleNameExpression(expression)
-                }
             })
         } else {
-            // Groovy fallback with stripped comments
+            // Groovy fallback with stripped comments and string literals
             val noComments = buildScriptContent
                 .replace(Regex("""//.*"""), "")
                 .replace(Regex("""/\*[\s\S]*?\*/"""), "")
+            val noStrings = noComments
+                .replace(Regex(""""(?:[^"\\]|\\.)*""""), "")
+                .replace(Regex("""'(?:[^'\\]|\\.)*'"""), "")
             val text = noComments.lowercase()
+            val textNoStrings = noStrings.lowercase()
 
-            if (text.contains("com.android.") || text.contains("android {") || text.contains("androidtarget")) {
+            if (text.contains("com.android.") || textNoStrings.contains("android {") || text.contains("androidtarget")) {
                 isAndroidProject = true
             }
             if (text.contains("compilesdk")) hasCompileSdk = true

@@ -113,11 +113,15 @@ class EnvironmentProfileDetector {
                 }
             })
         } else {
-            // Safe fallback for Groovy DSL build.gradle (strip single-line and multi-line comments)
+            // Safe fallback for Groovy DSL build.gradle (strip comments and string literals)
             val noComments = allContent
                 .replace(Regex("""//.*"""), "")
                 .replace(Regex("""/\*[\s\S]*?\*/"""), "")
+            val noStrings = noComments
+                .replace(Regex(""""(?:[^"\\]|\\.)*""""), "")
+                .replace(Regex("""'(?:[^'\\]|\\.)*'"""), "")
             val text = noComments.lowercase()
+            val textNoStrings = noStrings.lowercase()
 
             if (text.contains("ktor")) active.add(FrameworkFeature.KTOR)
             if (text.contains("spring") || text.contains("org.springframework")) active.add(FrameworkFeature.SPRING)
@@ -130,7 +134,7 @@ class EnvironmentProfileDetector {
             if (text.contains("datetime") || text.contains("kotlinx-datetime")) active.add(FrameworkFeature.DATETIME)
             if (text.contains("exposed") || text.contains("org.jetbrains.exposed")) active.add(FrameworkFeature.EXPOSED)
             if (text.contains("room") || text.contains("androidx.room")) active.add(FrameworkFeature.ROOM)
-            if (text.contains("com.android.") || text.contains("apply plugin: 'com.android.") || text.contains("apply plugin: \"com.android.") || text.contains("android {")) active.add(FrameworkFeature.ANDROID)
+            if (text.contains("com.android.") || text.contains("apply plugin: 'com.android.") || text.contains("apply plugin: \"com.android.") || textNoStrings.contains("android {")) active.add(FrameworkFeature.ANDROID)
 
             isKmp = text.contains("multiplatform")
         }

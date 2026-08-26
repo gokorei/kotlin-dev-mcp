@@ -100,6 +100,20 @@ class EnvironmentProfileDetectorTest {
     }
 
     @Test
+    fun `detectProfile ignores android block mentions in string literals in Groovy build script`() {
+        val groovyScript = """
+            apply plugin: 'java'
+            ext {
+                note = "android { compileSdk = 35 }"
+            }
+        """.trimIndent()
+
+        val profile = detector.detectProfile(groovyScript, null, GradleProjectInspector())
+        assertFalse(profile.hasFramework(FrameworkFeature.ANDROID), "android { in Groovy string literal must not trigger Android detection")
+        assertFalse(profile.isAndroid)
+    }
+
+    @Test
     fun `detectEnvironmentProfile renders structured markdown summary`() {
         val script = """
             plugins {

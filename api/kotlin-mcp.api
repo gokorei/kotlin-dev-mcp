@@ -1508,7 +1508,7 @@ public final class com/gokorei/kotlinmcp/project/DefaultProjectService : com/gok
 	public fun <init> ()V
 	public fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/project/SchemaScanner;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor;Lcom/gokorei/kotlinmcp/project/AndroidManifestInspector;)V
 	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/project/SchemaScanner;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor;Lcom/gokorei/kotlinmcp/project/AndroidManifestInspector;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun auditAndroidConfig (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun auditAndroidConfig (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun checkVulnerabilities (Ljava/lang/String;Ljava/lang/String;III)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun coverageReport (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun detectProfile (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/ProjectEnvironmentProfile;
@@ -1530,7 +1530,8 @@ public final class com/gokorei/kotlinmcp/project/EnvironmentProfileDetector {
 public final class com/gokorei/kotlinmcp/project/GradleProjectInspector {
 	public fun <init> ()V
 	public final fun analyzeDependencies (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
-	public final fun auditAndroidConfig (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun auditAndroidConfig (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun auditAndroidConfig$default (Lcom/gokorei/kotlinmcp/project/GradleProjectInspector;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun diagnoseBuild (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun inspectGradleProject (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun listKmpTargets (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -1570,7 +1571,8 @@ public final class com/gokorei/kotlinmcp/project/ProjectLayeringAnalyzer {
 }
 
 public abstract interface class com/gokorei/kotlinmcp/project/ProjectService : com/gokorei/kotlinmcp/shared/CommandService {
-	public fun auditAndroidConfig (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun auditAndroidConfig (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun auditAndroidConfig$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public abstract fun checkVulnerabilities (Ljava/lang/String;Ljava/lang/String;III)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun checkVulnerabilities$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;IIIILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public abstract fun coverageReport (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -1590,7 +1592,8 @@ public abstract interface class com/gokorei/kotlinmcp/project/ProjectService : c
 }
 
 public final class com/gokorei/kotlinmcp/project/ProjectService$DefaultImpls {
-	public static fun auditAndroidConfig (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static fun auditAndroidConfig (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun auditAndroidConfig$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun checkVulnerabilities$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;IIIILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun coverageReport$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun detectProfile$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/ProjectEnvironmentProfile;

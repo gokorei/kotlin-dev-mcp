@@ -61,8 +61,8 @@ interface ProjectService : CommandService<ProjectAction> {
         AndroidManifestInspector().inspectManifest(contentOrPath, projectPath)
 
     /** Statically audits Gradle build scripts for AGP and Kotlin 2.x Compose compiler alignment. */
-    fun auditAndroidConfig(buildScriptContent: String): KotlinMcpResult =
-        GradleProjectInspector().auditAndroidConfig(buildScriptContent)
+    fun auditAndroidConfig(buildScriptContent: String, projectPath: String? = null): KotlinMcpResult =
+        GradleProjectInspector().auditAndroidConfig(buildScriptContent, projectPath)
 }
 
 class DefaultProjectService(
@@ -84,7 +84,7 @@ class DefaultProjectService(
             ProjectAction.COVERAGE_REPORT, ProjectAction.REPORT_COVERAGE -> coverageReport(projectPath)
             ProjectAction.DETECT_ENVIRONMENT_PROFILE -> KotlinMcpResult.Success(detectProfile(buildScriptContent, projectPath).toString())
             ProjectAction.INSPECT_ANDROID_MANIFEST -> androidManifestInspector.inspectManifest(buildScriptContent, projectPath)
-            ProjectAction.AUDIT_ANDROID_CONFIG -> GradleProjectInspector().auditAndroidConfig(buildScriptContent)
+            ProjectAction.AUDIT_ANDROID_CONFIG -> GradleProjectInspector().auditAndroidConfig(buildScriptContent, projectPath)
         }
     }
 

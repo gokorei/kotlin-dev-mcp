@@ -140,4 +140,50 @@ class AndroidConfigAuditTest {
         assertTrue(success.content.contains("minSdk"), "unrelated top-level minSdk must not satisfy defaultConfig { minSdk }: ${success.content}")
         assertFalse(success.content.contains("composeOptions"), "top-level variable must not trigger composeOptions deprecation warning: ${success.content}")
     }
+
+    @Test
+    fun `android_config ignores local variable declarations without assignment inside composeOptions`() {
+        val buildScript = """
+            plugins {
+                id("com.android.application")
+                kotlin("plugin.compose")
+            }
+            android {
+                compileSdk = 35
+                defaultConfig {
+                    minSdk = 26
+                }
+                composeOptions {
+                    val kotlinCompilerExtensionVersion: String
+                }
+            }
+        """.trimIndent()
+
+        val result = projectService.execute(
+            action = ProjectAction.AUDIT_ANDROID_CONFIG,
+            buildScriptContent = buildScript
+        )
+
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertFalse(success.content.contains("⚠️"), "local variable declaration should not trigger deprecation warning: ${success.content}")
+    }
+
+    @Test
+    fun `android_config returns KOTLIN_SCRIPT_PARSE_ERROR on malformed kotlin dsl build script`() {
+        val malformedKts = """
+            plugins {
+                id("com.android.application"
+            }
+        """.trimIndent()
+
+        val result = projectService.execute(
+            action = ProjectAction.AUDIT_ANDROID_CONFIG,
+            buildScriptContent = malformedKts
+        )
+
+        assertFalse(result.isSuccess)
+        val error = result as KotlinMcpResult.Error
+        assertEquals("KOTLIN_SCRIPT_PARSE_ERROR", error.code)
+    }
 }
