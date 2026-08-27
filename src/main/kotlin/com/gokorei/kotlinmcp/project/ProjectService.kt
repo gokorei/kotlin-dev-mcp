@@ -137,16 +137,16 @@ class DefaultProjectService(
             }
             ProjectAction.VERSION_CATALOG_CHECK -> checkCatalogUpdates(projectPath)
             ProjectAction.RESOLVE_ANDROID_RUNTIME_TARGET -> {
-                val isBuildScriptXml = buildScriptContent.trim().startsWith("<") || buildScriptContent.contains("<manifest")
-                val isPackageNameXml = packageName?.trim()?.startsWith("<") == true || packageName?.contains("<manifest") == true
+                val isBuildScriptKotlin = isKotlinGradleScript(buildScriptContent)
+                val isPackageNameKotlin = packageName?.let { isKotlinGradleScript(it) } == true
                 val manifest = when {
-                    isPackageNameXml -> packageName.orEmpty()
-                    isBuildScriptXml -> buildScriptContent
-                    else -> packageName.orEmpty()
+                    !isPackageNameKotlin && !packageName.isNullOrBlank() -> packageName
+                    !isBuildScriptKotlin -> buildScriptContent
+                    else -> ""
                 }
                 val gradleScript = when {
-                    !isBuildScriptXml && buildScriptContent.isNotBlank() -> buildScriptContent
-                    !isPackageNameXml && !packageName.isNullOrBlank() -> packageName
+                    isBuildScriptKotlin -> buildScriptContent
+                    isPackageNameKotlin -> packageName
                     else -> null
                 }
                 resolveAndroidRuntimeTarget(manifest, projectPath, gradleScript)
@@ -156,6 +156,23 @@ class DefaultProjectService(
                 auditAndroidApp(buildScriptContent, projectPath, cat)
             }
         }
+    }
+
+    private fun isKotlinGradleScript(text: String): Boolean {
+        if (text.isBlank()) return false
+        val trimmed = text.trim()
+        if (trimmed.startsWith("<")) return false
+        val psi = K2SnippetFrontend.parsePsi(text) ?: return false
+        var hasError = false
+        psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+            override fun visitElement(element: org.jetbrains.kotlin.com.intellij.psi.PsiElement) {
+                if (element is org.jetbrains.kotlin.com.intellij.psi.PsiErrorElement) {
+                    hasError = true
+                }
+                if (!hasError) super.visitElement(element)
+            }
+        })
+        return !hasError
     }
 
     override fun auditAndroidApp(

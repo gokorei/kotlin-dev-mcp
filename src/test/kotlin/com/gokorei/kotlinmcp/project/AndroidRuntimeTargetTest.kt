@@ -284,4 +284,48 @@ class AndroidRuntimeTargetTest {
         assertEquals("com.example.appmodule", success.metadata["applicationId"])
         assertEquals("com.example.appmodule.AppMainActivity", success.metadata["launcherActivity"])
     }
+
+    @Test
+    fun `correctly classifies build gradle kts containing manifest comments via ProjectAction dispatch`() {
+        val appDir = File(tempDir, "app_comments").apply { mkdirs() }
+        val srcMain = File(appDir, "src/main").apply { mkdirs() }
+        File(srcMain, "AndroidManifest.xml").writeText("""
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+                <application>
+                    <activity android:name=".CommentActivity" android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.intent.action.MAIN" />
+                            <category android:name="android.intent.category.LAUNCHER" />
+                        </intent-filter>
+                    </activity>
+                </application>
+            </manifest>
+        """.trimIndent())
+
+        val buildGradleKts = """
+            // Reference to <manifest package="ignored"> in comment
+            plugins {
+                id("com.android.application")
+            }
+            android {
+                namespace = "com.example.commented"
+                defaultConfig {
+                    applicationId = "com.example.commented.app"
+                }
+            }
+        """.trimIndent()
+
+        val result = projectService.execute(
+            action = ProjectAction.RESOLVE_ANDROID_RUNTIME_TARGET,
+            buildScriptContent = buildGradleKts,
+            projectPath = appDir.absolutePath,
+            packageName = null
+        )
+
+        assertTrue(result.isSuccess, "expected success: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertEquals("com.example.commented.app", success.metadata["applicationId"])
+        assertEquals("com.example.commented", success.metadata["namespace"])
+        assertEquals("com.example.commented.CommentActivity", success.metadata["launcherActivity"])
+    }
 }
