@@ -8,7 +8,8 @@ enum class LibraryAnalysisAction {
     ANALYZE_SERIALIZATION,
     ANALYZE_TESTS,
     ROUTE_MAP,
-    ANALYZE_ANDROID_DI
+    ANALYZE_ANDROID_DI,
+    ANALYZE_WORKMANAGER
 }
 
 /**
@@ -25,7 +26,9 @@ interface LibraryAnalysisService : CommandService<LibraryAnalysisAction> {
  * Heuristic, text-based analysis of third-party library usage alongside K2-backed
  * semantic passes.
  */
-class DefaultLibraryAnalysisService : LibraryAnalysisService {
+class DefaultLibraryAnalysisService(
+    private val workManagerAnalyzer: com.gokorei.kotlinmcp.analysis.WorkManagerAnalyzer = com.gokorei.kotlinmcp.analysis.WorkManagerAnalyzer()
+) : LibraryAnalysisService {
 
     override fun execute(action: LibraryAnalysisAction, code: String, dataSources: List<String>): KotlinMcpResult {
         return when (action) {
@@ -34,6 +37,7 @@ class DefaultLibraryAnalysisService : LibraryAnalysisService {
             LibraryAnalysisAction.ANALYZE_TESTS -> analyzeTests(code)
             LibraryAnalysisAction.ROUTE_MAP -> routeMap(code)
             LibraryAnalysisAction.ANALYZE_ANDROID_DI -> analyzeAndroidDi(code)
+            LibraryAnalysisAction.ANALYZE_WORKMANAGER -> workManagerAnalyzer.analyze(code)
         }
     }
 

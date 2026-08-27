@@ -11,7 +11,8 @@ enum class CodeAnalysisAction {
     ANALYZE_NULLABILITY,
     EXPLAIN_COROUTINES,
     ANALYZE_COMPOSE,
-    FILE_CONTEXT
+    FILE_CONTEXT,
+    WORKMANAGER
 }
 
 /**
@@ -33,13 +34,14 @@ interface CodeAnalysisService : CommandService<CodeAnalysisAction> {
 /**
  * Single-responsibility facade routing [CodeAnalysisAction] operations to dedicated code analysis strategy components.
  */
-class DefaultCodeAnalysisService(
+class DefaultCodeAnalysisService @JvmOverloads constructor(
     private val indexer: WorkspaceSemanticIndexer = WorkspaceSemanticIndexer(),
     private val fileContextAnalyzer: FileContextAnalyzer = FileContextAnalyzer(),
     private val symbolInspector: SymbolInspector = SymbolInspector(),
     private val nullabilityAnalyzer: NullabilityAnalyzer = NullabilityAnalyzer(),
     private val coroutinesSafetyAnalyzer: CoroutinesSafetyAnalyzer = CoroutinesSafetyAnalyzer(),
-    private val composeAnalyzer: ComposeAnalyzer = ComposeAnalyzer()
+    private val composeAnalyzer: ComposeAnalyzer = ComposeAnalyzer(),
+    private val workManagerAnalyzer: WorkManagerAnalyzer = WorkManagerAnalyzer()
 ) : CodeAnalysisService {
 
     override fun execute(
@@ -54,6 +56,7 @@ class DefaultCodeAnalysisService(
             CodeAnalysisAction.EXPLAIN_COROUTINES -> coroutinesSafetyAnalyzer.explainCoroutines(code)
             CodeAnalysisAction.ANALYZE_COMPOSE -> composeAnalyzer.analyzeCompose(code)
             CodeAnalysisAction.FILE_CONTEXT -> fileContextAnalyzer.fileContext(code, workspacePath, indexer)
+            CodeAnalysisAction.WORKMANAGER -> workManagerAnalyzer.analyze(code)
         }
         return ProjectionFilter.apply(raw, projection)
     }

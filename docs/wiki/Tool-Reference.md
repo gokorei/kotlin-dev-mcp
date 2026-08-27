@@ -26,11 +26,11 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 
 **Description:** AST static analysis for Kotlin code snippets.
 
-**Supported Actions:** `inspect`, `nullability`, `coroutines`, `compose`, `file_context`
+**Supported Actions:** `inspect`, `nullability`, `coroutines`, `compose`, `file_context`, `workmanager`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | Analysis action: 'inspect' (default, declared elements), 'nullability' (unsafe null handling), 'coroutines' (scope safety & blocking calls), 'compose' (Compose anti-patterns), 'file_context' (cross-file dependencies of a target file) |
+| `action` | `string` | No | Analysis action: 'inspect' (default, declared elements), 'nullability' (unsafe null handling), 'coroutines' (scope safety & blocking calls), 'compose' (Compose anti-patterns), 'file_context' (cross-file dependencies of a target file), 'workmanager' (WorkManager & CoroutineWorker architecture) |
 | `code` | `string` | No | Kotlin source code snippet to analyze, or absolute path of a .kt file for file_context |
 | `workspacePath` | `string` | No | Optional workspace root directory (required for file_context) |
 
@@ -51,14 +51,16 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 
 **Description:** Gradle build script, version catalog, dependencies, Maven version discovery, and project layout inspection.
 
-**Supported Actions:** `structure`, `kmp_targets`, `dependencies`, `schema_digest`, `diagnose_build`, `layout_inventory`, `vulnerabilities`, `package_api`, `coverage_report`, `android_manifest`, `android_config`, `resolve_versions`, `latest_version`, `catalog_updates`
+**Supported Actions:** `structure`, `kmp_targets`, `dependencies`, `schema_digest`, `diagnose_build`, `layout_inventory`, `vulnerabilities`, `package_api`, `coverage_report`, `android_manifest`, `android_config`, `resolve_versions`, `latest_version`, `catalog_updates`, `android_runtime_target`, `android_audit`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | Project action: 'structure' (default), 'kmp_targets', 'dependencies', 'schema_digest', 'diagnose_build', 'layout_inventory', 'vulnerabilities', 'package_api', 'coverage_report', 'android_manifest', 'android_config', 'resolve_versions', 'latest_version', 'catalog_updates' |
-| `buildScriptContent` | `string` | No | Content of build.gradle.kts (or coordinate / manifest content) |
+| `action` | `string` | No | Project action: 'structure' (default), 'kmp_targets', 'dependencies', 'schema_digest', 'diagnose_build', 'layout_inventory', 'vulnerabilities', 'package_api', 'coverage_report', 'android_manifest', 'android_config', 'resolve_versions', 'latest_version', 'catalog_updates', 'android_runtime_target', 'android_audit' |
+| `buildScriptContent` | `string` | No | Content of build.gradle.kts (or coordinate / manifest content / source snippet) |
+| `manifestContent` | `string` | No | Optional AndroidManifest.xml XML content or file path for android_runtime_target |
 | `projectPath` | `string` | No | Path to Gradle project root directory (aliases: workspacePath, path) |
-| `packageName` | `string` | No | Target package for package_api (e.g. com.example.app) or Maven coordinate for resolve_versions/latest_version |
+| `packageName` | `string` | No | Target package for package_api or category for android_audit (e.g. 'compose', 'permissions', 'r8') or Maven coordinate |
+| `category` | `string` | No | Optional target audit category for android_audit: 'COMPOSE_PERFORMANCE', 'RUNTIME_PERMISSIONS', 'R8_MINIFICATION' |
 | `coordinate` | `string` | No | Target Maven coordinate 'group:artifact' for resolve_versions and latest_version (e.g. io.ktor:ktor-client-core) |
 | `repositoryUrl` | `string` | No | Optional custom Maven repository URL for resolve_versions/latest_version |
 | `settingsContent` | `string` | No | Optional settings.gradle.kts content for diagnose_build |
@@ -130,12 +132,12 @@ Mutating tools generate code diffs, format files, rename symbols across workspac
 
 **Description:** Library anti-pattern checks, modernization suggestions, and code-transforming refactors (e.g. Arrow, Android DI).
 
-**Supported Actions:** `ktor`, `serialization`, `tests`, `route_map`, `arrow`, `datetime`, `android_di`
+**Supported Actions:** `ktor`, `serialization`, `tests`, `route_map`, `arrow`, `datetime`, `android_di`, `workmanager`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | Primary library analysis action: 'ktor' (default), 'serialization', 'tests', 'route_map', 'arrow', 'datetime', 'android_di' |
-| `domain` | `string` | No | Deprecated backward-compatible alias for 'action'. Domain alias ('ktor', 'serialization', 'tests', 'arrow', 'datetime', 'android_di') |
+| `action` | `string` | No | Primary library analysis action: 'ktor' (default), 'serialization', 'tests', 'route_map', 'arrow', 'datetime', 'android_di', 'workmanager' |
+| `domain` | `string` | No | Deprecated backward-compatible alias for 'action'. Domain alias ('ktor', 'serialization', 'tests', 'arrow', 'datetime', 'android_di', 'workmanager') |
 | `code` | `string` | **Yes** | Kotlin code snippet to analyze |
 | `dataSources` | `string` | No | Optional schema-diff links for serialization analysis |
 | `legacy` | `string` | No | Optional 'true' for Arrow 1.x monad mode in arrow refactoring |

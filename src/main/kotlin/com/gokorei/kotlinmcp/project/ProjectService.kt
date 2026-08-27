@@ -28,7 +28,9 @@ enum class ProjectAction {
     AUDIT_ANDROID_CONFIG,
     RESOLVE_VERSIONS,
     LATEST_VERSION,
-    VERSION_CATALOG_CHECK
+    VERSION_CATALOG_CHECK,
+    RESOLVE_ANDROID_RUNTIME_TARGET,
+    ANDROID_AUDIT
 }
 
 /**
@@ -75,6 +77,20 @@ interface ProjectService : CommandService<ProjectAction> {
 
     /** Checks declared libraries in gradle/libs.versions.toml against remote repositories for available updates. */
     fun checkCatalogUpdates(projectPath: String? = null): KotlinMcpResult
+
+    /** Resolves Android runtime target metadata (applicationId, namespace, launcher activity, and CLI commands). */
+    fun resolveAndroidRuntimeTarget(
+        manifestContentOrPath: String,
+        projectPath: String? = null,
+        buildScriptContent: String? = null
+    ): KotlinMcpResult
+
+    /** Runs targeted Android audits (Compose performance, permissions, R8 minification). */
+    fun auditAndroidApp(
+        codeOrWorkspace: String,
+        projectPath: String? = null,
+        categories: List<AndroidAuditCategory> = emptyList()
+    ): KotlinMcpResult
 }
 
 class DefaultProjectService(
@@ -82,6 +98,7 @@ class DefaultProjectService(
     private val schemaScanner: SchemaScanner = SchemaScanner(),
     private val vulnerabilityAuditor: VulnerabilityAuditor = VulnerabilityAuditor(),
     private val androidManifestInspector: AndroidManifestInspector = AndroidManifestInspector(),
+    private val androidAppAuditor: AndroidAppAuditor = AndroidAppAuditor(),
     private val mavenMetadataClient: com.gokorei.kotlinmcp.maven.MavenMetadataClient = com.gokorei.kotlinmcp.maven.DefaultMavenMetadataClient(),
     private val versionCatalogService: VersionCatalogService = DefaultVersionCatalogService(mavenMetadataClient)
 ) : ProjectService {
@@ -119,8 +136,58 @@ class DefaultProjectService(
                 getLatestVersion(coord)
             }
             ProjectAction.VERSION_CATALOG_CHECK -> checkCatalogUpdates(projectPath)
+            ProjectAction.RESOLVE_ANDROID_RUNTIME_TARGET -> {
+                val isBuildScriptKotlin = isKotlinGradleScript(buildScriptContent)
+                val isPackageNameKotlin = packageName?.let { isKotlinGradleScript(it) } == true
+                val manifest = when {
+                    !isPackageNameKotlin && !packageName.isNullOrBlank() -> packageName
+                    !isBuildScriptKotlin -> buildScriptContent
+                    else -> ""
+                }
+                val gradleScript = when {
+                    isBuildScriptKotlin -> buildScriptContent
+                    isPackageNameKotlin -> packageName
+                    else -> null
+                }
+                resolveAndroidRuntimeTarget(manifest, projectPath, gradleScript)
+            }
+            ProjectAction.ANDROID_AUDIT -> {
+                val cat = packageName?.let { AndroidAuditCategory.fromString(it) }?.let { listOf(it) } ?: emptyList()
+                auditAndroidApp(buildScriptContent, projectPath, cat)
+            }
         }
     }
+
+    private fun isKotlinGradleScript(text: String): Boolean {
+        if (text.isBlank()) return false
+        val trimmed = text.trim()
+        if (trimmed.startsWith("<")) return false
+        val psi = K2SnippetFrontend.parsePsi(text) ?: return false
+        var hasError = false
+        psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+            override fun visitElement(element: org.jetbrains.kotlin.com.intellij.psi.PsiElement) {
+                if (element is org.jetbrains.kotlin.com.intellij.psi.PsiErrorElement) {
+                    hasError = true
+                }
+                if (!hasError) super.visitElement(element)
+            }
+        })
+        return !hasError
+    }
+
+    override fun auditAndroidApp(
+        codeOrWorkspace: String,
+        projectPath: String?,
+        categories: List<AndroidAuditCategory>
+    ): KotlinMcpResult =
+        androidAppAuditor.audit(codeOrWorkspace, projectPath, categories)
+
+    override fun resolveAndroidRuntimeTarget(
+        manifestContentOrPath: String,
+        projectPath: String?,
+        buildScriptContent: String?
+    ): KotlinMcpResult =
+        androidManifestInspector.resolveRuntimeTarget(manifestContentOrPath, projectPath, buildScriptContent)
 
     override fun resolveVersions(coordinate: String, customRepoUrl: String?): KotlinMcpResult {
         val parsed = com.gokorei.kotlinmcp.maven.MavenCoordinate.parse(coordinate)

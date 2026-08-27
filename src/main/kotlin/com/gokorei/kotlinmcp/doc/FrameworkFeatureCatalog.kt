@@ -26,7 +26,10 @@ object FrameworkFeatureCatalog {
             Guidelines for building robust, leak-free Android apps using Jetpack Compose, Lifecycle, and Hilt.
 
             ## Jetpack Compose Best Practices
-            - **Lifecycle-aware State Collection**: Use `flow.collectAsStateWithLifecycle()` from `androidx.lifecycle.compose` instead of `collectAsState()` to pause collection when the UI is in the background.
+            - **Lifecycle-aware State Collection**: Use `flow.collectAsStateWithLifecycle()` from `androidx.lifecycle.compose` instead of `collectAsState()` to automatically pause flow collection when the UI is in the background or stopped.
+            - **Type-Safe Navigation (Navigation Compose 2.8+)**: Define destinations using Kotlin `@Serializable` objects/classes instead of string route concatenation. Pass and extract type-safe route arguments directly.
+            - **UI State Preservation**: Use `rememberSaveable` for ephemeral UI state (e.g. text field edits, scroll offsets) and inject `SavedStateHandle` into `ViewModel` to survive process death and configuration changes.
+            - **Stable Collections**: Avoid standard `List<T>`, `Set<T>`, and `Map<K, V>` in Composable parameters as they are treated as unstable by the Compose compiler. Prefer `kotlinx.collections.immutable.ImmutableList` or wrap in `@Immutable` / `@Stable` data classes.
             - **Modifier Parameter Conventions**: Every custom UI `@Composable` should accept `modifier: Modifier = Modifier` as the first optional parameter and chain it to the root layout element.
             - **Edge-to-Edge Compliance (Android 15+)**: Call `enableEdgeToEdge()` in `Activity.onCreate()` and handle window insets via Compose modifiers (`Modifier.safeDrawingPadding()`, `Modifier.imePadding()`).
 
@@ -34,6 +37,10 @@ object FrameworkFeatureCatalog {
             - **ViewModel Coroutine Scopes**: Always launch coroutines via `viewModelScope.launch { ... }` so work cancels automatically when the ViewModel clears.
             - **No Leaked UI References**: Never hold direct references to `Activity`, `View`, or UI `Context` inside `ViewModel` or `@Singleton` classes. Use `@ApplicationContext` or state callbacks instead.
             - **Hilt Dependency Injection**: Annotate injected ViewModels with `@HiltViewModel` and Activity/Fragment injection targets with `@AndroidEntryPoint`.
+
+            ## Permissions & Media Selection
+            - **PhotoPicker**: For selecting images/videos on Android 13+, prefer `ActivityResultContracts.PickVisualMedia` over requesting full `READ_MEDIA_IMAGES` / storage permissions.
+            - **Push Notifications (Android 13+)**: Verify `android.permission.POST_NOTIFICATIONS` runtime permission with rationale dialogs before posting notifications.
         """.trimIndent(),
         FrameworkFeature.COMPOSE to """
             # Jetpack Compose Guide

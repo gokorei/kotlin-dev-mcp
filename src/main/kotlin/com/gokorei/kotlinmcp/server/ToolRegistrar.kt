@@ -78,9 +78,8 @@ object ToolRegistrar {
         // 2. kotlin_code_analyze
         register("kotlin_code_analyze") {
             description = "READ-ONLY. AST static analysis for Kotlin code snippets."
-            readOnly = true
-            actions("inspect", "nullability", "coroutines", "compose", "file_context")
-            param("action", "Analysis action: 'inspect' (default, declared elements), 'nullability' (unsafe null handling), 'coroutines' (scope safety & blocking calls), 'compose' (Compose anti-patterns), 'file_context' (cross-file dependencies of a target file)")
+            actions("inspect", "nullability", "coroutines", "compose", "file_context", "workmanager")
+            param("action", "Analysis action: 'inspect' (default, declared elements), 'nullability' (unsafe null handling), 'coroutines' (scope safety & blocking calls), 'compose' (Compose anti-patterns), 'file_context' (cross-file dependencies of a target file), 'workmanager' (WorkManager & CoroutineWorker architecture)")
             param("code", "Kotlin source code snippet to analyze, or absolute path of a .kt file for file_context")
             param("workspacePath", "Optional workspace root directory (required for file_context)")
             handleSimple { k, a ->
@@ -94,7 +93,8 @@ object ToolRegistrar {
                         "nullability" to { k.codeAnalyzeNullability(code) },
                         "coroutines" to { k.codeExplainCoroutines(code) },
                         "compose" to { k.codeAnalyzeCompose(code) },
-                        "file_context" to { k.codeFileContext(code, a["workspacePath"]) }
+                        "file_context" to { k.codeFileContext(code, a["workspacePath"]) },
+                        "workmanager" to { k.codeAnalyzeWorkManager(code) }
                     )
                 )
             }
@@ -135,11 +135,13 @@ object ToolRegistrar {
         register("kotlin_project_inspect") {
             description = "READ-ONLY. Gradle build script, version catalog, dependencies, Maven version discovery, and project layout inspection."
             readOnly = true
-            actions("structure", "kmp_targets", "dependencies", "schema_digest", "diagnose_build", "layout_inventory", "vulnerabilities", "package_api", "coverage_report", "android_manifest", "android_config", "resolve_versions", "latest_version", "catalog_updates")
-            param("action", "Project action: 'structure' (default), 'kmp_targets', 'dependencies', 'schema_digest', 'diagnose_build', 'layout_inventory', 'vulnerabilities', 'package_api', 'coverage_report', 'android_manifest', 'android_config', 'resolve_versions', 'latest_version', 'catalog_updates'")
-            param("buildScriptContent", "Content of build.gradle.kts (or coordinate / manifest content)")
+            actions("structure", "kmp_targets", "dependencies", "schema_digest", "diagnose_build", "layout_inventory", "vulnerabilities", "package_api", "coverage_report", "android_manifest", "android_config", "resolve_versions", "latest_version", "catalog_updates", "android_runtime_target", "android_audit")
+            param("action", "Project action: 'structure' (default), 'kmp_targets', 'dependencies', 'schema_digest', 'diagnose_build', 'layout_inventory', 'vulnerabilities', 'package_api', 'coverage_report', 'android_manifest', 'android_config', 'resolve_versions', 'latest_version', 'catalog_updates', 'android_runtime_target', 'android_audit'")
+            param("buildScriptContent", "Content of build.gradle.kts (or coordinate / manifest content / source snippet)")
+            param("manifestContent", "Optional AndroidManifest.xml XML content or file path for android_runtime_target")
             param("projectPath", "Path to Gradle project root directory (aliases: workspacePath, path)")
-            param("packageName", "Target package for package_api (e.g. com.example.app) or Maven coordinate for resolve_versions/latest_version")
+            param("packageName", "Target package for package_api or category for android_audit (e.g. 'compose', 'permissions', 'r8') or Maven coordinate")
+            param("category", "Optional target audit category for android_audit: 'COMPOSE_PERFORMANCE', 'RUNTIME_PERMISSIONS', 'R8_MINIFICATION'")
             param("coordinate", "Target Maven coordinate 'group:artifact' for resolve_versions and latest_version (e.g. io.ktor:ktor-client-core)")
             param("repositoryUrl", "Optional custom Maven repository URL for resolve_versions/latest_version")
             param("settingsContent", "Optional settings.gradle.kts content for diagnose_build")
@@ -152,6 +154,9 @@ object ToolRegistrar {
                 val script = a["buildScriptContent"].orEmpty()
                 val targetCoordinate = a["coordinate"] ?: a["packageName"] ?: script
                 val customRepo = a["repositoryUrl"]
+                val auditCategory = a["category"] ?: a["packageName"]
+                val manifestInput = a["manifestContent"] ?: a["manifestContentOrPath"] ?: if (script.trim().startsWith("<") || script.contains("<manifest")) script else ""
+                val gradleScript = if (a["manifestContent"] != null || a["manifestContentOrPath"] != null) script else if (!script.trim().startsWith("<")) script else null
                 dispatchAction(
                     action = a["action"],
                     defaultAction = "structure",
@@ -175,7 +180,9 @@ object ToolRegistrar {
                         "android_config" to { k.projectAuditAndroidConfig(script) },
                         "resolve_versions" to { k.projectResolveVersions(targetCoordinate, customRepo) },
                         "latest_version" to { k.projectGetLatestVersion(targetCoordinate, customRepo) },
-                        "catalog_updates" to { k.projectCheckCatalogUpdates(projectPath) }
+                        "catalog_updates" to { k.projectCheckCatalogUpdates(projectPath) },
+                        "android_runtime_target" to { k.projectResolveAndroidRuntimeTarget(manifestInput, projectPath, gradleScript) },
+                        "android_audit" to { k.projectAuditAndroidApp(script, projectPath, auditCategory) }
                     )
                 )
             }
@@ -291,9 +298,9 @@ object ToolRegistrar {
         register("kotlin_library_analyze") {
             description = "MUTATING. Library anti-pattern checks, modernization suggestions, and code-transforming refactors (e.g. Arrow, Android DI)."
             readOnly = false
-            actions("ktor", "serialization", "tests", "route_map", "arrow", "datetime", "android_di")
-            param("action", "Primary library analysis action: 'ktor' (default), 'serialization', 'tests', 'route_map', 'arrow', 'datetime', 'android_di'")
-            param("domain", "Deprecated backward-compatible alias for 'action'. Domain alias ('ktor', 'serialization', 'tests', 'arrow', 'datetime', 'android_di')")
+            actions("ktor", "serialization", "tests", "route_map", "arrow", "datetime", "android_di", "workmanager")
+            param("action", "Primary library analysis action: 'ktor' (default), 'serialization', 'tests', 'route_map', 'arrow', 'datetime', 'android_di', 'workmanager'")
+            param("domain", "Deprecated backward-compatible alias for 'action'. Domain alias ('ktor', 'serialization', 'tests', 'arrow', 'datetime', 'android_di', 'workmanager')")
             param("code", "Kotlin code snippet to analyze")
             param("dataSources", "Optional schema-diff links for serialization analysis")
             param("legacy", "Optional 'true' for Arrow 1.x monad mode in arrow refactoring")
@@ -316,7 +323,8 @@ object ToolRegistrar {
                         "arrow" to { k.refactorToArrow(code, a["legacy"]) },
                         "datetime" to { k.suggestKotlinxDatetime(code) },
                         "android_di" to { k.analyzeAndroidDi(code) },
-                        "android" to { k.analyzeAndroidDi(code) }
+                        "android" to { k.analyzeAndroidDi(code) },
+                        "workmanager" to { k.analyzeWorkManager(code) }
                     )
                 )
             }
