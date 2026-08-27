@@ -148,10 +148,16 @@ class DefaultMavenMetadataClient(
         )
     }
 
-    private fun getCacheFile(coordinate: MavenCoordinate): File {
+    private fun getCacheFile(coordinate: MavenCoordinate): File? {
         val groupRel = coordinate.group.replace('.', File.separatorChar)
         val dir = File(cacheDir, groupRel + File.separatorChar + coordinate.artifact)
-        return File(dir, "maven-metadata.xml")
+        val target = File(dir, "maven-metadata.xml")
+        val canonicalBase = runCatching { cacheDir.canonicalFile }.getOrNull() ?: cacheDir.absoluteFile
+        val canonicalTarget = runCatching { target.canonicalFile }.getOrNull() ?: target.absoluteFile
+        if (!canonicalTarget.toPath().startsWith(canonicalBase.toPath())) {
+            return null
+        }
+        return target
     }
 
     private fun fetchOrReadMetadata(
@@ -162,7 +168,7 @@ class DefaultMavenMetadataClient(
         val offline = checkOffline()
 
         // 1. Try cache if valid or offline
-        if (cacheFile.exists()) {
+        if (cacheFile != null && cacheFile.exists()) {
             val isFresh = (System.currentTimeMillis() - cacheFile.lastModified()) < cacheTtlMillis
             if (offline || isFresh) {
                 val text = runCatching { cacheFile.readText() }.getOrNull()
@@ -193,7 +199,7 @@ class DefaultMavenMetadataClient(
                 val request = HttpRequest.newBuilder()
                     .uri(URI(metadataUrl))
                     .timeout(Duration.ofMillis(6000))
-                    .header("User-Agent", "kotlin-mcp/1.2.0")
+                    .header("User-Agent", "kotlin-mcp/${com.gokorei.kotlinmcp.Version.CURRENT}")
                     .GET()
                     .build()
 
@@ -203,11 +209,13 @@ class DefaultMavenMetadataClient(
                     val parsed = parseMetadataXml(body, coordinate.group, coordinate.artifact, repo)
                     if (parsed != null) {
                         // Persist to cache
-                        runCatching {
-                            cacheFile.parentFile.mkdirs()
-                            cacheFile.writeText(body)
-                        }.onFailure { e ->
-                            logger.warn(e) { "Failed to write maven metadata cache to ${cacheFile.path}" }
+                        if (cacheFile != null) {
+                            runCatching {
+                                cacheFile.parentFile?.mkdirs()
+                                cacheFile.writeText(body)
+                            }.onFailure { e ->
+                                logger.warn(e) { "Failed to write maven metadata cache to ${cacheFile.path}" }
+                            }
                         }
                         return FetchResult.Success(parsed, repo)
                     } else {
@@ -225,7 +233,7 @@ class DefaultMavenMetadataClient(
         }
 
         // 3. Fallback to stale cache if available
-        if (cacheFile.exists()) {
+        if (cacheFile != null && cacheFile.exists()) {
             val text = runCatching { cacheFile.readText() }.getOrNull()
             if (!text.isNullOrBlank()) {
                 val parsed = parseMetadataXml(text, coordinate.group, coordinate.artifact, "stale-cache")
@@ -315,8 +323,12 @@ class DefaultMavenMetadataClient(
     companion object {
         fun isPreRelease(v: String): Boolean {
             val lower = v.lowercase()
-            return lower.contains("alpha") || lower.contains("beta") || lower.contains("rc") ||
-                lower.contains("m") || lower.contains("dev") || lower.contains("snapshot")
+            if (lower.contains("alpha") || lower.contains("beta") || lower.contains("rc") ||
+                lower.contains("dev") || lower.contains("snapshot") || lower.contains("preview") || lower.contains("eap")) {
+                return true
+            }
+            val tokens = lower.split('.', '-', '_')
+            return tokens.any { it.matches(Regex("""^m\d*$""")) }
         }
 
         fun mavenVersionCompare(a: String, b: String): Int {

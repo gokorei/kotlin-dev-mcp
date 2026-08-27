@@ -14,17 +14,20 @@ data class MavenCoordinate(
         fun parse(coordinateStr: String): MavenCoordinate? {
             val trimmed = coordinateStr.trim().removeSurrounding("\"", "'")
             val parts = trimmed.split(":")
+            fun isValid(segment: String): Boolean =
+                segment.isNotBlank() && !segment.contains('/') && !segment.contains('\\') && !segment.contains("..")
+
             return when (parts.size) {
                 2 -> {
                     val g = parts[0].trim()
                     val a = parts[1].trim()
-                    if (g.isNotBlank() && a.isNotBlank()) MavenCoordinate(group = g, artifact = a) else null
+                    if (isValid(g) && isValid(a)) MavenCoordinate(group = g, artifact = a) else null
                 }
                 3 -> {
                     val g = parts[0].trim()
                     val a = parts[1].trim()
                     val v = parts[2].trim()
-                    if (g.isNotBlank() && a.isNotBlank() && v.isNotBlank()) MavenCoordinate(group = g, artifact = a, version = v) else null
+                    if (isValid(g) && isValid(a) && isValid(v)) MavenCoordinate(group = g, artifact = a, version = v) else null
                 }
                 else -> null
             }

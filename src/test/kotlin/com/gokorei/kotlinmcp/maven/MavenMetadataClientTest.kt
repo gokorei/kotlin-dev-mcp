@@ -253,5 +253,24 @@ class MavenMetadataClientTest {
 
         val coord3 = MavenCoordinate.parse("  \"libs.ktor.client\"  ")
         assertNull(coord3)
+
+        // Path traversal rejection
+        assertNull(MavenCoordinate.parse("../foo:bar"))
+        assertNull(MavenCoordinate.parse("foo/bar:baz"))
+        assertNull(MavenCoordinate.parse("foo\\bar:baz"))
+    }
+
+    @Test
+    fun `isPreRelease correctly classifies milestone tokens without false positives on stable suffixes`() {
+        assertTrue(DefaultMavenMetadataClient.isPreRelease("1.0.0-alpha1"))
+        assertTrue(DefaultMavenMetadataClient.isPreRelease("1.0.0-beta02"))
+        assertTrue(DefaultMavenMetadataClient.isPreRelease("1.0.0-rc1"))
+        assertTrue(DefaultMavenMetadataClient.isPreRelease("1.0.0-m1"))
+        assertTrue(DefaultMavenMetadataClient.isPreRelease("1.0.0-M2"))
+        assertTrue(DefaultMavenMetadataClient.isPreRelease("1.0.0-SNAPSHOT"))
+
+        assertFalse(DefaultMavenMetadataClient.isPreRelease("1.6.3-native-mt"))
+        assertFalse(DefaultMavenMetadataClient.isPreRelease("2.3.12"))
+        assertFalse(DefaultMavenMetadataClient.isPreRelease("3.0.3-jvm"))
     }
 }

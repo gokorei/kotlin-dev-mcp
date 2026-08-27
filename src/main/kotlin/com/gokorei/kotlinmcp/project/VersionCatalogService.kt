@@ -54,18 +54,44 @@ class DefaultVersionCatalogService(
         }
     }
 
+    private fun stripTrailingComment(line: String): String {
+        var inSingleQuote = false
+        var inDoubleQuote = false
+        var escape = false
+        for (i in line.indices) {
+            val c = line[i]
+            if (escape) {
+                escape = false
+                continue
+            }
+            if (c == '\\') {
+                escape = true
+                continue
+            }
+            if (c == '"' && !inSingleQuote) {
+                inDoubleQuote = !inDoubleQuote
+            } else if (c == '\'' && !inDoubleQuote) {
+                inSingleQuote = !inSingleQuote
+            } else if (c == '#' && !inSingleQuote && !inDoubleQuote) {
+                return line.substring(0, i).trim()
+            }
+        }
+        return line.trim()
+    }
+
     override fun parseCatalog(projectPath: String): VersionCatalogModel {
         val file = getTomlFile(projectPath)
         if (!file.exists()) return VersionCatalogModel()
 
+        val lines = runCatching { file.readLines() }.getOrNull() ?: return VersionCatalogModel()
         val versions = mutableMapOf<String, String>()
         val libraries = mutableMapOf<String, CatalogLibraryEntry>()
         val plugins = mutableMapOf<String, String>()
         var currentSection = ""
 
-        file.readLines().forEach { line ->
-            val trimmed = line.trim()
-            if (trimmed.startsWith("#") || trimmed.isBlank()) return@forEach
+        lines.forEach { rawLine ->
+            val trimmed = stripTrailingComment(rawLine)
+            if (trimmed.isBlank()) return@forEach
 
             if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
                 currentSection = trimmed.removeSurrounding("[", "]").trim().lowercase()
@@ -130,12 +156,19 @@ class DefaultVersionCatalogService(
             )
         }
 
-        val lines = file.readLines().toMutableList()
+        val lines = runCatching { file.readLines().toMutableList() }.getOrElse { e ->
+            return KotlinMcpResult.Error(
+                code = "IO_ERROR",
+                message = "Failed to read version catalog from ${file.path}: ${e.message}"
+            )
+        }
+
         var currentSection = ""
         var updated = false
 
         for (i in lines.indices) {
-            val trimmed = lines[i].trim()
+            val raw = lines[i]
+            val trimmed = stripTrailingComment(raw)
             if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
                 currentSection = trimmed.removeSurrounding("[", "]").trim().lowercase()
                 continue
@@ -144,7 +177,7 @@ class DefaultVersionCatalogService(
             if (currentSection == "versions" && "=" in trimmed) {
                 val key = trimmed.substringBefore("=").trim()
                 if (key == versionRef) {
-                    val comment = if ("#" in lines[i]) " #" + lines[i].substringAfter("#") else ""
+                    val comment = if ("#" in raw) " #" + raw.substringAfter("#") else ""
                     lines[i] = "$versionRef = \"$newVersion\"$comment"
                     updated = true
                     break
@@ -159,7 +192,13 @@ class DefaultVersionCatalogService(
             )
         }
 
-        file.writeText(lines.joinToString("\n") + "\n")
+        runCatching { file.writeText(lines.joinToString("\n") + "\n") }.onFailure { e ->
+            return KotlinMcpResult.Error(
+                code = "IO_ERROR",
+                message = "Failed to write version catalog to ${file.path}: ${e.message}"
+            )
+        }
+
         return KotlinMcpResult.Success(
             content = "Updated version reference `$versionRef` to `$newVersion` in `${file.path}`.",
             metadata = mapOf("versionRef" to versionRef, "newVersion" to newVersion)
@@ -186,12 +225,19 @@ class DefaultVersionCatalogService(
             return updateVersion(projectPath, entry.versionRef, newVersion)
         }
 
-        val lines = file.readLines().toMutableList()
+        val lines = runCatching { file.readLines().toMutableList() }.getOrElse { e ->
+            return KotlinMcpResult.Error(
+                code = "IO_ERROR",
+                message = "Failed to read version catalog from ${file.path}: ${e.message}"
+            )
+        }
+
         var currentSection = ""
         var updated = false
 
         for (i in lines.indices) {
-            val trimmed = lines[i].trim()
+            val raw = lines[i]
+            val trimmed = stripTrailingComment(raw)
             if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
                 currentSection = trimmed.removeSurrounding("[", "]").trim().lowercase()
                 continue
@@ -202,8 +248,9 @@ class DefaultVersionCatalogService(
                 if (key == alias || key == alias.replace(".", "-")) {
                     val rhs = trimmed.substringAfter("=").trim()
                     if (rhs.startsWith("{") && "version" in rhs) {
+                        val comment = if ("#" in raw) " #" + raw.substringAfter("#") else ""
                         val replaced = rhs.replace(Regex("""version\s*=\s*"[^"]+""""), "version = \"$newVersion\"")
-                        lines[i] = "$key = $replaced"
+                        lines[i] = "$key = $replaced$comment"
                         updated = true
                         break
                     }
@@ -212,7 +259,12 @@ class DefaultVersionCatalogService(
         }
 
         if (updated) {
-            file.writeText(lines.joinToString("\n") + "\n")
+            runCatching { file.writeText(lines.joinToString("\n") + "\n") }.onFailure { e ->
+                return KotlinMcpResult.Error(
+                    code = "IO_ERROR",
+                    message = "Failed to write version catalog to ${file.path}: ${e.message}"
+                )
+            }
             return KotlinMcpResult.Success(
                 content = "Updated library `$alias` inline version to `$newVersion` in `${file.path}`.",
                 metadata = mapOf("alias" to alias, "newVersion" to newVersion)
@@ -233,12 +285,34 @@ class DefaultVersionCatalogService(
         versionRef: String?
     ): KotlinMcpResult {
         val file = getTomlFile(projectPath)
-        if (!file.exists()) {
-            file.parentFile?.mkdirs()
-            file.writeText("[versions]\n\n[libraries]\n")
+        val existingCatalog = if (file.exists()) parseCatalog(projectPath) else VersionCatalogModel()
+
+        if (existingCatalog.libraries.containsKey(alias) ||
+            existingCatalog.libraries.containsKey(alias.replace('.', '-')) ||
+            existingCatalog.libraries.containsKey(alias.replace('-', '.'))) {
+            return KotlinMcpResult.Error(
+                code = "LIBRARY_ALREADY_EXISTS",
+                message = "Library alias '$alias' is already declared in ${file.path}."
+            )
         }
 
-        val lines = file.readLines().toMutableList()
+        if (!file.exists()) {
+            file.parentFile?.mkdirs()
+            runCatching { file.writeText("[versions]\n\n[libraries]\n") }.onFailure { e ->
+                return KotlinMcpResult.Error(
+                    code = "IO_ERROR",
+                    message = "Failed to initialize version catalog file at ${file.path}: ${e.message}"
+                )
+            }
+        }
+
+        val lines = runCatching { file.readLines().toMutableList() }.getOrElse { e ->
+            return KotlinMcpResult.Error(
+                code = "IO_ERROR",
+                message = "Failed to read version catalog from ${file.path}: ${e.message}"
+            )
+        }
+
         var libIndex = -1
 
         for (i in lines.indices) {
@@ -268,7 +342,13 @@ class DefaultVersionCatalogService(
             lines.add(entryLine)
         }
 
-        file.writeText(lines.joinToString("\n") + "\n")
+        runCatching { file.writeText(lines.joinToString("\n") + "\n") }.onFailure { e ->
+            return KotlinMcpResult.Error(
+                code = "IO_ERROR",
+                message = "Failed to write version catalog to ${file.path}: ${e.message}"
+            )
+        }
+
         return KotlinMcpResult.Success(
             content = "Added library `$alias` (`$module`) to `${file.path}`.",
             metadata = mapOf("alias" to alias, "module" to module)
@@ -300,14 +380,21 @@ class DefaultVersionCatalogService(
         )
 
         val candidates = mutableListOf<UpdateCandidate>()
+        val skipped = mutableListOf<String>()
 
         catalog.libraries.values.forEach { lib ->
-            val coord = lib.resolvedCoordinate ?: return@forEach
+            val coord = lib.resolvedCoordinate
+            if (coord == null) {
+                skipped.add("`${lib.alias}`: could not parse module coordinates")
+                return@forEach
+            }
             val currentVersion = lib.version ?: (lib.versionRef?.let { catalog.versions[it] }) ?: "unknown"
 
             val latestResult = metadataClient.getLatestVersion(coord)
             if (latestResult is KotlinMcpResult.Success) {
-                val latestRelease = latestResult.metadata["latestRelease"] ?: latestResult.metadata["version"] ?: currentVersion
+                val rawRelease = latestResult.metadata["latestRelease"]?.takeIf { it.isNotBlank() }
+                val rawVersion = latestResult.metadata["version"]?.takeIf { it.isNotBlank() }
+                val latestRelease = rawRelease ?: rawVersion ?: currentVersion
                 val isOutdated = currentVersion != "unknown" && latestRelease != currentVersion &&
                     DefaultMavenMetadataClient.mavenVersionCompare(currentVersion, latestRelease) < 0
 
@@ -320,6 +407,8 @@ class DefaultVersionCatalogService(
                         isOutdated = isOutdated
                     )
                 )
+            } else {
+                skipped.add("`${lib.alias}` (${coord.toIdentifier()}): lookup failed")
             }
         }
 
@@ -328,7 +417,7 @@ class DefaultVersionCatalogService(
 
         val content = buildString {
             appendLine("# Version Catalog Update Check (${file.name})")
-            appendLine("Scanned ${candidates.size} library declarations.")
+            appendLine("Scanned ${candidates.size + skipped.size} library declaration(s).")
             appendLine()
 
             if (outdated.isNotEmpty()) {
@@ -338,7 +427,7 @@ class DefaultVersionCatalogService(
                 }
                 appendLine()
             } else {
-                appendLine("## ✅ All Libraries Up-to-Date")
+                appendLine("## ✅ All Checked Libraries Up-to-Date")
                 appendLine("All ${candidates.size} checked libraries are on their latest release.")
                 appendLine()
             }
@@ -348,6 +437,14 @@ class DefaultVersionCatalogService(
                 upToDate.forEach {
                     appendLine(" - `${it.alias}` (`${it.coordinate}`: `${it.currentVersion}`)")
                 }
+                appendLine()
+            }
+
+            if (skipped.isNotEmpty()) {
+                appendLine("## ⚠️ Skipped / Unresolved (${skipped.size})")
+                skipped.forEach {
+                    appendLine(" - $it")
+                }
             }
         }
 
@@ -355,7 +452,8 @@ class DefaultVersionCatalogService(
             content = content,
             metadata = mapOf(
                 "totalChecked" to candidates.size.toString(),
-                "outdatedCount" to outdated.size.toString()
+                "outdatedCount" to outdated.size.toString(),
+                "skippedCount" to skipped.size.toString()
             )
         )
     }

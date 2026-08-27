@@ -151,5 +151,46 @@ class VersionCatalogServiceTest {
         assertTrue(success.content.contains("ktor-client"))
         assertTrue(success.content.contains("3.0.3"))
         assertTrue(success.content.contains("2.3.12"))
+        assertTrue(success.content.contains("Skipped / Unresolved") || success.content.contains("coroutines-core"))
+    }
+
+    @Test
+    fun `parses inline comments correctly without truncating values`() {
+        val tomlWithInlineComments = """
+            [versions]
+            ktor = "2.3.12" # Ktor version
+            url = "http://example.com#anchor" # Url with hash in value
+
+            [libraries]
+            ktor-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" } # Core dependency
+        """.trimIndent()
+
+        val gradleDir = File(tempDir, "gradle").apply { mkdirs() }
+        File(gradleDir, "libs.versions.toml").writeText(tomlWithInlineComments)
+
+        val service = DefaultVersionCatalogService()
+        val parsed = service.parseCatalog(tempDir.absolutePath)
+
+        assertEquals("2.3.12", parsed.versions["ktor"])
+        assertEquals("http://example.com#anchor", parsed.versions["url"])
+        assertNotNull(parsed.libraries["ktor-core"])
+        assertEquals("io.ktor:ktor-client-core", parsed.libraries["ktor-core"]?.module)
+    }
+
+    @Test
+    fun `addLibrary rejects duplicate alias`() {
+        val gradleDir = File(tempDir, "gradle").apply { mkdirs() }
+        File(gradleDir, "libs.versions.toml").writeText(sampleToml)
+
+        val service = DefaultVersionCatalogService()
+        val result = service.addLibrary(
+            projectPath = tempDir.absolutePath,
+            alias = "ktor-client",
+            module = "io.ktor:ktor-client-core",
+            version = "3.0.3"
+        )
+
+        assertTrue(result.isError)
+        assertEquals("LIBRARY_ALREADY_EXISTS", (result as KotlinMcpResult.Error).code)
     }
 }

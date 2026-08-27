@@ -998,6 +998,108 @@ public final class com/gokorei/kotlinmcp/lsp/WorkspaceStats {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/gokorei/kotlinmcp/maven/DefaultMavenMetadataClient : com/gokorei/kotlinmcp/maven/MavenMetadataClient {
+	public static final field Companion Lcom/gokorei/kotlinmcp/maven/DefaultMavenMetadataClient$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljava/util/List;Ljava/io/File;JLjava/lang/Boolean;)V
+	public synthetic fun <init> (Ljava/util/List;Ljava/io/File;JLjava/lang/Boolean;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getCacheDir ()Ljava/io/File;
+	public final fun getCacheTtlMillis ()J
+	public final fun getDefaultRepositories ()Ljava/util/List;
+	public fun getLatestVersion (Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun isOffline ()Ljava/lang/Boolean;
+	public final fun parseMetadataXml (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/maven/VersionMetadata;
+	public fun resolveVersions (Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/maven/DefaultMavenMetadataClient$Companion {
+	public final fun isPreRelease (Ljava/lang/String;)Z
+	public final fun mavenVersionCompare (Ljava/lang/String;Ljava/lang/String;)I
+}
+
+public final class com/gokorei/kotlinmcp/maven/MavenCoordinate {
+	public static final field Companion Lcom/gokorei/kotlinmcp/maven/MavenCoordinate$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getArtifact ()Ljava/lang/String;
+	public final fun getGroup ()Ljava/lang/String;
+	public final fun getVersion ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun toIdentifier ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/gokorei/kotlinmcp/maven/MavenCoordinate$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Lcom/gokorei/kotlinmcp/maven/MavenCoordinate$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/gokorei/kotlinmcp/maven/MavenCoordinate$Companion {
+	public final fun parse (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public abstract interface class com/gokorei/kotlinmcp/maven/MavenMetadataClient {
+	public abstract fun getLatestVersion (Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun getLatestVersion$default (Lcom/gokorei/kotlinmcp/maven/MavenMetadataClient;Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun resolveVersions (Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun resolveVersions$default (Lcom/gokorei/kotlinmcp/maven/MavenMetadataClient;Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/maven/MavenMetadataClient$DefaultImpls {
+	public static synthetic fun getLatestVersion$default (Lcom/gokorei/kotlinmcp/maven/MavenMetadataClient;Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun resolveVersions$default (Lcom/gokorei/kotlinmcp/maven/MavenMetadataClient;Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/maven/VersionMetadata {
+	public static final field Companion Lcom/gokorei/kotlinmcp/maven/VersionMetadata$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/util/List;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/maven/VersionMetadata;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/maven/VersionMetadata;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/maven/VersionMetadata;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getArtifact ()Ljava/lang/String;
+	public final fun getGroup ()Ljava/lang/String;
+	public final fun getLatestRelease ()Ljava/lang/String;
+	public final fun getLatestVersion ()Ljava/lang/String;
+	public final fun getRepositoryUrl ()Ljava/lang/String;
+	public final fun getVersions ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/gokorei/kotlinmcp/maven/VersionMetadata$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Lcom/gokorei/kotlinmcp/maven/VersionMetadata$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/gokorei/kotlinmcp/maven/VersionMetadata;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/gokorei/kotlinmcp/maven/VersionMetadata;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/gokorei/kotlinmcp/maven/VersionMetadata$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
 public final class com/gokorei/kotlinmcp/models/FrameworkFeature : java/lang/Enum {
 	public static final field ANDROID Lcom/gokorei/kotlinmcp/models/FrameworkFeature;
 	public static final field ARROW Lcom/gokorei/kotlinmcp/models/FrameworkFeature;
@@ -1498,6 +1600,29 @@ public final class com/gokorei/kotlinmcp/project/AndroidManifestInspector {
 	public final fun inspectManifest (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
+public final class com/gokorei/kotlinmcp/project/CatalogLibraryEntry {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/project/CatalogLibraryEntry;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/project/CatalogLibraryEntry;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/project/CatalogLibraryEntry;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAlias ()Ljava/lang/String;
+	public final fun getGroup ()Ljava/lang/String;
+	public final fun getModule ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getResolvedCoordinate ()Lcom/gokorei/kotlinmcp/maven/MavenCoordinate;
+	public final fun getVersion ()Ljava/lang/String;
+	public final fun getVersionRef ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/gokorei/kotlinmcp/project/CoverageReporter {
 	public fun <init> ()V
 	public final fun coverageReport (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -1506,9 +1631,10 @@ public final class com/gokorei/kotlinmcp/project/CoverageReporter {
 
 public final class com/gokorei/kotlinmcp/project/DefaultProjectService : com/gokorei/kotlinmcp/project/ProjectService {
 	public fun <init> ()V
-	public fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/project/SchemaScanner;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor;Lcom/gokorei/kotlinmcp/project/AndroidManifestInspector;)V
-	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/project/SchemaScanner;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor;Lcom/gokorei/kotlinmcp/project/AndroidManifestInspector;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/project/SchemaScanner;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor;Lcom/gokorei/kotlinmcp/project/AndroidManifestInspector;Lcom/gokorei/kotlinmcp/maven/MavenMetadataClient;Lcom/gokorei/kotlinmcp/project/VersionCatalogService;)V
+	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/project/SchemaScanner;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor;Lcom/gokorei/kotlinmcp/project/AndroidManifestInspector;Lcom/gokorei/kotlinmcp/maven/MavenMetadataClient;Lcom/gokorei/kotlinmcp/project/VersionCatalogService;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun auditAndroidConfig (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun checkCatalogUpdates (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun checkVulnerabilities (Ljava/lang/String;Ljava/lang/String;III)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun coverageReport (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun detectProfile (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/ProjectEnvironmentProfile;
@@ -1516,8 +1642,21 @@ public final class com/gokorei/kotlinmcp/project/DefaultProjectService : com/gok
 	public fun execute (Lcom/gokorei/kotlinmcp/project/ProjectAction;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun execute (Lcom/gokorei/kotlinmcp/project/ProjectAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public synthetic fun execute (Ljava/lang/Object;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun getLatestVersion (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun inspectAndroidManifest (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun packageApi (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun resolveVersions (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/project/DefaultVersionCatalogService : com/gokorei/kotlinmcp/project/VersionCatalogService {
+	public fun <init> ()V
+	public fun <init> (Lcom/gokorei/kotlinmcp/maven/MavenMetadataClient;)V
+	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/maven/MavenMetadataClient;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun addLibrary (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun checkCatalogUpdates (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun parseCatalog (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/project/VersionCatalogModel;
+	public fun updateLibraryVersion (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun updateVersion (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
 public final class com/gokorei/kotlinmcp/project/EnvironmentProfileDetector {
@@ -1556,10 +1695,13 @@ public final class com/gokorei/kotlinmcp/project/ProjectAction : java/lang/Enum 
 	public static final field INSPECT_ANDROID_MANIFEST Lcom/gokorei/kotlinmcp/project/ProjectAction;
 	public static final field INSPECT_GRADLE_PROJECT Lcom/gokorei/kotlinmcp/project/ProjectAction;
 	public static final field INSPECT_STRUCTURE Lcom/gokorei/kotlinmcp/project/ProjectAction;
+	public static final field LATEST_VERSION Lcom/gokorei/kotlinmcp/project/ProjectAction;
 	public static final field LIST_KMP_TARGETS Lcom/gokorei/kotlinmcp/project/ProjectAction;
 	public static final field PACKAGE_API Lcom/gokorei/kotlinmcp/project/ProjectAction;
 	public static final field REPORT_COVERAGE Lcom/gokorei/kotlinmcp/project/ProjectAction;
+	public static final field RESOLVE_VERSIONS Lcom/gokorei/kotlinmcp/project/ProjectAction;
 	public static final field SCHEMA_DIGEST Lcom/gokorei/kotlinmcp/project/ProjectAction;
+	public static final field VERSION_CATALOG_CHECK Lcom/gokorei/kotlinmcp/project/ProjectAction;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/project/ProjectAction;
 	public static fun values ()[Lcom/gokorei/kotlinmcp/project/ProjectAction;
@@ -1573,6 +1715,8 @@ public final class com/gokorei/kotlinmcp/project/ProjectLayeringAnalyzer {
 public abstract interface class com/gokorei/kotlinmcp/project/ProjectService : com/gokorei/kotlinmcp/shared/CommandService {
 	public fun auditAndroidConfig (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun auditAndroidConfig$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun checkCatalogUpdates (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkCatalogUpdates$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public abstract fun checkVulnerabilities (Ljava/lang/String;Ljava/lang/String;III)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun checkVulnerabilities$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;IIIILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public abstract fun coverageReport (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -1585,24 +1729,31 @@ public abstract interface class com/gokorei/kotlinmcp/project/ProjectService : c
 	public abstract fun execute (Lcom/gokorei/kotlinmcp/project/ProjectAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public synthetic fun execute (Ljava/lang/Object;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun execute$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/project/ProjectAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun getLatestVersion (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun getLatestVersion$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun inspectAndroidManifest (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun inspectAndroidManifest$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public abstract fun packageApi (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun packageApi$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun resolveVersions (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun resolveVersions$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
 public final class com/gokorei/kotlinmcp/project/ProjectService$DefaultImpls {
 	public static fun auditAndroidConfig (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun auditAndroidConfig$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkCatalogUpdates$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun checkVulnerabilities$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;IIIILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun coverageReport$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun detectProfile$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/ProjectEnvironmentProfile;
 	public static synthetic fun diagnoseBuild$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static fun execute (Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/project/ProjectAction;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun execute$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/project/ProjectAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun getLatestVersion$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static fun inspectAndroidManifest (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun inspectAndroidManifest$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun packageApi$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun resolveVersions$default (Lcom/gokorei/kotlinmcp/project/ProjectService;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
 public final class com/gokorei/kotlinmcp/project/SchemaScanner {
@@ -1612,6 +1763,36 @@ public final class com/gokorei/kotlinmcp/project/SchemaScanner {
 }
 
 public final class com/gokorei/kotlinmcp/project/SchemaScanner$Companion {
+}
+
+public final class com/gokorei/kotlinmcp/project/VersionCatalogModel {
+	public fun <init> ()V
+	public fun <init> (Ljava/util/Map;Ljava/util/Map;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/util/Map;Ljava/util/Map;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/Map;
+	public final fun component2 ()Ljava/util/Map;
+	public final fun component3 ()Ljava/util/Map;
+	public final fun copy (Ljava/util/Map;Ljava/util/Map;Ljava/util/Map;)Lcom/gokorei/kotlinmcp/project/VersionCatalogModel;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/project/VersionCatalogModel;Ljava/util/Map;Ljava/util/Map;Ljava/util/Map;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/project/VersionCatalogModel;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLibraries ()Ljava/util/Map;
+	public final fun getPlugins ()Ljava/util/Map;
+	public final fun getVersions ()Ljava/util/Map;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/gokorei/kotlinmcp/project/VersionCatalogService {
+	public abstract fun addLibrary (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun addLibrary$default (Lcom/gokorei/kotlinmcp/project/VersionCatalogService;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun checkCatalogUpdates (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun parseCatalog (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/project/VersionCatalogModel;
+	public abstract fun updateLibraryVersion (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun updateVersion (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/project/VersionCatalogService$DefaultImpls {
+	public static synthetic fun addLibrary$default (Lcom/gokorei/kotlinmcp/project/VersionCatalogService;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
 public final class com/gokorei/kotlinmcp/project/VulnerabilityAuditor {
@@ -1766,11 +1947,15 @@ public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public final fun projectAnalyzeDependencies (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun projectAnalyzeDependencies$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun projectAuditAndroidConfig (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun projectCheckCatalogUpdates (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun projectCheckCatalogUpdates$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun projectCheckVulnerabilities (Ljava/lang/String;Ljava/lang/String;III)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun projectCheckVulnerabilities$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;IIIILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun projectCoverageReport (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun projectDiagnoseBuild (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun projectDiagnoseBuild$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun projectGetLatestVersion (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun projectGetLatestVersion$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun projectInspectAndroidManifest (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun projectInspectAndroidManifest$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun projectInspectStructure (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -1778,6 +1963,8 @@ public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public final fun projectListKmpTargets (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun projectPackageApi (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun projectPackageApi$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun projectResolveVersions (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun projectResolveVersions$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun projectSchemaDigest (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun refactorGenerateQuickFix (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun refactorImperativeToFunctional (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
