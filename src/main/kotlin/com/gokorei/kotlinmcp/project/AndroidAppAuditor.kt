@@ -40,7 +40,10 @@ class AndroidAppAuditor {
             val list = mutableListOf<String>()
             when (category) {
                 AndroidAuditCategory.COMPOSE_PERFORMANCE -> auditComposePerformance(code, projectPath, list)
-                AndroidAuditCategory.RUNTIME_PERMISSIONS -> auditRuntimePermissions(code, projectPath, list)
+                AndroidAuditCategory.RUNTIME_PERMISSIONS -> {
+                    val errorResult = auditRuntimePermissions(code, projectPath, list)
+                    if (errorResult != null) return errorResult
+                }
                 AndroidAuditCategory.R8_MINIFICATION -> auditR8Minification(code, projectPath, list)
             }
             if (list.isNotEmpty()) {
@@ -94,13 +97,15 @@ class AndroidAppAuditor {
                 // 1. Check for unstable collection parameter types
                 val valueParams = function.valueParameters
                 for (param in valueParams) {
-                    val typeRef = param.typeReference?.text?.trim() ?: continue
-                    val isCollection = typeRef.startsWith("List<") || typeRef.startsWith("Set<") ||
-                        typeRef.startsWith("Map<") || typeRef.startsWith("Collection<") ||
-                        typeRef.startsWith("kotlin.collections.List<") || typeRef.startsWith("kotlin.collections.Set<") ||
-                        typeRef.startsWith("kotlin.collections.Map<")
+                    val typeElement = param.typeReference?.typeElement
+                    val typeText = param.typeReference?.text?.trim() ?: ""
+                    val baseTypeName = when (typeElement) {
+                        is KtUserType -> typeElement.referencedName
+                        else -> typeText.substringBefore("<").substringAfterLast(".").trim()
+                    }
+                    val isCollection = baseTypeName in setOf("List", "Set", "Map", "Collection")
                     if (isCollection) {
-                        findings.add("⚠️ `@Composable fun $fnName`: Parameter `${param.name}: $typeRef` uses an unstable standard collection type. Use `kotlinx.collections.immutable.ImmutableList` / `ImmutableSet` / `ImmutableMap` or wrap in a `@Immutable` data class to prevent unnecessary recompositions.")
+                        findings.add("⚠️ `@Composable fun $fnName`: Parameter `${param.name}: $typeText` uses an unstable standard collection type. Use `kotlinx.collections.immutable.ImmutableList` / `ImmutableSet` / `ImmutableMap` or wrap in a `@Immutable` data class to prevent unnecessary recompositions.")
                     }
                 }
 
@@ -112,8 +117,7 @@ class AndroidAppAuditor {
                         if (callee == "items" || callee == "itemsIndexed") {
                             val args = expression.valueArguments
                             val hasKeyArg = args.any { arg ->
-                                arg.getArgumentName()?.asName?.asString() == "key" ||
-                                    arg.text.contains("key =")
+                                arg.getArgumentName()?.asName?.asString() == "key"
                             }
                             if (!hasKeyArg) {
                                 findings.add("⚠️ `@Composable fun $fnName`: `$callee(...)` invocation lacks explicit `key = { ... }` parameter. Provide a unique stable key (e.g. `key = { it.id }`) to optimize LazyColumn/LazyRow diffing and item skipping.")
@@ -130,7 +134,11 @@ class AndroidAppAuditor {
         })
     }
 
-    private fun auditRuntimePermissions(code: String, projectPath: String?, findings: MutableList<String>) {
+    private fun auditRuntimePermissions(
+        code: String,
+        projectPath: String?,
+        findings: MutableList<String>
+    ): KotlinMcpResult? {
         val manifestXml = resolveManifestXml(code, projectPath)
         if (manifestXml.isNotBlank()) {
             try {
@@ -169,20 +177,46 @@ class AndroidAppAuditor {
                         }
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                return KotlinMcpResult.Error(
+                    code = "XML_PARSE_ERROR",
+                    message = "Failed to parse AndroidManifest.xml: ${e.message}"
+                )
+            }
         }
+        return null
     }
 
     private fun auditR8Minification(code: String, projectPath: String?, findings: MutableList<String>) {
-        val buildContent = if (code.contains("isMinifyEnabled") || code.contains("minifyEnabled")) {
+        val buildContent = if (code.contains("MinifyEnabled") || code.contains("minifyEnabled")) {
             code
         } else {
             resolveBuildScriptContent(projectPath)
         }
 
-        val hasMinifyEnabled = buildContent.contains("isMinifyEnabled = true") ||
-            buildContent.contains("minifyEnabled true") ||
-            buildContent.contains("isMinifyEnabled.set(true)")
+        if (buildContent.isBlank()) return
+
+        var hasMinifyEnabled = false
+        val psi = K2SnippetFrontend.parsePsi(buildContent)
+        psi?.accept(object : KtTreeVisitorVoid() {
+            override fun visitBinaryExpression(expression: KtBinaryExpression) {
+                super.visitBinaryExpression(expression)
+                val left = expression.left?.text?.trim()
+                val right = expression.right?.text?.trim()
+                if ((left == "isMinifyEnabled" || left == "minifyEnabled") && right == "true") {
+                    hasMinifyEnabled = true
+                }
+            }
+
+            override fun visitCallExpression(expression: KtCallExpression) {
+                super.visitCallExpression(expression)
+                val callee = expression.calleeExpression?.text
+                if (callee == "isMinifyEnabled" || callee == "minifyEnabled") {
+                    val arg = expression.valueArguments.firstOrNull()?.getArgumentExpression()?.text?.trim()
+                    if (arg == "true") hasMinifyEnabled = true
+                }
+            }
+        })
 
         if (hasMinifyEnabled) {
             if (projectPath != null) {
@@ -216,8 +250,8 @@ class AndroidAppAuditor {
         if (code.trim().startsWith("<") || code.contains("<manifest")) return code
         if (projectPath != null) {
             val candidatePaths = listOf(
-                "src/main/AndroidManifest.xml",
                 "app/src/main/AndroidManifest.xml",
+                "src/main/AndroidManifest.xml",
                 "androidApp/src/main/AndroidManifest.xml",
                 "composeApp/src/androidMain/AndroidManifest.xml"
             )
@@ -232,10 +266,10 @@ class AndroidAppAuditor {
     private fun resolveBuildScriptContent(projectPath: String?): String {
         if (projectPath == null) return ""
         val candidatePaths = listOf(
-            "build.gradle.kts",
             "app/build.gradle.kts",
             "androidApp/build.gradle.kts",
-            "composeApp/build.gradle.kts"
+            "composeApp/build.gradle.kts",
+            "build.gradle.kts"
         )
         for (rel in candidatePaths) {
             val file = File(projectPath, rel)

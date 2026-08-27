@@ -35,10 +35,14 @@ class WorkManagerAnalyzer {
                 super.visitClass(klass)
                 val className = klass.name ?: "AnonymousWorker"
 
+                val validWorkerTypes = setOf(
+                    "CoroutineWorker", "ListenableWorker", "Worker", "RxWorker",
+                    "androidx.work.CoroutineWorker", "androidx.work.ListenableWorker",
+                    "androidx.work.Worker", "androidx.work.RxWorker"
+                )
                 val isWorker = klass.superTypeListEntries.any { entry ->
-                    val typeText = entry.typeReference?.text?.trim() ?: ""
-                    typeText.contains("CoroutineWorker") || typeText.contains("ListenableWorker") ||
-                        typeText.contains("Worker") || typeText.contains("RxWorker")
+                    val rawType = entry.typeReference?.text?.trim()?.substringBefore("<")?.trim() ?: ""
+                    rawType in validWorkerTypes
                 }
 
                 if (!isWorker) return
@@ -126,8 +130,9 @@ class WorkManagerAnalyzer {
             if (current is KtCallExpression) {
                 val callee = current.calleeExpression?.text
                 if (callee == "withContext") {
-                    val argText = current.valueArguments.firstOrNull()?.text.orEmpty()
-                    if (argText.contains("Dispatchers.IO") || argText.contains("Dispatchers.Default")) {
+                    val argExpr = current.valueArguments.firstOrNull()?.getArgumentExpression()
+                    val argText = argExpr?.text?.trim()
+                    if (argText == "Dispatchers.IO" || argText == "kotlinx.coroutines.Dispatchers.IO") {
                         return true
                     }
                 }

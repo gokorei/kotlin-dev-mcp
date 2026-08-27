@@ -122,4 +122,50 @@ class WorkManagerAnalyzerTest {
         val success = result as KotlinMcpResult.Success
         assertTrue(success.content.contains("SystemForegroundService") || success.content.contains("foregroundServiceType") || success.content.contains("setForeground"), "expected setForeground advisory: ${success.content}")
     }
+
+    @Test
+    fun `flags blocking operations inside withContext Dispatchers Default`() {
+        val workerCode = """
+            import android.content.Context
+            import androidx.work.CoroutineWorker
+            import androidx.work.WorkerParameters
+            import kotlinx.coroutines.Dispatchers
+            import kotlinx.coroutines.withContext
+            import java.io.File
+
+            class UnsafeDefaultDispatcherWorker(
+                context: Context,
+                params: WorkerParameters
+            ) : CoroutineWorker(context, params) {
+                override suspend fun doWork(): Result {
+                    return withContext(Dispatchers.Default) {
+                        val file = File("/tmp/data.bin")
+                        val text = file.readText()
+                        Result.success()
+                    }
+                }
+            }
+        """.trimIndent()
+
+        val result = analyzer.analyze(workerCode)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("withContext(Dispatchers.IO)"), "should flag blocking calls on Dispatchers.Default: ${success.content}")
+    }
+
+    @Test
+    fun `ignores classes not extending WorkManager worker hierarchy`() {
+        val plainClass = """
+            class PlainWorker(val name: String) {
+                fun doWork() {
+                    Thread.sleep(100)
+                }
+            }
+        """.trimIndent()
+
+        val result = analyzer.analyze(plainClass)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("follows modern architecture best practices"))
+    }
 }

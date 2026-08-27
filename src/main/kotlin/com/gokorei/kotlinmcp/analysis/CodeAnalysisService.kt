@@ -34,7 +34,7 @@ interface CodeAnalysisService : CommandService<CodeAnalysisAction> {
 /**
  * Single-responsibility facade routing [CodeAnalysisAction] operations to dedicated code analysis strategy components.
  */
-class DefaultCodeAnalysisService(
+class DefaultCodeAnalysisService @JvmOverloads constructor(
     private val indexer: WorkspaceSemanticIndexer = WorkspaceSemanticIndexer(),
     private val fileContextAnalyzer: FileContextAnalyzer = FileContextAnalyzer(),
     private val symbolInspector: SymbolInspector = SymbolInspector(),

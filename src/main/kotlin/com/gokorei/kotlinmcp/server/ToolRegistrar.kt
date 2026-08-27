@@ -138,6 +138,7 @@ object ToolRegistrar {
             actions("structure", "kmp_targets", "dependencies", "schema_digest", "diagnose_build", "layout_inventory", "vulnerabilities", "package_api", "coverage_report", "android_manifest", "android_config", "resolve_versions", "latest_version", "catalog_updates", "android_runtime_target", "android_audit")
             param("action", "Project action: 'structure' (default), 'kmp_targets', 'dependencies', 'schema_digest', 'diagnose_build', 'layout_inventory', 'vulnerabilities', 'package_api', 'coverage_report', 'android_manifest', 'android_config', 'resolve_versions', 'latest_version', 'catalog_updates', 'android_runtime_target', 'android_audit'")
             param("buildScriptContent", "Content of build.gradle.kts (or coordinate / manifest content / source snippet)")
+            param("manifestContent", "Optional AndroidManifest.xml XML content or file path for android_runtime_target")
             param("projectPath", "Path to Gradle project root directory (aliases: workspacePath, path)")
             param("packageName", "Target package for package_api or category for android_audit (e.g. 'compose', 'permissions', 'r8') or Maven coordinate")
             param("category", "Optional target audit category for android_audit: 'COMPOSE_PERFORMANCE', 'RUNTIME_PERMISSIONS', 'R8_MINIFICATION'")
@@ -154,6 +155,8 @@ object ToolRegistrar {
                 val targetCoordinate = a["coordinate"] ?: a["packageName"] ?: script
                 val customRepo = a["repositoryUrl"]
                 val auditCategory = a["category"] ?: a["packageName"]
+                val manifestInput = a["manifestContent"] ?: a["manifestContentOrPath"] ?: if (script.trim().startsWith("<") || script.contains("<manifest")) script else ""
+                val gradleScript = if (a["manifestContent"] != null || a["manifestContentOrPath"] != null) script else if (!script.trim().startsWith("<")) script else null
                 dispatchAction(
                     action = a["action"],
                     defaultAction = "structure",
@@ -178,7 +181,7 @@ object ToolRegistrar {
                         "resolve_versions" to { k.projectResolveVersions(targetCoordinate, customRepo) },
                         "latest_version" to { k.projectGetLatestVersion(targetCoordinate, customRepo) },
                         "catalog_updates" to { k.projectCheckCatalogUpdates(projectPath) },
-                        "android_runtime_target" to { k.projectResolveAndroidRuntimeTarget(script, projectPath) },
+                        "android_runtime_target" to { k.projectResolveAndroidRuntimeTarget(manifestInput, projectPath, gradleScript) },
                         "android_audit" to { k.projectAuditAndroidApp(script, projectPath, auditCategory) }
                     )
                 )

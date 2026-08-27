@@ -191,4 +191,49 @@ class AndroidRuntimeTargetTest {
         assertEquals("com.example.fsapp", success.metadata["applicationId"])
         assertEquals("com.example.fsapp.MainActivity", success.metadata["launcherActivity"])
     }
+
+    @Test
+    fun `prefers defaultConfig applicationId over productFlavors overrides`() {
+        val manifestXml = """
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+                <application>
+                    <activity android:name=".MainActivity" android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.intent.action.MAIN" />
+                            <category android:name="android.intent.category.LAUNCHER" />
+                        </intent-filter>
+                    </activity>
+                </application>
+            </manifest>
+        """.trimIndent()
+
+        val buildGradleKts = """
+            android {
+                namespace = "com.example.flavors"
+                defaultConfig {
+                    applicationId = "com.example.flavors.main"
+                }
+                productFlavors {
+                    create("demo") {
+                        applicationId = "com.example.flavors.demo"
+                    }
+                    create("full") {
+                        applicationId = "com.example.flavors.full"
+                    }
+                }
+            }
+        """.trimIndent()
+
+        val result = projectService.resolveAndroidRuntimeTarget(
+            manifestContentOrPath = manifestXml,
+            projectPath = null,
+            buildScriptContent = buildGradleKts
+        )
+
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertEquals("com.example.flavors.main", success.metadata["applicationId"])
+        assertEquals("com.example.flavors", success.metadata["namespace"])
+        assertEquals("com.example.flavors.MainActivity", success.metadata["launcherActivity"])
+    }
 }

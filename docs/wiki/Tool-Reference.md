@@ -57,6 +57,7 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 | :--- | :--- | :--- | :--- |
 | `action` | `string` | No | Project action: 'structure' (default), 'kmp_targets', 'dependencies', 'schema_digest', 'diagnose_build', 'layout_inventory', 'vulnerabilities', 'package_api', 'coverage_report', 'android_manifest', 'android_config', 'resolve_versions', 'latest_version', 'catalog_updates', 'android_runtime_target', 'android_audit' |
 | `buildScriptContent` | `string` | No | Content of build.gradle.kts (or coordinate / manifest content / source snippet) |
+| `manifestContent` | `string` | No | Optional AndroidManifest.xml XML content or file path for android_runtime_target |
 | `projectPath` | `string` | No | Path to Gradle project root directory (aliases: workspacePath, path) |
 | `packageName` | `string` | No | Target package for package_api or category for android_audit (e.g. 'compose', 'permissions', 'r8') or Maven coordinate |
 | `category` | `string` | No | Optional target audit category for android_audit: 'COMPOSE_PERFORMANCE', 'RUNTIME_PERMISSIONS', 'R8_MINIFICATION' |

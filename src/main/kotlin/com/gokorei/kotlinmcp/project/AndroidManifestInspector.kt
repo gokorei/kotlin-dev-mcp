@@ -287,11 +287,36 @@ class AndroidManifestInspector {
         if (scriptContent.isBlank()) return BuildScriptAndroidInfo(null, null)
 
         var namespace: String? = null
-        var applicationId: String? = null
+        var defaultConfigAppId: String? = null
+        var fallbackAppId: String? = null
 
         // Parse via K2 PSI AST to strictly comply with Rule 1
         val psi = K2SnippetFrontend.parsePsi(scriptContent) ?: return BuildScriptAndroidInfo(null, null)
         psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+            private var insideDefaultConfig = false
+
+            override fun visitCallExpression(expression: org.jetbrains.kotlin.psi.KtCallExpression) {
+                val callee = expression.calleeExpression?.text
+                if (callee == "defaultConfig") {
+                    insideDefaultConfig = true
+                    super.visitCallExpression(expression)
+                    insideDefaultConfig = false
+                } else {
+                    val args = expression.valueArguments
+                    if (callee == "namespace" && args.isNotEmpty()) {
+                        val argText = args[0].getArgumentExpression()?.text?.trim()?.trim('"', '\'')
+                        if (argText != null) namespace = argText
+                    }
+                    if (callee == "applicationId" && args.isNotEmpty()) {
+                        val argText = args[0].getArgumentExpression()?.text?.trim()?.trim('"', '\'')
+                        if (argText != null) {
+                            if (insideDefaultConfig) defaultConfigAppId = argText else if (fallbackAppId == null) fallbackAppId = argText
+                        }
+                    }
+                    super.visitCallExpression(expression)
+                }
+            }
+
             override fun visitBinaryExpression(expression: org.jetbrains.kotlin.psi.KtBinaryExpression) {
                 super.visitBinaryExpression(expression)
                 val left = expression.left?.text?.trim()
@@ -300,36 +325,22 @@ class AndroidManifestInspector {
                     namespace = right
                 }
                 if (left == "applicationId" && right != null) {
-                    applicationId = right
-                }
-            }
-
-            override fun visitCallExpression(expression: org.jetbrains.kotlin.psi.KtCallExpression) {
-                super.visitCallExpression(expression)
-                val callee = expression.calleeExpression?.text
-                val args = expression.valueArguments
-                if (callee == "namespace" && args.isNotEmpty()) {
-                    val argText = args[0].getArgumentExpression()?.text?.trim()?.trim('"', '\'')
-                    if (argText != null) namespace = argText
-                }
-                if (callee == "applicationId" && args.isNotEmpty()) {
-                    val argText = args[0].getArgumentExpression()?.text?.trim()?.trim('"', '\'')
-                    if (argText != null) applicationId = argText
+                    if (insideDefaultConfig) defaultConfigAppId = right else if (fallbackAppId == null) fallbackAppId = right
                 }
             }
         })
 
-        return BuildScriptAndroidInfo(namespace, applicationId)
+        return BuildScriptAndroidInfo(namespace, defaultConfigAppId ?: fallbackAppId)
     }
 
     private fun resolveBuildScriptContent(buildScriptContent: String?, projectPath: String?): String {
         if (!buildScriptContent.isNullOrBlank()) return buildScriptContent
         if (projectPath != null) {
             val candidatePaths = listOf(
-                "build.gradle.kts",
                 "app/build.gradle.kts",
                 "androidApp/build.gradle.kts",
-                "composeApp/build.gradle.kts"
+                "composeApp/build.gradle.kts",
+                "build.gradle.kts"
             )
             for (rel in candidatePaths) {
                 val candidate = File(projectPath, rel)

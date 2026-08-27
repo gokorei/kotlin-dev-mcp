@@ -136,7 +136,12 @@ class DefaultProjectService(
                 getLatestVersion(coord)
             }
             ProjectAction.VERSION_CATALOG_CHECK -> checkCatalogUpdates(projectPath)
-            ProjectAction.RESOLVE_ANDROID_RUNTIME_TARGET -> resolveAndroidRuntimeTarget(buildScriptContent, projectPath)
+            ProjectAction.RESOLVE_ANDROID_RUNTIME_TARGET -> {
+                val isXml = buildScriptContent.trim().startsWith("<") || buildScriptContent.contains("<manifest")
+                val manifest = if (isXml) buildScriptContent else packageName.orEmpty()
+                val gradleScript = if (!isXml && buildScriptContent.isNotBlank()) buildScriptContent else null
+                resolveAndroidRuntimeTarget(manifest, projectPath, gradleScript)
+            }
             ProjectAction.ANDROID_AUDIT -> {
                 val cat = packageName?.let { AndroidAuditCategory.fromString(it) }?.let { listOf(it) } ?: emptyList()
                 auditAndroidApp(buildScriptContent, projectPath, cat)
