@@ -175,6 +175,12 @@ class VersionCatalogServiceTest {
         assertEquals("http://example.com#anchor", parsed.versions["url"])
         assertNotNull(parsed.libraries["ktor-core"])
         assertEquals("io.ktor:ktor-client-core", parsed.libraries["ktor-core"]?.module)
+
+        val updateResult = service.updateVersion(tempDir.absolutePath, "url", "http://example.com#newanchor")
+        assertTrue(updateResult is KotlinMcpResult.Success)
+        val updatedText = File(gradleDir, "libs.versions.toml").readText()
+        assertTrue(updatedText.contains("url = \"http://example.com#newanchor\" # Url with hash in value"),
+            "Expected quoted hash value updated and trailing comment preserved:\n$updatedText")
     }
 
     @Test

@@ -54,7 +54,7 @@ class DefaultVersionCatalogService(
         }
     }
 
-    private fun stripTrailingComment(line: String): String {
+    private fun findCommentIndex(line: String): Int {
         var inSingleQuote = false
         var inDoubleQuote = false
         var escape = false
@@ -73,10 +73,20 @@ class DefaultVersionCatalogService(
             } else if (c == '\'' && !inDoubleQuote) {
                 inSingleQuote = !inSingleQuote
             } else if (c == '#' && !inSingleQuote && !inDoubleQuote) {
-                return line.substring(0, i).trim()
+                return i
             }
         }
-        return line.trim()
+        return -1
+    }
+
+    private fun stripTrailingComment(line: String): String {
+        val commentIdx = findCommentIndex(line)
+        return if (commentIdx != -1) line.substring(0, commentIdx).trim() else line.trim()
+    }
+
+    private fun extractTrailingComment(line: String): String {
+        val commentIdx = findCommentIndex(line)
+        return if (commentIdx != -1) " " + line.substring(commentIdx) else ""
     }
 
     override fun parseCatalog(projectPath: String): VersionCatalogModel {
@@ -177,7 +187,7 @@ class DefaultVersionCatalogService(
             if (currentSection == "versions" && "=" in trimmed) {
                 val key = trimmed.substringBefore("=").trim()
                 if (key == versionRef) {
-                    val comment = if ("#" in raw) " #" + raw.substringAfter("#") else ""
+                    val comment = extractTrailingComment(raw)
                     lines[i] = "$versionRef = \"$newVersion\"$comment"
                     updated = true
                     break
@@ -248,7 +258,7 @@ class DefaultVersionCatalogService(
                 if (key == alias || key == alias.replace(".", "-")) {
                     val rhs = trimmed.substringAfter("=").trim()
                     if (rhs.startsWith("{") && "version" in rhs) {
-                        val comment = if ("#" in raw) " #" + raw.substringAfter("#") else ""
+                        val comment = extractTrailingComment(raw)
                         val replaced = rhs.replace(Regex("""version\s*=\s*"[^"]+""""), "version = \"$newVersion\"")
                         lines[i] = "$key = $replaced$comment"
                         updated = true
