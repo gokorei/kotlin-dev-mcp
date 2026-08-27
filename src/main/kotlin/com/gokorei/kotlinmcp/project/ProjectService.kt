@@ -25,7 +25,10 @@ enum class ProjectAction {
     REPORT_COVERAGE,
     DETECT_ENVIRONMENT_PROFILE,
     INSPECT_ANDROID_MANIFEST,
-    AUDIT_ANDROID_CONFIG
+    AUDIT_ANDROID_CONFIG,
+    RESOLVE_VERSIONS,
+    LATEST_VERSION,
+    VERSION_CATALOG_CHECK
 }
 
 /**
@@ -63,13 +66,24 @@ interface ProjectService : CommandService<ProjectAction> {
     /** Statically audits Gradle build scripts for AGP and Kotlin 2.x Compose compiler alignment. */
     fun auditAndroidConfig(buildScriptContent: String, projectPath: String? = null): KotlinMcpResult =
         GradleProjectInspector().auditAndroidConfig(buildScriptContent, projectPath)
+
+    /** Resolves available published Maven versions for a coordinate. */
+    fun resolveVersions(coordinate: String, customRepoUrl: String? = null): KotlinMcpResult
+
+    /** Resolves the latest stable version for a Maven coordinate. */
+    fun getLatestVersion(coordinate: String, customRepoUrl: String? = null): KotlinMcpResult
+
+    /** Checks declared libraries in gradle/libs.versions.toml against remote repositories for available updates. */
+    fun checkCatalogUpdates(projectPath: String? = null): KotlinMcpResult
 }
 
 class DefaultProjectService(
     private val indexer: WorkspaceSemanticIndexer = WorkspaceSemanticIndexer(),
     private val schemaScanner: SchemaScanner = SchemaScanner(),
     private val vulnerabilityAuditor: VulnerabilityAuditor = VulnerabilityAuditor(),
-    private val androidManifestInspector: AndroidManifestInspector = AndroidManifestInspector()
+    private val androidManifestInspector: AndroidManifestInspector = AndroidManifestInspector(),
+    private val mavenMetadataClient: com.gokorei.kotlinmcp.maven.MavenMetadataClient = com.gokorei.kotlinmcp.maven.DefaultMavenMetadataClient(),
+    private val versionCatalogService: VersionCatalogService = DefaultVersionCatalogService(mavenMetadataClient)
 ) : ProjectService {
 
     override fun execute(action: ProjectAction, buildScriptContent: String, projectPath: String?, packageName: String?): KotlinMcpResult {
@@ -96,8 +110,38 @@ class DefaultProjectService(
                 } else null
                 GradleProjectInspector().auditAndroidConfig(buildScriptContent, scriptPath)
             }
+            ProjectAction.RESOLVE_VERSIONS -> {
+                val coord = packageName?.takeIf { it.isNotBlank() } ?: buildScriptContent
+                resolveVersions(coord)
+            }
+            ProjectAction.LATEST_VERSION -> {
+                val coord = packageName?.takeIf { it.isNotBlank() } ?: buildScriptContent
+                getLatestVersion(coord)
+            }
+            ProjectAction.VERSION_CATALOG_CHECK -> checkCatalogUpdates(projectPath)
         }
     }
+
+    override fun resolveVersions(coordinate: String, customRepoUrl: String?): KotlinMcpResult {
+        val parsed = com.gokorei.kotlinmcp.maven.MavenCoordinate.parse(coordinate)
+            ?: return KotlinMcpResult.Error(
+                code = "INVALID_ARGUMENTS",
+                message = "Invalid Maven coordinate '$coordinate'. Expected format: 'group:artifact' (e.g. 'io.ktor:ktor-client-core')."
+            )
+        return mavenMetadataClient.resolveVersions(parsed, customRepoUrl)
+    }
+
+    override fun getLatestVersion(coordinate: String, customRepoUrl: String?): KotlinMcpResult {
+        val parsed = com.gokorei.kotlinmcp.maven.MavenCoordinate.parse(coordinate)
+            ?: return KotlinMcpResult.Error(
+                code = "INVALID_ARGUMENTS",
+                message = "Invalid Maven coordinate '$coordinate'. Expected format: 'group:artifact' (e.g. 'io.ktor:ktor-client-core')."
+            )
+        return mavenMetadataClient.getLatestVersion(parsed, customRepoUrl)
+    }
+
+    override fun checkCatalogUpdates(projectPath: String?): KotlinMcpResult =
+        versionCatalogService.checkCatalogUpdates(projectPath ?: ".")
 
 
     private fun detectSubprojects(projectPath: String?): List<String> {

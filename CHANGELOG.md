@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AGP & Kotlin 2.0+ Compose compiler audit** — added `kotlin_project_inspect(action="android_config")` to audit Gradle build scripts for deprecated `kotlinCompilerExtensionVersion`, `compileSdk`, and `minSdk` configurations.
 - **Android Lint XML report ingestion** — added `kotlin_lint(action="android_lint")` to parse official `lint-results.xml` reports into structured error and warning summaries with source location coordinates.
 - **Modern Android & Jetpack documentation catalog** — expanded `FrameworkFeatureCatalog` and `kotlin_docs_read` with Jetpack Compose lifecycle state collection, edge-to-edge window insets, Hilt dependency injection, and Room patterns.
+- **Maven metadata & version resolver** — added `MavenMetadataClient` (`DefaultMavenMetadataClient`) and `kotlin_project_inspect(action="resolve_versions")` / `kotlin_project_inspect(action="latest_version")` to discover available versions and query the latest stable releases for published Maven/Gradle dependencies from Maven Central and Google Maven, with disk caching (`~/.cache/kotlin-mcp/metadata`) and offline mode fallback.
+- **Gradle version catalog AST synchronizer & update auditor** — added `VersionCatalogService` (`DefaultVersionCatalogService`) and `kotlin_project_inspect(action="catalog_updates")` to parse `gradle/libs.versions.toml`, audit declared dependencies against remote repositories for newer versions, and perform formatting- and comment-preserving updates.
 
 ## [1.2.0] - 2026-08-25
 
