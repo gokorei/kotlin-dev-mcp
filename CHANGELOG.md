@@ -5,7 +5,7 @@ All notable changes to `kotlin-mcp` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.0] - 2026-08-28
 
 ### Added
 - **Android framework detection & progressive discovery gating** — added `FrameworkFeature.ANDROID` and updated `EnvironmentProfileDetector` and `DefaultFrameworkDetector` to detect Android application (`com.android.application`), library (`com.android.library`), dynamic feature, and KMP Android targets, ensuring Android-specific tooling and diagnostics are strictly gated to Android projects without context bloat for pure JVM or backend projects.
@@ -132,7 +132,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sandboxed network audits** — network security audits in project inspection disabled by default (`kmcp.disable_network_audits`), guaranteeing safe offline/isolated runs.
 - **Hardened Maven dependency resolution** — handles malformed artifact versions and pre-release markers gracefully during library analysis.
 
-[Unreleased]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/gokorei/kotlin-dev-mcp/releases/tag/v1.0.0

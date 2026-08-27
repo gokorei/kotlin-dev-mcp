@@ -2,7 +2,7 @@
 
 Overview of new features, bug fixes, and improvements shipped in each `kotlin-mcp` release.
 
-## Next
+## v1.3.0 — 2026-08-28
 
 ### New Features
 
