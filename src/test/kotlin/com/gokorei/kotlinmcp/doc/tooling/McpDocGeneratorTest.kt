@@ -55,7 +55,7 @@ class McpDocGeneratorTest {
 
         val libAnalyze = docSpecs.first { it.name == "kotlin_library_analyze" }
         assertEquals(listOf("code"), libAnalyze.requiredParams)
-        assertEquals(listOf("ktor", "serialization", "tests", "route_map", "arrow", "datetime", "android_di"), libAnalyze.actions)
+        assertEquals(listOf("ktor", "serialization", "tests", "route_map", "arrow", "datetime", "android_di", "workmanager"), libAnalyze.actions)
     }
 
     @Test

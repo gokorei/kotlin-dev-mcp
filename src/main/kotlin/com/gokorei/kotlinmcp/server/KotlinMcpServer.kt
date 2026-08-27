@@ -101,6 +101,9 @@ class KotlinMcpServer(
     fun codeFileContext(code: String, workspacePath: String? = null): KotlinMcpResult =
         codeAnalysisService.execute(CodeAnalysisAction.FILE_CONTEXT, code, workspacePath)
 
+    fun codeAnalyzeWorkManager(code: String): KotlinMcpResult =
+        codeAnalysisService.execute(CodeAnalysisAction.WORKMANAGER, code)
+
     // ---- kotlin_lsp ----
 
     fun lspFindDefinition(code: String, symbol: String?, workspacePath: String? = null): KotlinMcpResult =
@@ -248,6 +251,28 @@ class KotlinMcpServer(
     fun projectCheckCatalogUpdates(projectPath: String? = null): KotlinMcpResult =
         projectService.checkCatalogUpdates(projectPath)
 
+    /**
+     * Resolves effective Android runtime target metadata (applicationId, namespace, launcher activity, and CLI commands).
+     */
+    fun projectResolveAndroidRuntimeTarget(
+        manifestContentOrPath: String,
+        projectPath: String? = null,
+        buildScriptContent: String? = null
+    ): KotlinMcpResult =
+        projectService.resolveAndroidRuntimeTarget(manifestContentOrPath, projectPath, buildScriptContent)
+
+    /**
+     * Statically audits an Android project/snippet across targeted categories (Compose performance, permissions, R8).
+     */
+    fun projectAuditAndroidApp(
+        codeOrWorkspace: String,
+        projectPath: String? = null,
+        category: String? = null
+    ): KotlinMcpResult {
+        val catList = category?.let { com.gokorei.kotlinmcp.project.AndroidAuditCategory.fromString(it) }?.let { listOf(it) } ?: emptyList()
+        return projectService.auditAndroidApp(codeOrWorkspace, projectPath, catList)
+    }
+
 
 
     // ---- kotlin_refactor ----
@@ -292,6 +317,12 @@ class KotlinMcpServer(
      */
     fun analyzeAndroidDi(code: String): KotlinMcpResult =
         libraryAnalysisService.execute(LibraryAnalysisAction.ANALYZE_ANDROID_DI, code)
+
+    /**
+     * Statically inspects WorkManager CoroutineWorker and ListenableWorker implementations for Hilt DI, foreground types, and thread safety.
+     */
+    fun analyzeWorkManager(code: String): KotlinMcpResult =
+        libraryAnalysisService.execute(LibraryAnalysisAction.ANALYZE_WORKMANAGER, code)
 
     // ---- kotlin_lint ----
 
