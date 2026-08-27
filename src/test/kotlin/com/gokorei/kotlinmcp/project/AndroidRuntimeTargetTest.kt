@@ -236,4 +236,52 @@ class AndroidRuntimeTargetTest {
         assertEquals("com.example.flavors", success.metadata["namespace"])
         assertEquals("com.example.flavors.MainActivity", success.metadata["launcherActivity"])
     }
+
+    @Test
+    fun `prefers app module manifest when both root and app manifests exist`() {
+        val rootDir = File(tempDir, "multimodule").apply { mkdirs() }
+        
+        // Root manifest
+        val rootSrcMain = File(rootDir, "src/main").apply { mkdirs() }
+        File(rootSrcMain, "AndroidManifest.xml").writeText("""
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+                package="com.example.root">
+                <application>
+                    <activity android:name=".RootActivity" android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.intent.action.MAIN" />
+                            <category android:name="android.intent.category.LAUNCHER" />
+                        </intent-filter>
+                    </activity>
+                </application>
+            </manifest>
+        """.trimIndent())
+
+        // App module manifest
+        val appSrcMain = File(rootDir, "app/src/main").apply { mkdirs() }
+        File(appSrcMain, "AndroidManifest.xml").writeText("""
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+                package="com.example.appmodule">
+                <application>
+                    <activity android:name=".AppMainActivity" android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.intent.action.MAIN" />
+                            <category android:name="android.intent.category.LAUNCHER" />
+                        </intent-filter>
+                    </activity>
+                </application>
+            </manifest>
+        """.trimIndent())
+
+        val result = projectService.resolveAndroidRuntimeTarget(
+            manifestContentOrPath = "",
+            projectPath = rootDir.absolutePath,
+            buildScriptContent = null
+        )
+
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertEquals("com.example.appmodule", success.metadata["applicationId"])
+        assertEquals("com.example.appmodule.AppMainActivity", success.metadata["launcherActivity"])
+    }
 }

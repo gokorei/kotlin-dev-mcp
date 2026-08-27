@@ -33,48 +33,60 @@ class AndroidAppAuditor {
         projectPath: String? = null,
         categories: List<AndroidAuditCategory> = emptyList()
     ): KotlinMcpResult {
-        val targetCategories = if (categories.isEmpty()) AndroidAuditCategory.entries else categories.distinct()
-        val findingsByCategory = mutableMapOf<AndroidAuditCategory, MutableList<String>>()
+        return try {
+            val targetCategories = if (categories.isEmpty()) AndroidAuditCategory.entries else categories.distinct()
+            val findingsByCategory = mutableMapOf<AndroidAuditCategory, MutableList<String>>()
 
-        for (category in targetCategories) {
-            val list = mutableListOf<String>()
-            when (category) {
-                AndroidAuditCategory.COMPOSE_PERFORMANCE -> auditComposePerformance(code, projectPath, list)
-                AndroidAuditCategory.RUNTIME_PERMISSIONS -> {
-                    val errorResult = auditRuntimePermissions(code, projectPath, list)
-                    if (errorResult != null) return errorResult
+            for (category in targetCategories) {
+                val list = mutableListOf<String>()
+                when (category) {
+                    AndroidAuditCategory.COMPOSE_PERFORMANCE -> auditComposePerformance(code, projectPath, list)
+                    AndroidAuditCategory.RUNTIME_PERMISSIONS -> {
+                        val errorResult = auditRuntimePermissions(code, projectPath, list)
+                        if (errorResult != null) return errorResult
+                    }
+                    AndroidAuditCategory.R8_MINIFICATION -> auditR8Minification(code, projectPath, list)
                 }
-                AndroidAuditCategory.R8_MINIFICATION -> auditR8Minification(code, projectPath, list)
-            }
-            if (list.isNotEmpty()) {
-                findingsByCategory[category] = list
-            }
-        }
-
-        val totalFindings = findingsByCategory.values.sumOf { it.size }
-        val content = buildString {
-            appendLine("# Android App Audit (${targetCategories.joinToString { it.name }})")
-            appendLine("Found $totalFindings potential issue(s) across ${targetCategories.size} checked category/categories.")
-            appendLine()
-
-            if (findingsByCategory.isEmpty()) {
-                appendLine("✅ No obvious Android anti-patterns or performance issues detected across the specified categories.")
-            } else {
-                for ((cat, findings) in findingsByCategory) {
-                    appendLine("## 🔍 ${cat.name} (${findings.size})")
-                    findings.forEach { appendLine("- $it") }
-                    appendLine()
+                if (list.isNotEmpty()) {
+                    findingsByCategory[category] = list
                 }
             }
-        }
 
-        return KotlinMcpResult.Success(
-            content = content,
-            metadata = mapOf(
-                "totalFindings" to totalFindings.toString(),
-                "checkedCategories" to targetCategories.joinToString(",") { it.name }
+            val totalFindings = findingsByCategory.values.sumOf { it.size }
+            val content = buildString {
+                appendLine("# Android App Audit (${targetCategories.joinToString { it.name }})")
+                appendLine("Found $totalFindings potential issue(s) across ${targetCategories.size} checked category/categories.")
+                appendLine()
+
+                if (findingsByCategory.isEmpty()) {
+                    appendLine("✅ No obvious Android anti-patterns or performance issues detected across the specified categories.")
+                } else {
+                    for ((cat, findings) in findingsByCategory) {
+                        appendLine("## 🔍 ${cat.name} (${findings.size})")
+                        findings.forEach { appendLine("- $it") }
+                        appendLine()
+                    }
+                }
+            }
+
+            KotlinMcpResult.Success(
+                content = content,
+                metadata = mapOf(
+                    "totalFindings" to totalFindings.toString(),
+                    "checkedCategories" to targetCategories.joinToString(",") { it.name }
+                )
             )
-        )
+        } catch (e: java.io.IOException) {
+            KotlinMcpResult.Error(
+                code = "INPUT_READ_ERROR",
+                message = "Failed to read input files during Android audit: ${e.message}"
+            )
+        } catch (e: Exception) {
+            KotlinMcpResult.Error(
+                code = "INPUT_READ_ERROR",
+                message = "Failed to process Android audit: ${e.message}"
+            )
+        }
     }
 
     private fun auditComposePerformance(code: String, projectPath: String?, findings: MutableList<String>) {
@@ -97,14 +109,10 @@ class AndroidAppAuditor {
                 // 1. Check for unstable collection parameter types
                 val valueParams = function.valueParameters
                 for (param in valueParams) {
-                    val typeElement = param.typeReference?.typeElement
-                    val typeText = param.typeReference?.text?.trim() ?: ""
-                    val baseTypeName = when (typeElement) {
-                        is KtUserType -> typeElement.referencedName
-                        else -> typeText.substringBefore("<").substringAfterLast(".").trim()
-                    }
+                    val baseTypeName = extractBaseTypeName(param.typeReference?.typeElement)
                     val isCollection = baseTypeName in setOf("List", "Set", "Map", "Collection")
                     if (isCollection) {
+                        val typeText = param.typeReference?.text?.trim() ?: baseTypeName
                         findings.add("⚠️ `@Composable fun $fnName`: Parameter `${param.name}: $typeText` uses an unstable standard collection type. Use `kotlinx.collections.immutable.ImmutableList` / `ImmutableSet` / `ImmutableMap` or wrap in a `@Immutable` data class to prevent unnecessary recompositions.")
                     }
                 }
@@ -132,6 +140,14 @@ class AndroidAppAuditor {
                 })
             }
         })
+    }
+
+    private fun extractBaseTypeName(typeElement: KtTypeElement?): String? {
+        return when (typeElement) {
+            is KtUserType -> typeElement.referencedName
+            is KtNullableType -> extractBaseTypeName(typeElement.innerType)
+            else -> null
+        }
     }
 
     private fun auditRuntimePermissions(
@@ -188,7 +204,7 @@ class AndroidAppAuditor {
     }
 
     private fun auditR8Minification(code: String, projectPath: String?, findings: MutableList<String>) {
-        val buildContent = if (code.contains("MinifyEnabled") || code.contains("minifyEnabled")) {
+        val buildContent = if (code.isNotBlank() && !code.trim().startsWith("<")) {
             code
         } else {
             resolveBuildScriptContent(projectPath)
@@ -241,7 +257,8 @@ class AndroidAppAuditor {
 
         val sb = StringBuilder()
         dir.walkTopDown().maxDepth(5).filter { it.isFile && it.name.endsWith(".kt") }.take(20).forEach {
-            sb.appendLine(runCatching { it.readText() }.getOrNull().orEmpty())
+            val text = it.readText()
+            sb.appendLine(text)
         }
         return sb.toString()
     }

@@ -377,8 +377,8 @@ class AndroidManifestInspector {
 
         if (projectPath != null) {
             val candidatePaths = listOf(
-                "src/main/AndroidManifest.xml",
                 "app/src/main/AndroidManifest.xml",
+                "src/main/AndroidManifest.xml",
                 "androidApp/src/main/AndroidManifest.xml",
                 "composeApp/src/androidMain/AndroidManifest.xml"
             )
