@@ -133,13 +133,15 @@ object ToolRegistrar {
 
         // 4. kotlin_project_inspect
         register("kotlin_project_inspect") {
-            description = "READ-ONLY. Gradle build script and project layout inspection."
+            description = "READ-ONLY. Gradle build script, version catalog, dependencies, Maven version discovery, and project layout inspection."
             readOnly = true
-            actions("structure", "kmp_targets", "dependencies", "schema_digest", "diagnose_build", "layout_inventory", "vulnerabilities", "package_api", "coverage_report", "android_manifest", "android_config")
-            param("action", "Project action: 'structure' (default), 'kmp_targets', 'dependencies', 'schema_digest', 'diagnose_build', 'layout_inventory', 'vulnerabilities', 'package_api', 'coverage_report', 'android_manifest', 'android_config'")
-            param("buildScriptContent", "Content of build.gradle.kts (or AndroidManifest.xml for android_manifest)")
+            actions("structure", "kmp_targets", "dependencies", "schema_digest", "diagnose_build", "layout_inventory", "vulnerabilities", "package_api", "coverage_report", "android_manifest", "android_config", "resolve_versions", "latest_version", "catalog_updates")
+            param("action", "Project action: 'structure' (default), 'kmp_targets', 'dependencies', 'schema_digest', 'diagnose_build', 'layout_inventory', 'vulnerabilities', 'package_api', 'coverage_report', 'android_manifest', 'android_config', 'resolve_versions', 'latest_version', 'catalog_updates'")
+            param("buildScriptContent", "Content of build.gradle.kts (or coordinate / manifest content)")
             param("projectPath", "Path to Gradle project root directory (aliases: workspacePath, path)")
-            param("packageName", "Target package for package_api (e.g. com.example.app)")
+            param("packageName", "Target package for package_api (e.g. com.example.app) or Maven coordinate for resolve_versions/latest_version")
+            param("coordinate", "Target Maven coordinate 'group:artifact' for resolve_versions and latest_version (e.g. io.ktor:ktor-client-core)")
+            param("repositoryUrl", "Optional custom Maven repository URL for resolve_versions/latest_version")
             param("settingsContent", "Optional settings.gradle.kts content for diagnose_build")
             param("gradlePropertiesContent", "Optional gradle.properties content for diagnose_build")
             param("connectTimeoutMs", "Optional connect timeout in milliseconds for OSV vulnerability check (default: 4000)")
@@ -148,6 +150,8 @@ object ToolRegistrar {
             handleSimple { k, a ->
                 val projectPath = a["projectPath"] ?: a["workspacePath"] ?: a["path"]
                 val script = a["buildScriptContent"].orEmpty()
+                val targetCoordinate = a["coordinate"] ?: a["packageName"] ?: script
+                val customRepo = a["repositoryUrl"]
                 dispatchAction(
                     action = a["action"],
                     defaultAction = "structure",
@@ -168,7 +172,10 @@ object ToolRegistrar {
                         "package_api" to { k.projectPackageApi(projectPath, a["packageName"]) },
                         "coverage_report" to { k.projectCoverageReport(projectPath) },
                         "android_manifest" to { k.projectInspectAndroidManifest(script, projectPath) },
-                        "android_config" to { k.projectAuditAndroidConfig(script) }
+                        "android_config" to { k.projectAuditAndroidConfig(script) },
+                        "resolve_versions" to { k.projectResolveVersions(targetCoordinate, customRepo) },
+                        "latest_version" to { k.projectGetLatestVersion(targetCoordinate, customRepo) },
+                        "catalog_updates" to { k.projectCheckCatalogUpdates(projectPath) }
                     )
                 )
             }

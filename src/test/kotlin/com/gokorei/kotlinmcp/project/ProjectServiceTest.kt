@@ -746,4 +746,27 @@ class ProjectServiceTest {
         val success = result as KotlinMcpResult.Success
         assertTrue(success.content.contains("commons-compress"), "expected commons-compress flagged via offline fallback: ${success.content}")
     }
+
+    @Test
+    fun `resolve_versions and latest_version handle invalid arguments safely`() {
+        val badResult = projectService.resolveVersions("invalid-coord-without-colon")
+        assertTrue(badResult.isError)
+        assertEquals("INVALID_ARGUMENTS", (badResult as KotlinMcpResult.Error).code)
+
+        val badLatest = projectService.getLatestVersion("")
+        assertTrue(badLatest.isError)
+        assertEquals("INVALID_ARGUMENTS", (badLatest as KotlinMcpResult.Error).code)
+    }
+
+    @Test
+    fun `execute dispatches RESOLVE_VERSIONS and LATEST_VERSION`() {
+        val result = projectService.execute(
+            action = ProjectAction.RESOLVE_VERSIONS,
+            buildScriptContent = "",
+            packageName = "invalid:format:too:many:colons"
+        )
+        assertTrue(result.isError)
+        assertEquals("INVALID_ARGUMENTS", (result as KotlinMcpResult.Error).code)
+    }
 }
+

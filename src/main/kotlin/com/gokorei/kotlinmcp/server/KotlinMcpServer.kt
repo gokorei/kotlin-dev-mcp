@@ -230,6 +230,24 @@ class KotlinMcpServer(
     fun projectAuditAndroidConfig(buildScriptContent: String): KotlinMcpResult =
         projectService.execute(ProjectAction.AUDIT_ANDROID_CONFIG, buildScriptContent = buildScriptContent)
 
+    /**
+     * Resolves published Maven versions for a given coordinate (e.g. 'io.ktor:ktor-client-core').
+     */
+    fun projectResolveVersions(coordinate: String, customRepoUrl: String? = null): KotlinMcpResult =
+        projectService.resolveVersions(coordinate, customRepoUrl)
+
+    /**
+     * Gets the latest stable published version for a given Maven coordinate.
+     */
+    fun projectGetLatestVersion(coordinate: String, customRepoUrl: String? = null): KotlinMcpResult =
+        projectService.getLatestVersion(coordinate, customRepoUrl)
+
+    /**
+     * Audits all declared dependencies in gradle/libs.versions.toml for available newer versions.
+     */
+    fun projectCheckCatalogUpdates(projectPath: String? = null): KotlinMcpResult =
+        projectService.checkCatalogUpdates(projectPath)
+
 
 
     // ---- kotlin_refactor ----

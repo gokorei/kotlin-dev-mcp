@@ -49,16 +49,18 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 
 ### `kotlin_project_inspect`
 
-**Description:** Gradle build script and project layout inspection.
+**Description:** Gradle build script, version catalog, dependencies, Maven version discovery, and project layout inspection.
 
-**Supported Actions:** `structure`, `kmp_targets`, `dependencies`, `schema_digest`, `diagnose_build`, `layout_inventory`, `vulnerabilities`, `package_api`, `coverage_report`, `android_manifest`, `android_config`
+**Supported Actions:** `structure`, `kmp_targets`, `dependencies`, `schema_digest`, `diagnose_build`, `layout_inventory`, `vulnerabilities`, `package_api`, `coverage_report`, `android_manifest`, `android_config`, `resolve_versions`, `latest_version`, `catalog_updates`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | Project action: 'structure' (default), 'kmp_targets', 'dependencies', 'schema_digest', 'diagnose_build', 'layout_inventory', 'vulnerabilities', 'package_api', 'coverage_report', 'android_manifest', 'android_config' |
-| `buildScriptContent` | `string` | No | Content of build.gradle.kts (or AndroidManifest.xml for android_manifest) |
+| `action` | `string` | No | Project action: 'structure' (default), 'kmp_targets', 'dependencies', 'schema_digest', 'diagnose_build', 'layout_inventory', 'vulnerabilities', 'package_api', 'coverage_report', 'android_manifest', 'android_config', 'resolve_versions', 'latest_version', 'catalog_updates' |
+| `buildScriptContent` | `string` | No | Content of build.gradle.kts (or coordinate / manifest content) |
 | `projectPath` | `string` | No | Path to Gradle project root directory (aliases: workspacePath, path) |
-| `packageName` | `string` | No | Target package for package_api (e.g. com.example.app) |
+| `packageName` | `string` | No | Target package for package_api (e.g. com.example.app) or Maven coordinate for resolve_versions/latest_version |
+| `coordinate` | `string` | No | Target Maven coordinate 'group:artifact' for resolve_versions and latest_version (e.g. io.ktor:ktor-client-core) |
+| `repositoryUrl` | `string` | No | Optional custom Maven repository URL for resolve_versions/latest_version |
 | `settingsContent` | `string` | No | Optional settings.gradle.kts content for diagnose_build |
 | `gradlePropertiesContent` | `string` | No | Optional gradle.properties content for diagnose_build |
 | `connectTimeoutMs` | `string` | No | Optional connect timeout in milliseconds for OSV vulnerability check (default: 4000) |

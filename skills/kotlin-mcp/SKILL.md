@@ -47,7 +47,7 @@ By default, `kotlin-mcp` tools should be registered **eagerly** (`"eager": true`
 | `kotlin_docs_read` | `search`, `lookup`, `explain` | **Documentation**: Query stdlib references, signature lookups, and language feature explanations. | Low-Med (Use `preset="compact"`) |
 | `kotlin_code_analyze` | `inspect`, `nullability`, `coroutines`, `compose`, `file_context` | **Code Analysis**: In-memory PSI AST analysis for single-file dependencies, null safety, Compose anti-patterns, and coroutines scopes. | Low-Med |
 | `kotlin_text_lsp_read` | `definition`, `references`, `completion`, `workspace_search`, `workspace_references`, `type_hierarchy`, `call_hierarchy` | **Text / LSP**: Symbol definition lookup, workspace search, reference locations, and type/call hierarchies. | Med |
-| `kotlin_project_inspect` | `structure`, `kmp_targets`, `dependencies`, `diagnose_build`, `layout_inventory`, `vulnerabilities`, `package_api`, `coverage_report` | **Project**: Gradle build script inspection, KMP targets, security advisories (CVEs), package API dumping, and JaCoCo coverage summaries. | Med |
+| `kotlin_project_inspect` | `structure`, `kmp_targets`, `dependencies`, `diagnose_build`, `layout_inventory`, `vulnerabilities`, `package_api`, `coverage_report`, `resolve_versions`, `latest_version`, `catalog_updates` | **Project**: Gradle build script inspection, KMP targets, security advisories (CVEs), Maven version resolution, version catalog audits, package API dumping, and JaCoCo coverage summaries. | Med |
 
 ### Mutating / Edit Tools (`readOnly = false`)
 
