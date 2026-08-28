@@ -299,9 +299,14 @@ val uberJar = tasks.register<Jar>("uberJar") {
             "Implementation-Version" to project.version
         )
     }
-    val dependencies = configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) }
-    from(dependencies)
+    // 1. Application classes and resources take priority over dependencies under EXCLUDE
     with(tasks.jar.get())
+    // 2. Unpack runtime dependencies, excluding signed JAR manifest signatures
+    val dependencies = configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) }
+    from(dependencies) {
+        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    }
+    dependsOn(tasks.jar, tasks.processResources)
 }
 
 tasks.assemble {

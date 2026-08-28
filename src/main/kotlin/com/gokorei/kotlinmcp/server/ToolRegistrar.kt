@@ -16,6 +16,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import java.io.File
+import io.github.oshai.kotlinlogging.KotlinLogging
 
 /**
  * Registers the consolidated Kotlin developer tools on the MCP [Server].
@@ -24,6 +25,8 @@ import java.io.File
  * action parameters to drastically reduce LLM prompt token consumption.
  */
 object ToolRegistrar {
+
+    private val logger = KotlinLogging.logger {}
 
     fun registerReadOnlyTools(server: Server, kotlinServer: KotlinMcpServer) {
         collectReadOnlyTools(kotlinServer) { name, builder ->
@@ -539,7 +542,17 @@ object ToolRegistrar {
                 )
             ) { request ->
                 val args = request.arguments.orEmpty()
-                toCallToolResult(finalHandler(args))
+                val result = try {
+                    finalHandler(args)
+                } catch (t: Throwable) {
+                    logger.error(t) { "Unexpected runtime error while executing MCP tool '$name'" }
+                    KotlinMcpResult.Error(
+                        message = "Internal MCP server error while executing tool '$name': ${t.message ?: t.javaClass.name}. If this persists after updating code or dependencies, rebuild the server artifact with `./gradlew uberJar` and restart the MCP server process.",
+                        code = "INTERNAL_SERVER_ERROR",
+                        requireAnotherCall = false
+                    )
+                }
+                toCallToolResult(result)
             }
         }
     }

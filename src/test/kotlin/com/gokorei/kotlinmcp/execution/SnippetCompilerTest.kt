@@ -174,6 +174,24 @@ class SnippetCompilerTest {
     }
 
     @Test
+    fun `materializeBundledSnippetClasspath rejects invalid non-zip files and handles corrupted resources safely`() {
+        SnippetCompiler.resetBundledSnippetClasspathCache()
+        val corruptLoader = object : ClassLoader(SnippetCompiler::class.java.classLoader) {
+            override fun getResourceAsStream(name: String): java.io.InputStream? {
+                return when (name) {
+                    "snippet-classpath/snippet.classpath.txt" -> "corrupted.jar\n".byteInputStream()
+                    "snippet-classpath/corrupted.jar" -> "NOT_A_VALID_ZIP_HEADER".byteInputStream()
+                    else -> super.getResourceAsStream(name)
+                }
+            }
+        }
+
+        val result = SnippetCompiler.materializeBundledSnippetClasspath(corruptLoader)
+        assertTrue(result.isEmpty(), "Expected empty list when all bundled jars are corrupt, got: $result")
+        SnippetCompiler.resetBundledSnippetClasspathCache()
+    }
+
+    @Test
     fun `external library without classpath is a hard unresolved error`() {
         val snippet = """
             import org.example.missinglib.Widget
