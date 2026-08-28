@@ -32,15 +32,21 @@ class ContractsAnalyzer {
                                 }
 
                                 // Check contract DSL elements
-                                stmt.accept(object : KtTreeVisitorVoid() {
-                                    override fun visitCallExpression(innerCall: KtCallExpression) {
-                                        super.visitCallExpression(innerCall)
-                                        val innerCallee = innerCall.calleeExpression?.text
-                                        if (innerCallee == "returns" || innerCallee == "returnsNotNull" || innerCallee == "callsInPlace") {
-                                            // Valid standard effect
+                                val lambdaArg = stmt.lambdaArguments.firstOrNull()?.getLambdaExpression()
+                                    ?: stmt.valueArguments.mapNotNull { (it.getArgumentExpression() as? KtLambdaExpression) }.firstOrNull()
+                                
+                                val validEffectRoots = setOf("returns", "returnsNotNull", "callsInPlace", "implies")
+                                lambdaArg?.bodyExpression?.statements?.forEach { contractStmt ->
+                                    contractStmt.accept(object : KtTreeVisitorVoid() {
+                                        override fun visitCallExpression(innerCall: KtCallExpression) {
+                                            super.visitCallExpression(innerCall)
+                                            val innerCallee = innerCall.calleeExpression?.text
+                                            if (innerCallee != null && innerCallee !in validEffectRoots) {
+                                                findings.add("⚠️ `fun $fnName`: Unsupported contract effect call `$innerCallee()` inside `contract { ... }` block.")
+                                            }
                                         }
-                                    }
-                                })
+                                    })
+                                }
                             }
                         }
                     }

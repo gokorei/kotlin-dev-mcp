@@ -17,6 +17,7 @@ interface SemanticService {
     fun checkExperimentalOptIn(code: String, classpath: List<String> = emptyList()): KotlinMcpResult
     fun checkDeprecated(code: String, classpath: List<String> = emptyList()): KotlinMcpResult
     fun acquireSession(code: String, classpath: List<String> = emptyList()): K2AnalysisSession?
+    fun close() {}
 }
 
 /**
@@ -32,6 +33,10 @@ class DefaultSemanticService(
     private val contractsAnalyzer = ContractsAnalyzer()
     private val expectActualAnalyzer = ExpectActualAnalyzer()
     private val optInAndDeprecationAnalyzer = OptInAndDeprecationAnalyzer()
+
+    override fun close() {
+        sessionProvider.dispose()
+    }
 
     override fun acquireSession(code: String, classpath: List<String>): K2AnalysisSession? {
         return sessionProvider.acquireSession(code, classpath)

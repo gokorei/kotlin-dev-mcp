@@ -43,6 +43,35 @@ class KotlinMcpServer(
     private val mutationService: MutationService = DefaultMutationService()
 ) {
 
+    constructor(
+        docService: DocService = DefaultDocService(),
+        semanticEngine: K2SemanticEngine = DefaultK2SemanticEngine(),
+        codeAnalysisService: CodeAnalysisService = DefaultCodeAnalysisService(),
+        diagnosticService: DiagnosticService = DefaultDiagnosticService(),
+        projectService: ProjectService = DefaultProjectService(),
+        refactoringService: RefactoringService = DefaultRefactoringService(),
+        runSnippetService: RunSnippetService = DefaultRunSnippetService(),
+        gradleRunService: GradleRunService = DefaultGradleRunService(),
+        lspService: LspService? = null,
+        libraryAnalysisService: LibraryAnalysisService = DefaultLibraryAnalysisService(),
+        lintService: LintService = DefaultLintService(),
+        mutationService: MutationService = DefaultMutationService()
+    ) : this(
+        docService = docService,
+        semanticEngine = semanticEngine,
+        semanticService = DefaultSemanticService(),
+        codeAnalysisService = codeAnalysisService,
+        diagnosticService = diagnosticService,
+        projectService = projectService,
+        refactoringService = refactoringService,
+        runSnippetService = runSnippetService,
+        gradleRunService = gradleRunService,
+        lspService = lspService,
+        libraryAnalysisService = libraryAnalysisService,
+        lintService = lintService,
+        mutationService = mutationService
+    )
+
     private val logger = KotlinLogging.logger {}
     private val textService: LspService = lspService ?: DefaultLspService(docService, semanticEngine)
 
@@ -145,6 +174,8 @@ class KotlinMcpServer(
             .onFailure { logger.warn(it) { "Failed to close LSP text service during shutdown." } }
         runCatching { semanticEngine.close() }
             .onFailure { logger.warn(it) { "Failed to close K2 semantic engine during shutdown." } }
+        runCatching { semanticService.close() }
+            .onFailure { logger.warn(it) { "Failed to close semantic service during shutdown." } }
         runCatching { mutationService.close() }
             .onFailure { logger.warn(it) { "Failed to close mutation service during shutdown." } }
     }

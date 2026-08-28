@@ -19,6 +19,15 @@ class WhenExhaustivenessAnalyzer {
         val sealedHierarchies = mutableMapOf<String, MutableSet<String>>()
         val enumDeclarations = mutableMapOf<String, MutableSet<String>>()
 
+        fun extractTypeName(typeRef: KtTypeReference?): String? {
+            val typeElement = typeRef?.typeElement ?: return null
+            return when (typeElement) {
+                is KtUserType -> typeElement.referencedName
+                is KtNullableType -> (typeElement.innerType as? KtUserType)?.referencedName
+                else -> null
+            }
+        }
+
         file.accept(object : KtTreeVisitorVoid() {
             override fun visitClass(klass: KtClass) {
                 super.visitClass(klass)
@@ -38,9 +47,9 @@ class WhenExhaustivenessAnalyzer {
                     }
                 }
 
-                // Check subclasses declared inside or outside
+                // Check subclasses declared inside or outside via PSI type elements
                 for (superEntry in klass.superTypeListEntries) {
-                    val superName = superEntry.typeReference?.text?.trim()?.substringBefore("<")?.substringAfterLast(".")?.trim() ?: continue
+                    val superName = extractTypeName(superEntry.typeReference) ?: continue
                     sealedHierarchies.computeIfAbsent(superName) { mutableSetOf() }.add(name)
                 }
             }
@@ -49,7 +58,7 @@ class WhenExhaustivenessAnalyzer {
                 super.visitObjectDeclaration(declaration)
                 val name = declaration.name ?: return
                 for (superEntry in declaration.superTypeListEntries) {
-                    val superName = superEntry.typeReference?.text?.trim()?.substringBefore("<")?.substringAfterLast(".")?.trim() ?: continue
+                    val superName = extractTypeName(superEntry.typeReference) ?: continue
                     sealedHierarchies.computeIfAbsent(superName) { mutableSetOf() }.add(name)
                 }
             }
@@ -61,24 +70,33 @@ class WhenExhaustivenessAnalyzer {
                 super.visitWhenExpression(expression)
 
                 val subject = expression.subjectExpression ?: return
-                val subjectText = subject.text.trim()
+                val subjectName = when (subject) {
+                    is KtNameReferenceExpression -> subject.getReferencedName()
+                    is KtDotQualifiedExpression -> (subject.selectorExpression as? KtNameReferenceExpression)?.getReferencedName()
+                    else -> null
+                }
                 val entries = expression.entries
 
                 val hasElse = entries.any { it.isElse }
                 if (hasElse) return
 
-                // Determine covered branch types / entries
+                // Determine covered branch types / entries via PSI AST nodes
                 val coveredBranches = mutableSetOf<String>()
                 for (entry in entries) {
                     for (condition in entry.conditions) {
                         when (condition) {
                             is KtWhenConditionIsPattern -> {
-                                val typeText = condition.typeReference?.text?.trim()?.substringAfterLast(".") ?: ""
-                                if (typeText.isNotBlank()) coveredBranches.add(typeText)
+                                val typeName = extractTypeName(condition.typeReference)
+                                if (typeName != null) coveredBranches.add(typeName)
                             }
                             is KtWhenConditionWithExpression -> {
-                                val exprText = condition.expression?.text?.trim()?.substringAfterLast(".") ?: ""
-                                if (exprText.isNotBlank()) coveredBranches.add(exprText)
+                                val expr = condition.expression
+                                val name = when (expr) {
+                                    is KtDotQualifiedExpression -> (expr.selectorExpression as? KtNameReferenceExpression)?.getReferencedName()
+                                    is KtNameReferenceExpression -> expr.getReferencedName()
+                                    else -> null
+                                }
+                                if (name != null) coveredBranches.add(name)
                             }
                             else -> {}
                         }
@@ -87,10 +105,10 @@ class WhenExhaustivenessAnalyzer {
 
                 // Match against known sealed hierarchies
                 for ((sealedName, subTypes) in sealedHierarchies) {
-                    if (subTypes.isNotEmpty() && (coveredBranches.any { it in subTypes } || subjectText.contains(sealedName))) {
+                    if (subTypes.isNotEmpty() && (coveredBranches.any { it in subTypes } || (subjectName != null && subjectName == sealedName))) {
                         val missing = subTypes - coveredBranches
                         if (missing.isNotEmpty()) {
-                            findings.add("⚠️ `when ($subjectText)`: Missing branches for sealed type `$sealedName`: ${missing.joinToString(", ") { "`$it`" }}")
+                            findings.add("⚠️ `when (${subject.text})`: Missing branches for sealed type `$sealedName`: ${missing.joinToString(", ") { "`$it`" }}")
                             for (m in missing) {
                                 synthesizedBranches.add("is $sealedName.$m -> TODO()")
                             }
@@ -100,10 +118,10 @@ class WhenExhaustivenessAnalyzer {
 
                 // Match against known enums
                 for ((enumName, enumConstants) in enumDeclarations) {
-                    if (enumConstants.isNotEmpty() && (coveredBranches.any { it in enumConstants } || subjectText.contains(enumName))) {
+                    if (enumConstants.isNotEmpty() && (coveredBranches.any { it in enumConstants } || (subjectName != null && subjectName == enumName))) {
                         val missing = enumConstants - coveredBranches
                         if (missing.isNotEmpty()) {
-                            findings.add("⚠️ `when ($subjectText)`: Missing enum constants for `$enumName`: ${missing.joinToString(", ") { "`$it`" }}")
+                            findings.add("⚠️ `when (${subject.text})`: Missing enum constants for `$enumName`: ${missing.joinToString(", ") { "`$it`" }}")
                             for (m in missing) {
                                 synthesizedBranches.add("$enumName.$m -> TODO()")
                             }

@@ -45,21 +45,52 @@ class OptInAndDeprecationAnalyzer {
         })
 
         // Check call sites
+        fun hasOptInFor(caller: KtNamedFunction, marker: String): Boolean {
+            val fileAnnotations = file.fileAnnotationList?.annotationEntries.orEmpty()
+            for (entry in fileAnnotations) {
+                if (entry.shortName?.asString() == "OptIn") {
+                    val args = entry.valueArguments.mapNotNull { it.getArgumentExpression()?.text }
+                    if (args.isEmpty() || args.any { it.contains(marker) }) return true
+                }
+            }
+
+            var parent = caller.parent
+            while (parent != null) {
+                if (parent is KtClassOrObject) {
+                    for (entry in parent.annotationEntries) {
+                        if (entry.shortName?.asString() == "OptIn") {
+                            val args = entry.valueArguments.mapNotNull { it.getArgumentExpression()?.text }
+                            if (args.isEmpty() || args.any { it.contains(marker) }) return true
+                        }
+                        if (entry.shortName?.asString() == marker) return true
+                    }
+                }
+                parent = parent.parent
+            }
+
+            for (entry in caller.annotationEntries) {
+                if (entry.shortName?.asString() == "OptIn") {
+                    val args = entry.valueArguments.mapNotNull { it.getArgumentExpression()?.text }
+                    if (args.isEmpty() || args.any { it.contains(marker) }) return true
+                }
+                if (entry.shortName?.asString() == marker) return true
+            }
+
+            return false
+        }
+
         file.accept(object : KtTreeVisitorVoid() {
             override fun visitNamedFunction(function: KtNamedFunction) {
                 super.visitNamedFunction(function)
                 val callerName = function.name ?: "anonymous"
-                val hasOptInAnnotation = function.annotationEntries.any {
-                    it.shortName?.asString() == "OptIn"
-                }
 
                 function.accept(object : KtTreeVisitorVoid() {
                     override fun visitCallExpression(expression: KtCallExpression) {
                         super.visitCallExpression(expression)
                         val callee = expression.calleeExpression?.text ?: return
                         val marker = guardedDeclarations[callee]
-                        if (marker != null && !hasOptInAnnotation) {
-                            findings.add("⚠️ `fun $callerName`: Calls experimental `$callee()` which requires `@$marker`. Add `@OptIn($marker::class)` to the calling function or file.")
+                        if (marker != null && !hasOptInFor(function, marker)) {
+                            findings.add("⚠️ `fun $callerName`: Calls experimental `$callee()` which requires `@$marker`. Add `@OptIn($marker::class)` to the calling function, class, or file.")
                         }
                     }
                 })

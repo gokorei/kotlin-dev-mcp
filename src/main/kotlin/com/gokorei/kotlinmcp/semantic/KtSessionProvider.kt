@@ -38,13 +38,31 @@ class KtSessionProvider(
         val disposable: Disposable,
         val environment: KotlinCoreEnvironment,
         val psiFactory: KtPsiFactory
-    )
+    ) {
+        var activeLeases = 0
+        var isEvicted = false
+
+        fun retain() {
+            activeLeases++
+        }
+
+        fun release() {
+            activeLeases--
+            if (activeLeases <= 0 && isEvicted) {
+                runCatching { Disposer.dispose(disposable) }
+            }
+        }
+    }
 
     private val sessionCache = object : LinkedHashMap<String, CachedEnv>(maxSessions, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedEnv>?): Boolean {
             val shouldRemove = size > maxSessions
             if (shouldRemove && eldest != null) {
-                runCatching { Disposer.dispose(eldest.value.disposable) }
+                val env = eldest.value
+                env.isEvicted = true
+                if (env.activeLeases <= 0) {
+                    runCatching { Disposer.dispose(env.disposable) }
+                }
             }
             return shouldRemove
         }
@@ -58,14 +76,16 @@ class KtSessionProvider(
     fun acquireSession(code: String, classpath: List<String> = emptyList()): K2AnalysisSession? {
         if (!enableSemantic) return null
 
-        return try {
-            val cpKey = computeClasspathKey(classpath)
-            val cachedEnv = synchronized(lock) {
-                sessionCache.computeIfAbsent(cpKey) { key ->
-                    createEnvironment(classpath, key)
-                }
+        val cpKey = computeClasspathKey(classpath)
+        val cachedEnv = synchronized(lock) {
+            val env = sessionCache.computeIfAbsent(cpKey) { key ->
+                createEnvironment(classpath, key)
             }
+            env.retain()
+            env
+        }
 
+        return try {
             val hash = (code.hashCode() and 0x7fffffff).toString(16)
             val nano = System.nanoTime()
             val ktFile = cachedEnv.psiFactory.createFile("SemanticSnippet_${hash}_$nano.kt", code)
@@ -93,6 +113,10 @@ class KtSessionProvider(
             logger.warn(e) { "KtSessionProvider.acquireSession failed; falling back to syntactic PSI: ${e.message}" }
             val fallbackFile = K2SnippetFrontend.parsePsi(code)
             fallbackFile?.let { K2AnalysisSession(file = it) }
+        } finally {
+            synchronized(lock) {
+                cachedEnv.release()
+            }
         }
     }
 

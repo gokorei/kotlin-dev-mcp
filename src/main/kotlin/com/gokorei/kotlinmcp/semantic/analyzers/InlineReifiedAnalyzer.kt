@@ -42,14 +42,25 @@ class InlineReifiedAnalyzer {
                         }
                     }
 
-                    // 3. Functional parameters check
-                    val params = function.valueParameters
-                    for (param in params) {
-                        val typeRef = param.typeReference?.text?.trim() ?: continue
-                        val isFunctionalType = typeRef.contains("->") || typeRef.startsWith("Function") || typeRef.startsWith("() ->")
-                        if (!isFunctionalType && params.size == 1) {
-                            findings.add("ℹ️ `inline fun $fnName`: Function is marked `inline` but accepts no functional parameters. Inlining is primarily beneficial when taking lambda parameters or using reified types.")
+                    // 3. Functional parameters check via PSI AST
+                    fun isFunctionType(typeElement: org.jetbrains.kotlin.psi.KtTypeElement?): Boolean {
+                        return when (typeElement) {
+                            is org.jetbrains.kotlin.psi.KtFunctionType -> true
+                            is org.jetbrains.kotlin.psi.KtNullableType -> isFunctionType(typeElement.innerType)
+                            is org.jetbrains.kotlin.psi.KtUserType -> {
+                                val refName = typeElement.referencedName.orEmpty()
+                                refName == "Function" || refName.startsWith("Function") || refName == "KFunction"
+                            }
+                            else -> false
                         }
+                    }
+
+                    val hasReified = typeParams.any { it.hasModifier(KtTokens.REIFIED_KEYWORD) }
+                    val params = function.valueParameters
+                    val hasFunctionParam = params.any { isFunctionType(it.typeReference?.typeElement) }
+
+                    if (!hasReified && !hasFunctionParam) {
+                        findings.add("ℹ️ `inline fun $fnName`: Function is marked `inline` but has no functional parameters and no reified type parameters. Inlining is primarily beneficial when taking lambda parameters or using reified types.")
                     }
                 }
             }

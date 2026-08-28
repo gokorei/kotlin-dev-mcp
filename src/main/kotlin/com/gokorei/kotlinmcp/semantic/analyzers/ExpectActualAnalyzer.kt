@@ -55,34 +55,56 @@ class ExpectActualAnalyzer {
             }
 
             // Compare member functions
-            val expectMemberFns = expectClass.body?.functions.orEmpty().associateBy { it.name }
-            val actualMemberFns = actualClass.body?.functions.orEmpty().associateBy { it.name }
+            fun signatureOf(fn: KtNamedFunction): Pair<String, List<String>> {
+                val pTypes = fn.valueParameters.map { it.typeReference?.text?.trim() ?: "Any?" }
+                return Pair(fn.name.orEmpty(), pTypes)
+            }
 
-            for ((fnName, expectFn) in expectMemberFns) {
-                if (fnName == null) continue
-                val actualFn = actualMemberFns[fnName]
+            val expectMemberFns = expectClass.body?.functions.orEmpty().associateBy { signatureOf(it) }
+            val actualMemberFns = actualClass.body?.functions.orEmpty().associateBy { signatureOf(it) }
+
+            for ((sig, expectFn) in expectMemberFns) {
+                val (fnName, params) = sig
+                if (fnName.isBlank()) continue
+                val actualFn = actualMemberFns[sig]
                 if (actualFn == null) {
-                    findings.add("⚠️ `actual class $name`: Missing implementation of expected member function `fun $fnName()`.")
+                    findings.add("⚠️ `actual class $name`: Missing implementation of expected member function `fun $fnName(${params.joinToString(", ")})`.")
                 } else {
                     val expectRet = expectFn.typeReference?.text?.trim() ?: "Unit"
                     val actualRet = actualFn.typeReference?.text?.trim() ?: "Unit"
                     if (expectRet != actualRet) {
-                        findings.add("⚠️ `actual class $name`: Return type mismatch for `fun $fnName()`. Expected `$expectRet` but actual is `$actualRet`.")
+                        findings.add("⚠️ `actual class $name`: Return type mismatch for `fun $fnName(${params.joinToString(", ")})`. Expected `$expectRet` but actual is `$actualRet`.")
+                    }
+                    if (expectFn.hasModifier(KtTokens.SUSPEND_KEYWORD) != actualFn.hasModifier(KtTokens.SUSPEND_KEYWORD)) {
+                        findings.add("⚠️ `actual class $name`: Suspend modifier mismatch for `fun $fnName()`. Expect and actual must both be suspend or non-suspend.")
                     }
                 }
             }
         }
 
         // Compare top-level expect vs actual functions
-        for ((name, expectFn) in expectFunctions) {
-            val actualFn = actualFunctions[name]
+        fun topSignatureOf(fn: KtNamedFunction): Pair<String, List<String>> {
+            val pTypes = fn.valueParameters.map { it.typeReference?.text?.trim() ?: "Any?" }
+            return Pair(fn.name.orEmpty(), pTypes)
+        }
+
+        val expectTopFns = expectFunctions.values.associateBy { topSignatureOf(it) }
+        val actualTopFns = actualFunctions.values.associateBy { topSignatureOf(it) }
+
+        for ((sig, expectFn) in expectTopFns) {
+            val (fnName, params) = sig
+            if (fnName.isBlank()) continue
+            val actualFn = actualTopFns[sig]
             if (actualFn == null) {
-                findings.add("⚠️ `expect fun $name`: Missing corresponding `actual fun $name` declaration in the target platform module.")
+                findings.add("⚠️ `expect fun $fnName(${params.joinToString(", ")})`: Missing corresponding `actual fun` declaration in the target platform module.")
             } else {
                 val expectRet = expectFn.typeReference?.text?.trim() ?: "Unit"
                 val actualRet = actualFn.typeReference?.text?.trim() ?: "Unit"
                 if (expectRet != actualRet) {
-                    findings.add("⚠️ `actual fun $name`: Return type mismatch. Expected `$expectRet` but actual is `$actualRet`.")
+                    findings.add("⚠️ `actual fun $fnName(${params.joinToString(", ")})`: Return type mismatch. Expected `$expectRet` but actual is `$actualRet`.")
+                }
+                if (expectFn.hasModifier(KtTokens.SUSPEND_KEYWORD) != actualFn.hasModifier(KtTokens.SUSPEND_KEYWORD)) {
+                    findings.add("⚠️ `actual fun $fnName`: Suspend modifier mismatch. Expect and actual must both be suspend or non-suspend.")
                 }
             }
         }

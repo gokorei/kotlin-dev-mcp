@@ -156,11 +156,13 @@ class GoldenPsiSemanticTestSuite {
         val optInResult = server.checkExperimentalOptIn(snippet)
         assertTrue(optInResult.isSuccess)
         val optInSuccess = optInResult as KotlinMcpResult.Success
-        assertTrue(optInSuccess.content.contains("InternalEngineApi") || optInSuccess.content.contains("@OptIn"))
+        assertEquals("1", optInSuccess.metadata["findingsCount"])
+        assertTrue(optInSuccess.content.contains("bootEngine") && optInSuccess.content.contains("InternalEngineApi"))
 
         val depResult = server.checkDeprecated(snippet)
         assertTrue(depResult.isSuccess)
         val depSuccess = depResult as KotlinMcpResult.Success
-        assertTrue(depSuccess.content.contains("startNewEngine(fast = true)"))
+        assertEquals("1", depSuccess.metadata["findingsCount"])
+        assertTrue(depSuccess.content.contains("startOldEngine") && depSuccess.content.contains("startNewEngine(fast = true)"))
     }
 }

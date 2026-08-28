@@ -21,14 +21,16 @@ class ValueClassAnalyzer {
                 super.visitClass(klass)
                 val className = klass.name ?: return
 
-                val isValueClass = klass.hasModifier(KtTokens.VALUE_KEYWORD) ||
-                    klass.annotationEntries.any { it.shortName?.asString() == "JvmInline" }
+                val isValueClass = klass.hasModifier(KtTokens.VALUE_KEYWORD) || klass.isValue()
 
                 if (!isValueClass) return
                 valueClassCount++
 
-                val hasJvmInline = klass.annotationEntries.any { it.shortName?.asString() == "JvmInline" }
-                if (klass.hasModifier(KtTokens.VALUE_KEYWORD) && !hasJvmInline) {
+                val hasJvmInline = klass.annotationEntries.any {
+                    val name = it.shortName?.asString()
+                    name == "JvmInline" || name == "kotlin.jvm.JvmInline"
+                }
+                if (!hasJvmInline) {
                     findings.add("⚠️ `value class $className`: Missing `@JvmInline` annotation on JVM target. Add `@JvmInline` to prevent compilation errors.")
                 }
 

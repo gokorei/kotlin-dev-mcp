@@ -206,13 +206,16 @@ object ToolRegistrar {
             required("code")
             handleSimple { k, a ->
                 val code = a["code"].orEmpty()
-                val cp = a["classpath"]?.split(",", ";")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
+                val projectPath = a["projectPath"] ?: a["workspacePath"] ?: a["path"]
+                val projectCp = com.gokorei.kotlinmcp.execution.SnippetCompiler.detectProjectClasspath(projectPath)
+                val explicitCp = a["classpath"]?.split(",", ";")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
+                val cp = (explicitCp + projectCp).distinct()
                 dispatchAction(
                     action = a["action"],
                     defaultAction = "check",
                     args = a,
                     handlers = mapOf(
-                        "check" to { k.checkSnippet(code, cp, a["projectPath"]) },
+                        "check" to { k.checkSnippet(code, explicitCp, projectPath) },
                         "mutate" to { k.mutationTest(code, a["testCode"], a["preset"]) },
                         "mutation_test" to { k.mutationTest(code, a["testCode"], a["preset"]) },
                         "when_exhaustiveness" to { k.checkWhenExhaustiveness(code, cp) },
