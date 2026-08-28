@@ -1928,6 +1928,96 @@ public final class com/gokorei/kotlinmcp/refactoring/RxJavaToCoroutinesRefactore
 	public final fun migrateRxJavaToCoroutines (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
+public final class com/gokorei/kotlinmcp/semantic/DefaultSemanticService : com/gokorei/kotlinmcp/semantic/SemanticService {
+	public fun <init> ()V
+	public fun <init> (Lcom/gokorei/kotlinmcp/semantic/KtSessionProvider;)V
+	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/semantic/KtSessionProvider;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun acquireSession (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;
+	public fun checkContracts (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun checkDeprecated (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun checkExpectActual (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun checkExperimentalOptIn (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun checkInlineReified (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun checkValueClass (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public fun checkWhenExhaustiveness (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/semantic/KtSessionProvider : org/jetbrains/kotlin/com/intellij/openapi/Disposable {
+	public static final field Companion Lcom/gokorei/kotlinmcp/semantic/KtSessionProvider$Companion;
+	public fun <init> ()V
+	public fun <init> (IZ)V
+	public synthetic fun <init> (IZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun acquireSession (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;
+	public static synthetic fun acquireSession$default (Lcom/gokorei/kotlinmcp/semantic/KtSessionProvider;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;
+	public fun dispose ()V
+	public final fun getCachedSessionCount ()I
+}
+
+public final class com/gokorei/kotlinmcp/semantic/KtSessionProvider$Companion {
+	public final fun isSemanticEnabledByDefault ()Z
+}
+
+public abstract interface class com/gokorei/kotlinmcp/semantic/SemanticService {
+	public abstract fun acquireSession (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;
+	public static synthetic fun acquireSession$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;
+	public abstract fun checkContracts (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkContracts$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun checkDeprecated (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkDeprecated$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun checkExpectActual (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkExpectActual$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun checkExperimentalOptIn (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkExperimentalOptIn$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun checkInlineReified (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkInlineReified$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun checkValueClass (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkValueClass$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public abstract fun checkWhenExhaustiveness (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkWhenExhaustiveness$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/semantic/SemanticService$DefaultImpls {
+	public static synthetic fun acquireSession$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;
+	public static synthetic fun checkContracts$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkDeprecated$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkExpectActual$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkExperimentalOptIn$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkInlineReified$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkValueClass$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkWhenExhaustiveness$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/semantic/analyzers/ContractsAnalyzer {
+	public fun <init> ()V
+	public final fun analyze (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/semantic/analyzers/ExpectActualAnalyzer {
+	public fun <init> ()V
+	public final fun analyze (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/semantic/analyzers/InlineReifiedAnalyzer {
+	public fun <init> ()V
+	public final fun analyze (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/semantic/analyzers/OptInAndDeprecationAnalyzer {
+	public fun <init> ()V
+	public final fun analyzeDeprecated (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun analyzeOptIn (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/semantic/analyzers/ValueClassAnalyzer {
+	public fun <init> ()V
+	public final fun analyze (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
+public final class com/gokorei/kotlinmcp/semantic/analyzers/WhenExhaustivenessAnalyzer {
+	public fun <init> ()V
+	public final fun analyze (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+}
+
 public final class com/gokorei/kotlinmcp/server/DefaultFrameworkDetector : com/gokorei/kotlinmcp/server/FrameworkDetector {
 	public fun <init> ()V
 	public fun <init> (Lcom/gokorei/kotlinmcp/project/EnvironmentProfileDetector;)V
@@ -1943,8 +2033,8 @@ public abstract interface class com/gokorei/kotlinmcp/server/FrameworkDetector {
 
 public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public fun <init> ()V
-	public fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;Lcom/gokorei/kotlinmcp/mutation/MutationService;)V
-	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;Lcom/gokorei/kotlinmcp/mutation/MutationService;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;Lcom/gokorei/kotlinmcp/semantic/SemanticService;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;Lcom/gokorei/kotlinmcp/mutation/MutationService;)V
+	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;Lcom/gokorei/kotlinmcp/semantic/SemanticService;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;Lcom/gokorei/kotlinmcp/mutation/MutationService;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun analyzeAndroidDi (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun analyzeKtor (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun analyzeSerialization (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -1953,8 +2043,22 @@ public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public final fun baselineDump (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun baselineDump$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun baselineRead (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun checkContracts (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkContracts$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun checkDeprecated (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkDeprecated$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun checkExpectActual (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkExpectActual$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun checkExperimentalOptIn (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkExperimentalOptIn$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun checkInlineReified (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkInlineReified$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun checkSnippet (Ljava/lang/String;Ljava/util/List;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun checkSnippet$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun checkValueClass (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkValueClass$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun checkWhenExhaustiveness (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun checkWhenExhaustiveness$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun close ()V
 	public final fun codeAnalyzeCompose (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun codeAnalyzeNullability (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -1975,6 +2079,7 @@ public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public static synthetic fun formatKtlint$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;ZLjava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun getDocService ()Lcom/gokorei/kotlinmcp/doc/DocService;
 	public final fun getSemanticEngine ()Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;
+	public final fun getSemanticService ()Lcom/gokorei/kotlinmcp/semantic/SemanticService;
 	public final fun gradleRun (Ljava/lang/String;Ljava/lang/String;J)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun gradleRun$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;JILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun lspCallHierarchy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;

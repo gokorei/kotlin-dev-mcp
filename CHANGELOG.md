@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **K2 Analysis API & deep semantic analysis infrastructure** — added `SemanticService` (`DefaultSemanticService`) and `KtSessionProvider` with bounded LRU session pooling (max 4 environments) and `ENABLE_SEMANTIC` gating, providing compiler-accurate type resolution, control-flow analysis, and graceful fallback to syntactic K2 PSI AST inspection.
+- **When expression exhaustiveness analyzer** — added `kotlin_check_snippet(action="when_exhaustiveness")` to verify `when` branch coverage across sealed classes, sealed interfaces, and enums, synthesizing missing branch stubs (`Subtype -> TODO()`).
+- **Value class compiler constraint validator** — added `kotlin_check_snippet(action="value_class")` to enforce single immutable `val` primary constructor parameters and flag redundant object boxing allocations.
+- **Inline functions & reified type parameter checks** — added `kotlin_check_snippet(action="inline_reified")` to validate reified generics placement and audit large inline function bodies causing bytecode explosion.
+- **Kotlin contracts analyzer** — added `kotlin_check_snippet(action="contracts")` to validate `contract { ... }` block placement (first statement in body) and effect clauses (`returns() implies`, `callsInPlace`).
+- **KMP Expect/Actual declaration validator** — added `kotlin_check_snippet(action="expect_actual")` to statically verify expected and actual class/function signatures, visibility, and return type compatibility across multiplatform targets.
+- **Opt-in and deprecation migration analyzer** — added `kotlin_check_snippet(action="experimental_optin")` and `kotlin_check_snippet(action="deprecated")` to enforce `@RequiresOptIn` / `@OptIn` annotations and extract `@Deprecated(replaceWith = ReplaceWith(...))` migration expressions.
+
 ### Changed
 - **Hardened uberJar fat-jar packaging** — updated `build.gradle.kts` so project classes and resources strictly take precedence over unpacked runtime dependencies under `DuplicatesStrategy.EXCLUDE`, stripped third-party manifest signature files (`META-INF/*.SF`, `*.DSA`, `*.RSA`), and enforced explicit task dependencies (`dependsOn(jar, processResources)`).
 

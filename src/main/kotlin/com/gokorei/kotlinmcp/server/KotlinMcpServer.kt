@@ -9,6 +9,7 @@ import com.gokorei.kotlinmcp.lsp.*
 import com.gokorei.kotlinmcp.project.*
 import com.gokorei.kotlinmcp.refactoring.*
 import com.gokorei.kotlinmcp.mutation.*
+import com.gokorei.kotlinmcp.semantic.*
 import com.gokorei.kotlinmcp.models.ResponsePreset
 import com.gokorei.kotlinmcp.models.ResponseProjection
 
@@ -29,6 +30,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 class KotlinMcpServer(
     val docService: DocService = DefaultDocService(),
     val semanticEngine: K2SemanticEngine = DefaultK2SemanticEngine(),
+    val semanticService: SemanticService = DefaultSemanticService(),
     private val codeAnalysisService: CodeAnalysisService = DefaultCodeAnalysisService(),
     private val diagnosticService: DiagnosticService = DefaultDiagnosticService(),
     private val projectService: ProjectService = DefaultProjectService(),
@@ -352,4 +354,27 @@ class KotlinMcpServer(
      */
     fun parseAndroidLint(xmlContentOrPath: String, workspacePath: String? = null): KotlinMcpResult =
         lintService.parseAndroidLintReport(xmlContentOrPath, workspacePath)
+
+    // ---- kotlin_check_snippet semantic actions ----
+
+    fun checkWhenExhaustiveness(code: String, classpath: List<String> = emptyList()): KotlinMcpResult =
+        semanticService.checkWhenExhaustiveness(code, classpath)
+
+    fun checkValueClass(code: String, classpath: List<String> = emptyList()): KotlinMcpResult =
+        semanticService.checkValueClass(code, classpath)
+
+    fun checkInlineReified(code: String, classpath: List<String> = emptyList()): KotlinMcpResult =
+        semanticService.checkInlineReified(code, classpath)
+
+    fun checkContracts(code: String, classpath: List<String> = emptyList()): KotlinMcpResult =
+        semanticService.checkContracts(code, classpath)
+
+    fun checkExpectActual(code: String, classpath: List<String> = emptyList()): KotlinMcpResult =
+        semanticService.checkExpectActual(code, classpath)
+
+    fun checkExperimentalOptIn(code: String, classpath: List<String> = emptyList()): KotlinMcpResult =
+        semanticService.checkExperimentalOptIn(code, classpath)
+
+    fun checkDeprecated(code: String, classpath: List<String> = emptyList()): KotlinMcpResult =
+        semanticService.checkDeprecated(code, classpath)
 }
