@@ -192,6 +192,25 @@ class SnippetCompilerTest {
     }
 
     @Test
+    fun `materializeBundledSnippetClasspath rejects truncated PK header files`() {
+        SnippetCompiler.resetBundledSnippetClasspathCache()
+        val truncatedLoader = object : ClassLoader(SnippetCompiler::class.java.classLoader) {
+            override fun getResourceAsStream(name: String): java.io.InputStream? {
+                return when (name) {
+                    "snippet-classpath/snippet.classpath.txt" -> "truncated.jar\n".byteInputStream()
+                    // Starts with PK magic bytes but lacks valid ZIP central directory / header structures
+                    "snippet-classpath/truncated.jar" -> byteArrayOf(0x50, 0x4B, 0x03, 0x04, 0x00, 0x00).inputStream()
+                    else -> super.getResourceAsStream(name)
+                }
+            }
+        }
+
+        val result = SnippetCompiler.materializeBundledSnippetClasspath(truncatedLoader)
+        assertTrue(result.isEmpty(), "Expected empty list when bundled jar has truncated PK header, got: $result")
+        SnippetCompiler.resetBundledSnippetClasspathCache()
+    }
+
+    @Test
     fun `external library without classpath is a hard unresolved error`() {
         val snippet = """
             import org.example.missinglib.Widget

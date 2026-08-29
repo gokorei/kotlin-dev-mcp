@@ -17,6 +17,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import java.io.File
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 
 /**
  * Registers the consolidated Kotlin developer tools on the MCP [Server].
@@ -544,6 +545,8 @@ object ToolRegistrar {
                 val args = request.arguments.orEmpty()
                 val result = try {
                     finalHandler(args)
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (t: Throwable) {
                     logger.error(t) { "Unexpected runtime error while executing MCP tool '$name'" }
                     KotlinMcpResult.Error(

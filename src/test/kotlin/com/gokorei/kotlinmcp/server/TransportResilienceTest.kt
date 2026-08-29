@@ -143,4 +143,24 @@ class TransportResilienceTest {
             cleanup(client, sessionJob, clientTransport)
         }
     }
+
+    @Test
+    fun `tool execution rethrows CancellationException rather than wrapping in error result`() = runBlocking {
+        val toolBuilder = ToolRegistrar.ToolBuilder("cancelling_tool", kotlinServer).apply {
+            description = "Simulates coroutine cancellation during execution"
+            handle { _, _ ->
+                throw CancellationException("Operation cancelled")
+            }
+        }
+        toolBuilder.registerOn(server)
+
+        val (client, sessionJob, clientTransport) = connectedClient(server)
+        try {
+            org.junit.jupiter.api.assertThrows<CancellationException> {
+                client.callTool("cancelling_tool", emptyMap<String, Any?>())
+            }
+        } finally {
+            cleanup(client, sessionJob, clientTransport)
+        }
+    }
 }

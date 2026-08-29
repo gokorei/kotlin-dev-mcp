@@ -181,12 +181,10 @@ object SnippetCompiler {
     private fun isValidZipFile(file: File): Boolean {
         if (!file.isFile || file.length() < 4) return false
         return try {
-            file.inputStream().use { input ->
-                val b1 = input.read()
-                val b2 = input.read()
-                // ZIP/JAR files start with magic bytes 'P' (0x50), 'K' (0x4B)
-                b1 == 0x50 && b2 == 0x4B
+            java.util.zip.ZipFile(file).use { zip ->
+                zip.size() >= 0
             }
+            true
         } catch (_: Throwable) {
             false
         }
