@@ -9,9 +9,15 @@ import java.io.File
 /**
  * Strategy component for summarizing target file packages, imported types, and inbound/outbound workspace dependencies.
  */
-class FileContextAnalyzer {
+class FileContextAnalyzer(
+    private val indexer: WorkspaceSemanticIndexer = WorkspaceSemanticIndexer()
+) {
 
-    fun fileContext(code: String, workspacePath: String?, indexer: WorkspaceSemanticIndexer): KotlinMcpResult {
+    fun fileContext(
+        code: String,
+        workspacePath: String?,
+        customIndexer: WorkspaceSemanticIndexer = indexer
+    ): KotlinMcpResult {
         val targetFile = File(code)
         if (!targetFile.isFile || !targetFile.extension.equals("kt", true)) {
             return KotlinMcpResult.Error(
@@ -38,7 +44,7 @@ class FileContextAnalyzer {
         val files = root.walkTopDown()
             .filter { it.isFile && it.extension == "kt" }
             .toList()
-        val index = indexer.index(files, root.invariantSeparatorsPath)
+        val index = customIndexer.index(files, root.invariantSeparatorsPath)
         val targetRel = try {
             root.toPath().relativize(targetFile.toPath()).toString()
         } catch (e: Exception) {

@@ -96,7 +96,7 @@ class FileContextTest {
     @Test
     fun `file_context semantic mode resolves cross-file edges to FQN`() {
         sampleWorkspace()
-        val service = DefaultCodeAnalysisService(indexer = WorkspaceSemanticIndexer())
+        val service = DefaultCodeAnalysisService(fileContextAnalyzer = FileContextAnalyzer(indexer = WorkspaceSemanticIndexer()))
 
         val result = service.execute(CodeAnalysisAction.FILE_CONTEXT, workspace.resolve("Main.kt").toString(), workspacePath = workspace.toString())
         assertTrue(result is KotlinMcpResult.Success, "expected success, got: ${result.toFormattedText()}")

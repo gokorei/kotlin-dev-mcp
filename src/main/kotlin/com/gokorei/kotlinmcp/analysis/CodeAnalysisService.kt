@@ -3,7 +3,6 @@ package com.gokorei.kotlinmcp.analysis
 import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import com.gokorei.kotlinmcp.models.ProjectionFilter
 import com.gokorei.kotlinmcp.models.ResponseProjection
-import com.gokorei.kotlinmcp.lsp.WorkspaceSemanticIndexer
 import com.gokorei.kotlinmcp.shared.CommandService
 
 enum class CodeAnalysisAction {
@@ -23,7 +22,7 @@ interface CodeAnalysisService : CommandService<CodeAnalysisAction> {
     fun execute(
         action: CodeAnalysisAction,
         code: String,
-        workspacePath: String?,
+        workspacePath: String? = null,
         projection: ResponseProjection = ResponseProjection()
     ): KotlinMcpResult
 
@@ -34,8 +33,7 @@ interface CodeAnalysisService : CommandService<CodeAnalysisAction> {
 /**
  * Single-responsibility facade routing [CodeAnalysisAction] operations to dedicated code analysis strategy components.
  */
-class DefaultCodeAnalysisService @JvmOverloads constructor(
-    private val indexer: WorkspaceSemanticIndexer = WorkspaceSemanticIndexer(),
+class DefaultCodeAnalysisService(
     private val fileContextAnalyzer: FileContextAnalyzer = FileContextAnalyzer(),
     private val symbolInspector: SymbolInspector = SymbolInspector(),
     private val nullabilityAnalyzer: NullabilityAnalyzer = NullabilityAnalyzer(),
@@ -55,7 +53,7 @@ class DefaultCodeAnalysisService @JvmOverloads constructor(
             CodeAnalysisAction.ANALYZE_NULLABILITY -> nullabilityAnalyzer.analyzeNullability(code)
             CodeAnalysisAction.EXPLAIN_COROUTINES -> coroutinesSafetyAnalyzer.explainCoroutines(code)
             CodeAnalysisAction.ANALYZE_COMPOSE -> composeAnalyzer.analyzeCompose(code)
-            CodeAnalysisAction.FILE_CONTEXT -> fileContextAnalyzer.fileContext(code, workspacePath, indexer)
+            CodeAnalysisAction.FILE_CONTEXT -> fileContextAnalyzer.fileContext(code, workspacePath)
             CodeAnalysisAction.WORKMANAGER -> workManagerAnalyzer.analyze(code)
         }
         return ProjectionFilter.apply(raw, projection)
