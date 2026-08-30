@@ -182,7 +182,18 @@ object SnippetCompiler {
         if (!file.isFile || file.length() < 4) return false
         return try {
             java.util.zip.ZipFile(file).use { zip ->
-                zip.size() >= 0
+                val entries = zip.entries()
+                val buffer = ByteArray(8192)
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    if (!entry.isDirectory) {
+                        zip.getInputStream(entry).use { stream ->
+                            while (stream.read(buffer) != -1) {
+                                // Drain stream to verify CRC checksum and decompression integrity
+                            }
+                        }
+                    }
+                }
             }
             true
         } catch (_: Throwable) {

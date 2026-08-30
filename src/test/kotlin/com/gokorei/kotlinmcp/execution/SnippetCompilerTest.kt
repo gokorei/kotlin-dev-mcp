@@ -211,6 +211,37 @@ class SnippetCompilerTest {
     }
 
     @Test
+    fun `materializeBundledSnippetClasspath rejects zip files with damaged entry data or CRC mismatch`() {
+        SnippetCompiler.resetBundledSnippetClasspathCache()
+        val baos = java.io.ByteArrayOutputStream()
+        java.util.zip.ZipOutputStream(baos).use { zos ->
+            zos.putNextEntry(java.util.zip.ZipEntry("test.txt"))
+            zos.write("some uncompressed data to create valid entry".toByteArray())
+            zos.closeEntry()
+        }
+        val zipBytes = baos.toByteArray()
+        // Corrupt entry payload bytes to trigger CRC / decompression failure when entry is read
+        if (zipBytes.size > 40) {
+            zipBytes[38] = (zipBytes[38] + 1).toByte()
+            zipBytes[39] = (zipBytes[39] + 1).toByte()
+        }
+
+        val damagedLoader = object : ClassLoader(SnippetCompiler::class.java.classLoader) {
+            override fun getResourceAsStream(name: String): java.io.InputStream? {
+                return when (name) {
+                    "snippet-classpath/snippet.classpath.txt" -> "damaged.jar\n".byteInputStream()
+                    "snippet-classpath/damaged.jar" -> zipBytes.inputStream()
+                    else -> super.getResourceAsStream(name)
+                }
+            }
+        }
+
+        val result = SnippetCompiler.materializeBundledSnippetClasspath(damagedLoader)
+        assertTrue(result.isEmpty(), "Expected empty list when bundled jar has damaged entry data/CRC, got: $result")
+        SnippetCompiler.resetBundledSnippetClasspathCache()
+    }
+
+    @Test
     fun `external library without classpath is a hard unresolved error`() {
         val snippet = """
             import org.example.missinglib.Widget
