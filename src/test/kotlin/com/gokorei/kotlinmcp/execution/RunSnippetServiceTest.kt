@@ -24,13 +24,33 @@ class RunSnippetServiceTest {
     }
 
     @Test
-    fun `run_snippet rejects code without a main function`() {
-        val code = "val x = 42"
+    fun `run_snippet wraps expressions without main function and executes them`() {
+        val code = """
+            val x = 40
+            val y = 2
+            println("result=${'$'}{x + y}")
+        """.trimIndent()
 
         val result = service.execute(code, timeoutMillis = 30_000L)
 
-        assertTrue(result.isError)
-        assertTrue(result.toFormattedText().contains("NO_MAIN_FOUND"), "got: ${result.toFormattedText()}")
+        assertTrue(result.isSuccess, "expected success for scratchpad expression, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("result=42"), "expected evaluated output result=42, got: ${success.content}")
+    }
+
+    @Test
+    fun `run_snippet preserves imports when wrapping in synthetic main`() {
+        val code = """
+            import java.time.Instant
+            val now = Instant.EPOCH
+            println("epoch=${'$'}now")
+        """.trimIndent()
+
+        val result = service.execute(code, timeoutMillis = 30_000L)
+
+        assertTrue(result.isSuccess, "expected success with imports, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("epoch=1970-01-01T00:00:00Z"), "expected epoch output, got: ${success.content}")
     }
 
     @Test
@@ -295,8 +315,7 @@ class RunSnippetServiceTest {
         """.trimIndent()
 
         val result = service.execute(code, timeoutMillis = 30_000L)
-        assertTrue(result.isError, "expected NO_MAIN_FOUND, got: ${result.toFormattedText()}")
-        assertTrue(result.toFormattedText().contains("NO_MAIN_FOUND"), "got: ${result.toFormattedText()}")
+        assertTrue(result.isSuccess, "expected code to be wrapped in synthetic main and run successfully, got: ${result.toFormattedText()}")
     }
 
     @Test

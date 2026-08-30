@@ -50,17 +50,55 @@ class DefaultRunSnippetService(
                 code = "EMPTY_SNIPPET"
             )
         }
-        return when (val compiled = SnippetCompiler.compile(trimmed, classpath, projectPath)) {
+        val executableCode = prepareExecutableCode(trimmed)
+        return when (val compiled = SnippetCompiler.compile(executableCode, classpath, projectPath)) {
             is CompileResult.Failed -> KotlinMcpResult.Error(
                 message = compiled.message,
                 code = compiled.code,
                 requireAnotherCall = true
             )
             is CompileResult.Compiled -> {
-                val outcome = runFromCompiled(compiled, trimmed, timeoutMillis, classpath, runner, jvmArgs, javaPath, projectPath)
+                val outcome = runFromCompiled(compiled, executableCode, timeoutMillis, classpath, runner, jvmArgs, javaPath, projectPath)
                 SnippetCompiler.cleanup(compiled)
                 outcome
             }
+        }
+    }
+
+    internal fun prepareExecutableCode(code: String): String {
+        if (hasMainFunction(code)) return code
+        val file = K2SnippetFrontend.parsePsi(code) ?: return "fun main() {\n$code\n}"
+        val pkg = file.packageDirective?.text?.trim().orEmpty()
+        val imports = file.importDirectives.map { it.text.trim() }
+
+        var body = code
+        if (pkg.isNotEmpty()) {
+            val pkgText = file.packageDirective?.text.orEmpty()
+            val idx = body.indexOf(pkgText)
+            if (idx != -1) {
+                body = (body.substring(0, idx) + body.substring(idx + pkgText.length)).trim()
+            }
+        }
+        for (imp in file.importDirectives) {
+            val impText = imp.text
+            val idx = body.indexOf(impText)
+            if (idx != -1) {
+                body = (body.substring(0, idx) + body.substring(idx + impText.length)).trim()
+            }
+        }
+
+        return buildString {
+            if (pkg.isNotBlank()) {
+                appendLine(pkg)
+                appendLine()
+            }
+            if (imports.isNotEmpty()) {
+                imports.forEach { appendLine(it) }
+                appendLine()
+            }
+            appendLine("fun main() {")
+            appendLine(body)
+            appendLine("}")
         }
     }
 
