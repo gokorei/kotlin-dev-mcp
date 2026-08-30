@@ -339,9 +339,9 @@ class SnippetCompilerTest {
         val errors = (result as CompileResult.Compiled).diagnostics.filter { it.severity == "error" }
         assertTrue(errors.isNotEmpty())
         val err = errors.first()
-        assertNotNull(err.line)
-        assertNotNull(err.column)
-        assertTrue(err.message.contains("Type mismatch") || err.message.contains("String"), "expected full error message, got: ${err.message}")
+        assertEquals(1, err.line, "expected line 1")
+        assertEquals(12, err.column, "expected column 12")
+        assertEquals("Initializer type mismatch: expected 'Int', actual 'String'.", err.message)
         SnippetCompiler.cleanup(result)
     }
 }
