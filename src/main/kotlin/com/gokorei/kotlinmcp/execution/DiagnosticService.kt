@@ -56,7 +56,7 @@ class DefaultDiagnosticService : DiagnosticService {
      * @param code The snippet source code.
      * @param classpath Additional classpath entries.
      * @param projectPath Optional path to project directory.
-     * @return [KotlinMcpResult] with TOON diagnostics table or success confirmation.
+     * @return [KotlinMcpResult] containing a TOON diagnostics table on compilation errors, success confirmation on clean compilation, or [KotlinMcpResult.Error] without a TOON table on compiler invocation failure.
      */
     fun checkSnippetEmbedded(code: String, classpath: List<String> = emptyList(), projectPath: String? = null): KotlinMcpResult {
         val result = SnippetCompiler.compile(code, classpath, projectPath)
