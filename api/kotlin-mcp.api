@@ -447,7 +447,9 @@ public final class com/gokorei/kotlinmcp/execution/SnippetCompiler {
 	public static synthetic fun compile$default (Lcom/gokorei/kotlinmcp/execution/SnippetCompiler;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/execution/CompileResult;
 	public final fun detectProjectClasspath (Ljava/lang/String;)Ljava/util/List;
 	public final fun getRuntimeExecutionClasspath ()Ljava/util/List;
+	public final fun getToolchainManager ()Lcom/gokorei/kotlinmcp/execution/BuildToolsToolchainManager;
 	public final fun resolveDefaultImports (Ljava/lang/String;)Ljava/util/List;
+	public final fun setToolchainManager (Lcom/gokorei/kotlinmcp/execution/BuildToolsToolchainManager;)V
 }
 
 public final class com/gokorei/kotlinmcp/execution/ThreadLocalPrintStream : java/io/PrintStream {
