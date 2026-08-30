@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Kotlin Build Tools API dependencies** — added `org.jetbrains.kotlin:kotlin-build-tools-api` and `kotlin-build-tools-impl` (2.3.20) dependencies to `build.gradle.kts` and aligned shadow/fat JAR distribution packaging in preparation for compiler daemon and in-process compilation execution.
+
 ## [1.4.0] - 2026-08-30
 
 ### Added
