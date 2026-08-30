@@ -432,6 +432,23 @@ class RunSnippetServiceTest {
             dir.toFile().deleteRecursively()
         }
     }
+
+    @Test
+    fun `run_snippet executes snippet with package declaration`() {
+        val code = """
+            package com.example.demo
+            
+            fun main() {
+                println("hello-from-package")
+            }
+        """.trimIndent()
+
+        val result = service.execute(code, timeoutMillis = 30_000L)
+
+        assertTrue(result.isSuccess, "expected success for packaged snippet, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("hello-from-package"), "expected packaged output, got: ${success.content}")
+    }
 }
 
 
