@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-08-30
+
 ### Added
 - **K2 Analysis API & deep semantic analysis infrastructure** — added `SemanticService` (`DefaultSemanticService`) and `KtSessionProvider` with bounded LRU session pooling (max 4 environments) and `ENABLE_SEMANTIC` gating, providing compiler-accurate type resolution, control-flow analysis, and graceful fallback to syntactic K2 PSI AST inspection.
 - **When expression exhaustiveness analyzer** — added `kotlin_check_snippet(action="when_exhaustiveness")` to verify `when` branch coverage across sealed classes, sealed interfaces, and enums, synthesizing missing branch stubs (`Subtype -> TODO()`).
@@ -151,7 +153,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sandboxed network audits** — network security audits in project inspection disabled by default (`kmcp.disable_network_audits`), guaranteeing safe offline/isolated runs.
 - **Hardened Maven dependency resolution** — handles malformed artifact versions and pre-release markers gracefully during library analysis.
 
-[Unreleased]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.0.0...v1.1.0

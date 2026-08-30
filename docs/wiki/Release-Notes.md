@@ -6,6 +6,16 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### New Features
 
+### Bug Fixes
+
+### Improvements
+
+---
+
+## v1.4.0 — 2026-08-30
+
+### New Features
+
 - **K2 Analysis API & deep semantic analysis infrastructure** — added `SemanticService` (`DefaultSemanticService`) and `KtSessionProvider` with bounded LRU session pooling (max 4 environments) and `ENABLE_SEMANTIC` gating, providing compiler-accurate type resolution, control-flow analysis, and graceful fallback to syntactic K2 PSI AST inspection.
 - **When expression exhaustiveness analyzer** — added `kotlin_check_snippet(action="when_exhaustiveness")` to verify `when` branch coverage across sealed classes, sealed interfaces, and enums, synthesizing missing branch stubs (`Subtype -> TODO()`).
 - **Value class compiler constraint validator** — added `kotlin_check_snippet(action="value_class")` to enforce single immutable `val` primary constructor parameters and flag redundant object boxing allocations.
