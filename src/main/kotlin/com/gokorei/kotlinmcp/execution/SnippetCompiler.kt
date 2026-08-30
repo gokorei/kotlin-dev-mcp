@@ -1,13 +1,17 @@
+@file:OptIn(org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi::class)
 package com.gokorei.kotlinmcp.execution
 
-import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
+import io.github.oshai.kotlinlogging.KotlinLogging
+import org.jetbrains.kotlin.buildtools.api.CompilationResult
+import org.jetbrains.kotlin.buildtools.api.KotlinLogger
+import org.jetbrains.kotlin.buildtools.api.ProjectId
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
-import io.github.oshai.kotlinlogging.KotlinLogging
+import java.util.UUID
 
 /**
- * A single parsed diagnostic produced by the embedded K2 compiler, with the
+ * A single parsed diagnostic produced by the compiler, with the
  * `Snippet.kt:LINE:COL` location already extracted.
  */
 data class CompilerDiagnostic(
@@ -29,7 +33,7 @@ sealed class CompileResult {
 }
 
 /**
- * Shared wrapper around the embedded Kotlin compiler (K2). Writes the snippet
+ * Shared wrapper around the Kotlin Build Tools API (BTA) compiler. Writes the snippet
  * to a temp `Snippet.kt` and compiles it in-process against the server's own
  * classpath, optionally extended with an extra classpath (a project's compiled
  * classes and dependency jars).
@@ -40,6 +44,8 @@ object SnippetCompiler {
 
     const val SOURCE_FILE_NAME = "Snippet.kt"
     const val MAIN_CLASS = "SnippetKt"
+
+    var toolchainManager: BuildToolsToolchainManager = DefaultBuildToolsToolchainManager.instance
 
     fun detectProjectClasspath(projectPath: String?): List<String> {
         if (projectPath.isNullOrBlank()) return emptyList()
@@ -75,22 +81,11 @@ object SnippetCompiler {
     }
 
     private val defaultImportsClasspath: List<String> by lazy {
-        // TK-94DK6TD1: when launched as `java -jar <all.jar>` the JVM sets
-        // java.class.path to a single flat jar whose name matches none of the
-        // library substrings below, so the system list is empty. Fall back to
-        // the library jars bundled as resources by the `dumpSnippetClasspath`
-        // Gradle task (materialized to a temp dir so K2 sees real file paths).
         resolveDefaultImports(System.getProperty("java.class.path").orEmpty())
     }
 
     /**
      * Resolves the default classpath for snippet compilation/execution.
-     *
-     * Prefers the name-filtered system `java.class.path` (the `gradle test` /
-     * `gradle run` layout). When that yields nothing — e.g. under
-     * `java -jar <all.jar>`, where the JVM reports the single flat fat jar —
-     * falls back to the library jars bundled as resources by the
-     * `dumpSnippetClasspath` Gradle task.
      */
     fun resolveDefaultImports(javaClassPath: String): List<String> {
         val fromSystem = javaClassPath
@@ -117,6 +112,7 @@ object SnippetCompiler {
                 name.contains("kotlin-compiler") ||
                 name.contains("kotlin-sdk") ||
                 name.contains("modelcontextprotocol") ||
+                name.contains("kotlin-build-tools") ||
                 entry.contains("build/classes/kotlin/main") ||
                 entry.contains("build/classes/kotlin/test")
             ))
@@ -127,11 +123,7 @@ object SnippetCompiler {
 
     /**
      * Materializes the library jars bundled as resources by `dumpSnippetClasspath`
-     * into a temp dir and returns their on-disk paths (K2 needs real file paths).
-     *
-     * The result is cached for the process lifetime and the temp dir is deleted on
-     * JVM shutdown. Returns an empty list (with a warning) if materialization is
-     * impossible, leaving callers to compile without the bundled libraries.
+     * into a temp dir and returns their on-disk paths.
      */
     internal fun materializeBundledSnippetClasspath(
         classLoader: ClassLoader? = SnippetCompiler::class.java.classLoader
@@ -189,7 +181,7 @@ object SnippetCompiler {
                     if (!entry.isDirectory) {
                         zip.getInputStream(entry).use { stream ->
                             while (stream.read(buffer) != -1) {
-                                // Drain stream to verify CRC checksum and decompression integrity
+                                // Drain stream to verify CRC checksum
                             }
                         }
                     }
@@ -232,56 +224,116 @@ object SnippetCompiler {
             .filter { it.isNotBlank() }
             .joinToString(File.pathSeparator)
 
-        val args = org.jetbrains.kotlin.cli.common.arguments.K2JVMCompilerArguments().apply {
-            destination = outDir.toString()
-            classpath = effectiveClasspath
-            freeArgs = listOf(sourceFile.toString())
-            jvmTarget = resolveTargetJvmVersion()
-        }
         return try {
-            val collector = CapturingMessageCollector()
-            val compiler = K2JVMCompiler()
-            compiler.exec(collector, org.jetbrains.kotlin.config.Services.EMPTY, args)
-            val diagnostics = collector.reports.mapNotNull { report ->
-                val loc = report.location
-                CompilerDiagnostic(
-                    severity = report.severity,
-                    line = loc?.line,
-                    column = loc?.column,
-                    message = report.message
+            val service = toolchainManager.getCompilationService()
+            val strategyConfig = service.makeCompilerExecutionStrategyConfiguration().useInProcessStrategy()
+            val jvmConfig = service.makeJvmCompilationConfiguration()
+            val collector = BtaDiagnosticCollector()
+            jvmConfig.useLogger(collector)
+
+            val compilerArgs = listOf(
+                "-d", outDir.toString(),
+                "-classpath", effectiveClasspath,
+                "-jvm-target", resolveTargetJvmVersion()
+            )
+
+            val projectId = ProjectId.ProjectUUID(UUID.randomUUID())
+            val compilationResult = service.compileJvm(
+                projectId,
+                strategyConfig,
+                jvmConfig,
+                listOf(sourceFile.toFile()),
+                compilerArgs
+            )
+
+            val diagnostics = collector.diagnostics
+            if (compilationResult != CompilationResult.COMPILATION_SUCCESS && diagnostics.none { it.severity == "error" }) {
+                // If compiler returned non-success but no errors were recorded, synthesize a diagnostic
+                val fallbackDiagnostics = diagnostics + CompilerDiagnostic(
+                    severity = "error",
+                    line = null,
+                    column = null,
+                    message = "Compilation failed with result: $compilationResult"
                 )
+                CompileResult.Compiled(outDir, fallbackDiagnostics, tempDir)
+            } else {
+                CompileResult.Compiled(outDir, diagnostics, tempDir)
             }
-            CompileResult.Compiled(outDir, diagnostics, tempDir)
         } catch (e: Throwable) {
             tempDir.toFile().deleteRecursively()
             CompileResult.Failed("Embedded compiler failed to run: ${e.message}", "COMPILER_INVOCATION_ERROR")
         }
     }
 
-    private class CapturingMessageCollector : org.jetbrains.kotlin.cli.common.messages.MessageCollector {
-        data class Report(
-            val severity: String,
-            val message: String,
-            val location: org.jetbrains.kotlin.cli.common.messages.CompilerMessageSourceLocation?
-        )
+    private class BtaDiagnosticCollector : KotlinLogger {
+        val diagnostics = mutableListOf<CompilerDiagnostic>()
 
-        val reports = mutableListOf<Report>()
+        override val isDebugEnabled: Boolean = false
 
-        override fun clear() = reports.clear()
-
-        override fun report(
-            severity: org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity,
-            message: String,
-            location: org.jetbrains.kotlin.cli.common.messages.CompilerMessageSourceLocation?
-        ) {
-            if (severity.isError) {
-                reports.add(Report("error", message, location))
-            } else if (severity.isWarning) {
-                reports.add(Report("warning", message, location))
-            }
+        override fun error(msg: String, throwable: Throwable?) {
+            val parsed = parseDiagnosticMessage("error", msg)
+            diagnostics.add(parsed)
         }
 
-        override fun hasErrors(): Boolean = reports.any { it.severity == "error" }
+        override fun warn(msg: String, throwable: Throwable?) {
+            val parsed = parseDiagnosticMessage("warning", msg)
+            diagnostics.add(parsed)
+        }
+
+        override fun info(msg: String) {}
+        override fun debug(msg: String) {}
+        override fun lifecycle(msg: String) {}
+
+        private fun parseDiagnosticMessage(severity: String, rawMsg: String): CompilerDiagnostic {
+            // Typical formats:
+            // "e: /path/to/Snippet.kt:1:15 Type mismatch..."
+            // "w: /path/to/Snippet.kt:2:5 Unused variable..."
+            // "Snippet.kt: (1, 15): error: ..."
+            // "/path/to/Snippet.kt:1:15: error: ..."
+            var text = rawMsg.trim()
+            if (text.startsWith("e: ") || text.startsWith("w: ") || text.startsWith("i: ")) {
+                text = text.substring(3).trim()
+            }
+
+            var line: Int? = null
+            var column: Int? = null
+            var cleanMessage = text
+
+            if (text.contains(SOURCE_FILE_NAME)) {
+                val afterFile = text.substringAfter(SOURCE_FILE_NAME)
+                if (afterFile.startsWith(":")) {
+                    val parts = afterFile.removePrefix(":").split(":")
+                    if (parts.size >= 2) {
+                        line = parts[0].trim().toIntOrNull()
+                        column = parts[1].trim().takeWhile { it.isDigit() }.toIntOrNull()
+                        cleanMessage = if (parts.size >= 3) {
+                            parts.drop(2).joinToString(":").trim().removePrefix("error:").removePrefix("warning:").trim()
+                        } else {
+                            parts[1].trim().dropWhile { it.isDigit() }.trim()
+                        }
+                    }
+                } else if (afterFile.startsWith(": (") || afterFile.startsWith(" (")) {
+                    val coordPart = afterFile.substringAfter("(").substringBefore(")")
+                    val coords = coordPart.split(",")
+                    if (coords.size == 2) {
+                        line = coords[0].trim().toIntOrNull()
+                        column = coords[1].trim().toIntOrNull()
+                        cleanMessage = afterFile.substringAfter("):").trim().removePrefix("error:").removePrefix("warning:").trim()
+                    }
+                }
+            }
+
+            if (cleanMessage.isBlank()) {
+                cleanMessage = rawMsg
+            }
+
+            return CompilerDiagnostic(
+                severity = severity,
+                line = line,
+                column = column,
+                message = cleanMessage
+            )
+        }
     }
 
     fun cleanup(result: CompileResult) {
