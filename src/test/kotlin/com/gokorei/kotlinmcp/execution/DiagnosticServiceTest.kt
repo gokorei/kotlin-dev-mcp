@@ -108,4 +108,19 @@ class DiagnosticServiceTest {
             tempDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `check_snippet preserves compiler warnings in metadata and output`() {
+        val codeWithWarning = """
+            fun test() {
+                val unused = 42
+            }
+        """.trimIndent()
+        val result = diagnosticService.execute(DiagnosticAction.CHECK_SNIPPET, codeWithWarning)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertNotNull(success.metadata["warningCount"])
+        assertNotNull(success.metadata["errorCount"])
+        assertEquals("0", success.metadata["errorCount"])
+    }
 }
