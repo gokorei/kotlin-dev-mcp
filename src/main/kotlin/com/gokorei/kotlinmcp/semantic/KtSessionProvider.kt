@@ -76,28 +76,30 @@ class KtSessionProvider(
     fun acquireSession(code: String, classpath: List<String> = emptyList()): K2AnalysisSession? {
         if (!enableSemantic) return null
 
-        val cpKey = computeClasspathKey(classpath)
-        val cachedEnv = synchronized(lock) {
-            val env = sessionCache.computeIfAbsent(cpKey) { key ->
-                createEnvironment(classpath, key)
-            }
-            env.retain()
-            env
-        }
-
+        var cachedEnv: CachedEnv? = null
         return try {
+            val cpKey = computeClasspathKey(classpath)
+            val env = synchronized(lock) {
+                val e = sessionCache.computeIfAbsent(cpKey) { key ->
+                    createEnvironment(classpath, key)
+                }
+                e.retain()
+                e
+            }
+            cachedEnv = env
+
             val hash = (code.hashCode() and 0x7fffffff).toString(16)
             val nano = System.nanoTime()
-            val ktFile = cachedEnv.psiFactory.createFile("SemanticSnippet_${hash}_$nano.kt", code)
+            val ktFile = env.psiFactory.createFile("SemanticSnippet_${hash}_$nano.kt", code)
 
-            val trace = NoScopeRecordCliBindingTrace(cachedEnv.environment.project)
-            val scope = org.jetbrains.kotlin.com.intellij.psi.search.GlobalSearchScope.allScope(cachedEnv.environment.project)
+            val trace = NoScopeRecordCliBindingTrace(env.environment.project)
+            val scope = org.jetbrains.kotlin.com.intellij.psi.search.GlobalSearchScope.allScope(env.environment.project)
             val result = TopDownAnalyzerFacadeForJVM.analyzeFilesWithJavaIntegration(
-                cachedEnv.environment.project,
+                env.environment.project,
                 listOf(ktFile),
                 trace,
-                cachedEnv.environment.configuration,
-                { s -> cachedEnv.environment.createPackagePartProvider(s) },
+                env.environment.configuration,
+                { s -> env.environment.createPackagePartProvider(s) },
                 { storageManager, files ->
                     org.jetbrains.kotlin.resolve.lazy.declarations.FileBasedDeclarationProviderFactory(storageManager, files)
                 },
@@ -114,8 +116,10 @@ class KtSessionProvider(
             val fallbackFile = K2SnippetFrontend.parsePsi(code)
             fallbackFile?.let { K2AnalysisSession(file = it) }
         } finally {
-            synchronized(lock) {
-                cachedEnv.release()
+            cachedEnv?.let { env ->
+                synchronized(lock) {
+                    env.release()
+                }
             }
         }
     }
@@ -149,15 +153,18 @@ class KtSessionProvider(
 
     private fun computeClasspathKey(classpath: List<String>): String {
         if (classpath.isEmpty()) return "default"
-        val sorted = classpath.sorted().joinToString(";")
-        val digest = MessageDigest.getInstance("SHA-256").digest(sorted.toByteArray(Charsets.UTF_8))
+        val raw = classpath.joinToString(";")
+        val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }.take(16)
     }
 
     override fun dispose() {
         synchronized(lock) {
             sessionCache.values.forEach { env ->
-                runCatching { Disposer.dispose(env.disposable) }
+                env.isEvicted = true
+                if (env.activeLeases <= 0) {
+                    runCatching { Disposer.dispose(env.disposable) }
+                }
             }
             sessionCache.clear()
         }

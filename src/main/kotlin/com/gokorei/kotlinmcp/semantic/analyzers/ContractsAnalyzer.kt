@@ -34,18 +34,22 @@ class ContractsAnalyzer {
                                 // Check contract DSL elements
                                 val lambdaArg = stmt.lambdaArguments.firstOrNull()?.getLambdaExpression()
                                     ?: stmt.valueArguments.mapNotNull { (it.getArgumentExpression() as? KtLambdaExpression) }.firstOrNull()
-                                
-                                val validEffectRoots = setOf("returns", "returnsNotNull", "callsInPlace", "implies")
-                                lambdaArg?.bodyExpression?.statements?.forEach { contractStmt ->
-                                    contractStmt.accept(object : KtTreeVisitorVoid() {
-                                        override fun visitCallExpression(innerCall: KtCallExpression) {
-                                            super.visitCallExpression(innerCall)
-                                            val innerCallee = innerCall.calleeExpression?.text
-                                            if (innerCallee != null && innerCallee !in validEffectRoots) {
-                                                findings.add("⚠️ `fun $fnName`: Unsupported contract effect call `$innerCallee()` inside `contract { ... }` block.")
+
+                                if (lambdaArg == null) {
+                                    findings.add("⚠️ `fun $fnName`: `contract { ... }` call requires a contract builder lambda.")
+                                } else {
+                                    val validEffectRoots = setOf("returns", "returnsNotNull", "callsInPlace", "implies")
+                                    lambdaArg.bodyExpression?.statements?.forEach { contractStmt ->
+                                        contractStmt.accept(object : KtTreeVisitorVoid() {
+                                            override fun visitCallExpression(innerCall: KtCallExpression) {
+                                                super.visitCallExpression(innerCall)
+                                                val innerCallee = innerCall.calleeExpression?.text
+                                                if (innerCallee != null && innerCallee !in validEffectRoots) {
+                                                    findings.add("⚠️ `fun $fnName`: Unsupported contract effect call `$innerCallee()` inside `contract { ... }` block.")
+                                                }
                                             }
-                                        }
-                                    })
+                                        })
+                                    }
                                 }
                             }
                         }

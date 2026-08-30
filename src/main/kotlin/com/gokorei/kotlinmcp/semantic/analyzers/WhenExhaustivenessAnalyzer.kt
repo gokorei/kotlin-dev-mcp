@@ -104,13 +104,41 @@ class WhenExhaustivenessAnalyzer {
                 }
 
                 // Match against known sealed hierarchies
-                for ((sealedName, subTypes) in sealedHierarchies) {
-                    if (subTypes.isNotEmpty() && (coveredBranches.any { it in subTypes } || (subjectName != null && subjectName == sealedName))) {
-                        val missing = subTypes - coveredBranches
-                        if (missing.isNotEmpty()) {
-                            findings.add("⚠️ `when (${subject.text})`: Missing branches for sealed type `$sealedName`: ${missing.joinToString(", ") { "`$it`" }}")
-                            for (m in missing) {
-                                synthesizedBranches.add("is $sealedName.$m -> TODO()")
+                fun getEffectiveSubtypes(rootName: String, visited: Set<String> = emptySet()): Set<String> {
+                    if (rootName in visited) return emptySet()
+                    val direct = sealedHierarchies[rootName].orEmpty()
+                    val result = mutableSetOf<String>()
+                    for (child in direct) {
+                        val childSub = sealedHierarchies[child]
+                        if (!childSub.isNullOrEmpty()) {
+                            if (child in coveredBranches) {
+                                result.add(child)
+                            } else {
+                                result.addAll(getEffectiveSubtypes(child, visited + rootName))
+                            }
+                        } else {
+                            result.add(child)
+                        }
+                    }
+                    return result
+                }
+
+                // Identify top-level sealed roots (not a subtype of another sealed type)
+                val allChildTypes = sealedHierarchies.values.flatten().toSet()
+
+                for ((sealedName, directSubTypes) in sealedHierarchies) {
+                    if (directSubTypes.isNotEmpty()) {
+                        val effectiveSubTypes = getEffectiveSubtypes(sealedName)
+                        val isSubjectMatch = subjectName != null && (subjectName == sealedName || subject.text.contains(sealedName))
+                        val isCoveredMatch = coveredBranches.any { it in effectiveSubTypes || it in directSubTypes }
+
+                        if (isSubjectMatch || isCoveredMatch) {
+                            val missing = effectiveSubTypes - coveredBranches
+                            if (missing.isNotEmpty()) {
+                                findings.add("⚠️ `when (${subject.text})`: Missing branches for sealed type `$sealedName`: ${missing.joinToString(", ") { "`$it`" }}")
+                                for (m in missing) {
+                                    synthesizedBranches.add("is $sealedName.$m -> TODO()")
+                                }
                             }
                         }
                     }

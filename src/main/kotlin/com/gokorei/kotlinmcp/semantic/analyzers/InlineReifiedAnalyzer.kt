@@ -49,7 +49,10 @@ class InlineReifiedAnalyzer {
                             is org.jetbrains.kotlin.psi.KtNullableType -> isFunctionType(typeElement.innerType)
                             is org.jetbrains.kotlin.psi.KtUserType -> {
                                 val refName = typeElement.referencedName.orEmpty()
-                                refName == "Function" || refName.startsWith("Function") || refName == "KFunction"
+                                refName == "Function" ||
+                                    refName == "KFunction" ||
+                                    (refName.startsWith("Function") && refName.removePrefix("Function").all { it.isDigit() }) ||
+                                    (refName.startsWith("KFunction") && refName.removePrefix("KFunction").all { it.isDigit() })
                             }
                             else -> false
                         }
