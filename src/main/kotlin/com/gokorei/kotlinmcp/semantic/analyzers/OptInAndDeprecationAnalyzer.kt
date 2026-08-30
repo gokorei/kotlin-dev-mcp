@@ -44,36 +44,43 @@ class OptInAndDeprecationAnalyzer {
             }
         })
 
+        fun matchesOptInMarker(entry: KtAnnotationEntry, marker: String): Boolean {
+            if (entry.shortName?.asString() != "OptIn") return false
+            for (arg in entry.valueArguments) {
+                val expr = arg.getArgumentExpression() ?: continue
+                val receiver = when (expr) {
+                    is KtClassLiteralExpression -> expr.receiverExpression
+                    else -> expr
+                }
+                val name = when (receiver) {
+                    is KtNameReferenceExpression -> receiver.getReferencedName()
+                    is KtDotQualifiedExpression -> (receiver.selectorExpression as? KtNameReferenceExpression)?.getReferencedName()
+                    else -> null
+                }
+                if (name == marker) return true
+            }
+            return false
+        }
+
         // Check call sites
         fun hasOptInFor(caller: KtNamedFunction, marker: String): Boolean {
             val fileAnnotations = file.fileAnnotationList?.annotationEntries.orEmpty()
             for (entry in fileAnnotations) {
-                if (entry.shortName?.asString() == "OptIn") {
-                    val args = entry.valueArguments.mapNotNull { it.getArgumentExpression()?.text }
-                    if (args.isEmpty() || args.any { it.contains(marker) }) return true
-                }
+                if (matchesOptInMarker(entry, marker)) return true
             }
 
             var parent = caller.parent
             while (parent != null) {
                 if (parent is KtClassOrObject) {
                     for (entry in parent.annotationEntries) {
-                        if (entry.shortName?.asString() == "OptIn") {
-                            val args = entry.valueArguments.mapNotNull { it.getArgumentExpression()?.text }
-                            if (args.isEmpty() || args.any { it.contains(marker) }) return true
-                        }
-                        if (entry.shortName?.asString() == marker) return true
+                        if (matchesOptInMarker(entry, marker) || entry.shortName?.asString() == marker) return true
                     }
                 }
                 parent = parent.parent
             }
 
             for (entry in caller.annotationEntries) {
-                if (entry.shortName?.asString() == "OptIn") {
-                    val args = entry.valueArguments.mapNotNull { it.getArgumentExpression()?.text }
-                    if (args.isEmpty() || args.any { it.contains(marker) }) return true
-                }
-                if (entry.shortName?.asString() == marker) return true
+                if (matchesOptInMarker(entry, marker) || entry.shortName?.asString() == marker) return true
             }
 
             return false
