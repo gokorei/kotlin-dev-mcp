@@ -186,9 +186,12 @@ class SnippetCompilerTest {
             }
         }
 
-        val result = SnippetCompiler.materializeBundledSnippetClasspath(corruptLoader)
-        assertTrue(result.isEmpty(), "Expected empty list when all bundled jars are corrupt, got: $result")
-        SnippetCompiler.resetBundledSnippetClasspathCache()
+        try {
+            val result = SnippetCompiler.materializeBundledSnippetClasspath(corruptLoader)
+            assertTrue(result.isEmpty(), "Expected empty list when all bundled jars are corrupt, got: $result")
+        } finally {
+            SnippetCompiler.resetBundledSnippetClasspathCache()
+        }
     }
 
     @Test
@@ -205,9 +208,12 @@ class SnippetCompilerTest {
             }
         }
 
-        val result = SnippetCompiler.materializeBundledSnippetClasspath(truncatedLoader)
-        assertTrue(result.isEmpty(), "Expected empty list when bundled jar has truncated PK header, got: $result")
-        SnippetCompiler.resetBundledSnippetClasspathCache()
+        try {
+            val result = SnippetCompiler.materializeBundledSnippetClasspath(truncatedLoader)
+            assertTrue(result.isEmpty(), "Expected empty list when bundled jar has truncated PK header, got: $result")
+        } finally {
+            SnippetCompiler.resetBundledSnippetClasspathCache()
+        }
     }
 
     @Test
@@ -236,9 +242,12 @@ class SnippetCompilerTest {
             }
         }
 
-        val result = SnippetCompiler.materializeBundledSnippetClasspath(damagedLoader)
-        assertTrue(result.isEmpty(), "Expected empty list when bundled jar has damaged entry data/CRC, got: $result")
-        SnippetCompiler.resetBundledSnippetClasspathCache()
+        try {
+            val result = SnippetCompiler.materializeBundledSnippetClasspath(damagedLoader)
+            assertTrue(result.isEmpty(), "Expected empty list when bundled jar has damaged entry data/CRC, got: $result")
+        } finally {
+            SnippetCompiler.resetBundledSnippetClasspathCache()
+        }
     }
 
     @Test
