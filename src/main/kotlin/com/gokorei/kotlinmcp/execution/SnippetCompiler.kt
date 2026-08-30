@@ -361,23 +361,17 @@ object SnippetCompiler {
                         val parsedLine = lineStr.toIntOrNull()
                         if (parsedLine != null) {
                             line = parsedLine
-                            val afterLine = remainder.substring(firstColon + 1)
-                            val secondColon = afterLine.indexOf(':')
-                            if (secondColon != -1) {
-                                val colStr = afterLine.substring(0, secondColon).trim()
-                                val parsedCol = colStr.takeWhile { it.isDigit() }.toIntOrNull()
-                                if (parsedCol != null) {
-                                    column = parsedCol
-                                    cleanMessage = afterLine.substring(secondColon + 1).trim()
-                                        .removePrefix("error:").removePrefix("warning:").trim()
-                                } else {
-                                    cleanMessage = afterLine.trim().removePrefix("error:").removePrefix("warning:").trim()
-                                }
-                            } else {
-                                val colDigits = afterLine.trim().takeWhile { it.isDigit() }
+                            val afterLine = remainder.substring(firstColon + 1).trim()
+                            val colDigits = afterLine.takeWhile { it.isDigit() }
+                            if (colDigits.isNotEmpty()) {
                                 column = colDigits.toIntOrNull()
-                                cleanMessage = afterLine.trim().drop(colDigits.length).trim()
-                                    .removePrefix("error:").removePrefix("warning:").trim()
+                                var msgRemainder = afterLine.substring(colDigits.length).trim()
+                                if (msgRemainder.startsWith(":")) {
+                                    msgRemainder = msgRemainder.removePrefix(":").trim()
+                                }
+                                cleanMessage = msgRemainder.removePrefix("error:").removePrefix("warning:").trim()
+                            } else {
+                                cleanMessage = afterLine.removePrefix("error:").removePrefix("warning:").trim()
                             }
                         }
                     }

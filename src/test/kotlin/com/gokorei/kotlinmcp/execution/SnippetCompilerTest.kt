@@ -330,5 +330,19 @@ class SnippetCompilerTest {
 
         tempDir.toFile().deleteRecursively()
     }
+
+    @Test
+    fun `structured collector preserves entire colon-separated error messages`() {
+        val invalidCode = "val x: Int = \"type: mismatch: detail\""
+        val result = SnippetCompiler.compile(invalidCode)
+        assertTrue(result is CompileResult.Compiled)
+        val errors = (result as CompileResult.Compiled).diagnostics.filter { it.severity == "error" }
+        assertTrue(errors.isNotEmpty())
+        val err = errors.first()
+        assertNotNull(err.line)
+        assertNotNull(err.column)
+        assertTrue(err.message.contains("Type mismatch") || err.message.contains("String"), "expected full error message, got: ${err.message}")
+        SnippetCompiler.cleanup(result)
+    }
 }
 
