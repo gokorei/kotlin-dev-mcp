@@ -3,8 +3,13 @@ package com.gokorei.kotlinmcp.execution
 import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import com.gokorei.kotlinmcp.shared.ToonUtils
 
+/**
+ * Diagnostic actions supported by [DiagnosticService].
+ */
 enum class DiagnosticAction {
+    /** Run embedded compiler diagnostics on a Kotlin code snippet. */
     CHECK_SNIPPET,
+    /** Run a structural project layout inventory. */
     RUN_PROJECT_LAYOUT
 }
 
@@ -13,6 +18,15 @@ enum class DiagnosticAction {
  * layout inventory on Kotlin snippets and projects.
  */
 interface DiagnosticService {
+    /**
+     * Executes the requested diagnostic action.
+     *
+     * @param action The diagnostic action to perform.
+     * @param code Kotlin source snippet (if applicable).
+     * @param projectPath Optional root path to project workspace.
+     * @param classpath Additional classpath items.
+     * @return [KotlinMcpResult] containing formatted output or structured error details.
+     */
     fun execute(
         action: DiagnosticAction,
         code: String,
@@ -21,8 +35,14 @@ interface DiagnosticService {
     ): KotlinMcpResult
 }
 
+/**
+ * Default implementation of [DiagnosticService] using the in-process BTA [SnippetCompiler].
+ */
 class DefaultDiagnosticService : DiagnosticService {
 
+    /**
+     * Executes the requested diagnostic action.
+     */
     override fun execute(action: DiagnosticAction, code: String, projectPath: String?, classpath: List<String>): KotlinMcpResult {
         return when (action) {
             DiagnosticAction.CHECK_SNIPPET -> checkSnippetEmbedded(code, classpath, projectPath)
@@ -30,6 +50,14 @@ class DefaultDiagnosticService : DiagnosticService {
         }
     }
 
+    /**
+     * Checks snippet compilation in-process and produces structured diagnostics.
+     *
+     * @param code The snippet source code.
+     * @param classpath Additional classpath entries.
+     * @param projectPath Optional path to project directory.
+     * @return [KotlinMcpResult] containing a TOON diagnostics table on compilation errors, success confirmation on clean compilation, or [KotlinMcpResult.Error] without a TOON table on compiler invocation failure.
+     */
     fun checkSnippetEmbedded(code: String, classpath: List<String> = emptyList(), projectPath: String? = null): KotlinMcpResult {
         val result = SnippetCompiler.compile(code, classpath, projectPath)
         val mcp = buildCheckResult(result)

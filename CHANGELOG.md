@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Kotlin Build Tools API dependencies** — added `org.jetbrains.kotlin:kotlin-build-tools-api` and `kotlin-build-tools-impl` (2.3.20) dependencies to `build.gradle.kts` in preparation for compiler daemon and in-process compilation execution.
 - **BTA Toolchain Manager & Session lifecycle** — implemented `BuildToolsToolchainManager` (`DefaultBuildToolsToolchainManager`) and `BuildToolsSession` for thread-safe discovery, caching, and lifecycle scoping of Kotlin Build Tools API `CompilationService` instances across snippet compilation calls.
 - **BTA-backed snippet compilation execution** — refactored `SnippetCompiler.compile(...)` to execute in-process compilation via Kotlin Build Tools API `CompilationService.compileJvm`, maintaining strongly typed compiler argument lists, JVM target resolution, and structured diagnostic capture.
+- **Structured BTA diagnostics & severity mapping** — adapted `DiagnosticService` and `SnippetCompiler` to parse BTA compiler diagnostics into structured line/column spans, TOON table formatting, severity metadata counters, and actionable unresolved reference hints.
 
 ## [1.4.0] - 2026-08-30
 
