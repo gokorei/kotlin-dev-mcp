@@ -193,6 +193,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
         suppressWarnings.set(true)
         allWarningsAsErrors.set(false)
         optIn.add("org.jetbrains.kotlin.K1Deprecation")
+        optIn.add("org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi")
     }
 }
 
