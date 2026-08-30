@@ -330,5 +330,21 @@ class SnippetCompilerTest {
 
         tempDir.toFile().deleteRecursively()
     }
+
+    @Test
+    fun `warm session in-memory compilation latency benchmark`() {
+        // Pre-warm the compilation toolchain
+        val warmup = SnippetCompiler.compile("fun warmup(): Int = 42")
+        assertTrue(warmup is CompileResult.Compiled)
+        SnippetCompiler.cleanup(warmup)
+
+        val start = System.nanoTime()
+        val result = SnippetCompiler.compile("fun fast(): String = \"benchmark\"")
+        val durationMs = (System.nanoTime() - start) / 1_000_000
+
+        assertTrue(result is CompileResult.Compiled)
+        assertTrue(durationMs < 5000, "Warm compilation should execute rapidly, took: ${durationMs}ms")
+        SnippetCompiler.cleanup(result)
+    }
 }
 
