@@ -2,6 +2,21 @@
 
 Overview of new features, bug fixes, and improvements shipped in each `kotlin-mcp` release.
 
+## Next
+
+### New Features
+
+### Bug Fixes
+
+- **Runtime transport boundary resilience & LinkageError protection** — wrapped MCP tool execution handlers in a `Throwable` guard in `ToolRegistrar` to intercept `LinkageError`, `NoClassDefFoundError`, `ZipError`, and unexpected runtime errors, returning structured `KotlinMcpResult.Error` responses with actionable diagnostic guidance rather than dropping transport frames.
+- **Bundled snippet classpath validation & corruption recovery** — added structural ZIP validity and header checks in `SnippetCompiler.materializeBundledSnippetClasspath()` to prevent bad signature and invalid LOC header crashes when extracting bundled library JARs.
+- **Tooling classpath validation & descriptive linter diagnostics** — added pre-invocation validation for `detekt` and `ktlint` classpaths in `DefaultLintService` to detect missing or corrupted tooling files before spawning worker JVM subprocesses, returning actionable instructions to rebuild tooling caches.
+
+### Improvements
+
+- **Hardened uberJar fat-jar packaging** — updated `build.gradle.kts` so project classes and resources strictly take precedence over unpacked runtime dependencies under `DuplicatesStrategy.EXCLUDE`, stripped third-party manifest signature files (`META-INF/*.SF`, `*.DSA`, `*.RSA`), and enforced explicit task dependencies (`dependsOn(jar, processResources)`).
+
+---
 ## v1.3.0 — 2026-08-28
 
 ### New Features

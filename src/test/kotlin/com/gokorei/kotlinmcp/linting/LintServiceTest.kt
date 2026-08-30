@@ -105,21 +105,39 @@ class LintServiceTest {
     fun `missing detekt classpath attempts fallback resolution or returns actionable error message`() {
         val noClasspath = DefaultLintService(resourceOverrides = mapOf("detekt.classpath.txt" to null))
         val result = noClasspath.runDetekt("fun main() {}")
-        if (result.isError) {
-            val err = result as KotlinMcpResult.Error
-            assertTrue(err.code == "DETEKT_CLASSPATH_MISSING" || err.code == "DETEKT_RUN_ERROR", "got code: ${err.code}")
-            assertTrue(err.message.contains("classpath") || err.message.contains("dumpToolingClasspaths"), "message should guide user: ${err.message}")
-        }
+        assertTrue(result.isError)
+        val err = result as KotlinMcpResult.Error
+        assertEquals("DETEKT_CLASSPATH_MISSING", err.code)
+        assertTrue(err.message.contains("classpath") || err.message.contains("dumpToolingClasspaths"), "message should guide user: ${err.message}")
+    }
+
+    @Test
+    fun `invalid detekt classpath entries returns actionable error message`() {
+        val invalidClasspath = DefaultLintService(resourceOverrides = mapOf("detekt.classpath.txt" to "/non/existent/detekt.jar:/another/missing.jar"))
+        val result = invalidClasspath.runDetekt("fun main() {}")
+        assertTrue(result.isError)
+        val err = result as KotlinMcpResult.Error
+        assertEquals("DETEKT_CLASSPATH_MISSING", err.code)
+        assertTrue(err.message.contains("missing on disk") || err.message.contains("dumpToolingClasspaths"))
     }
 
     @Test
     fun `missing ktlint classpath attempts fallback resolution or returns actionable error message`() {
         val noClasspath = DefaultLintService(resourceOverrides = mapOf("ktlint.classpath.txt" to null))
         val result = noClasspath.formatKtlint("fun main() {}")
-        if (result.isError) {
-            val err = result as KotlinMcpResult.Error
-            assertTrue(err.code == "KTLINT_CLASSPATH_MISSING" || err.code == "KTLINT_ERROR")
-        }
+        assertTrue(result.isError)
+        val err = result as KotlinMcpResult.Error
+        assertEquals("KTLINT_CLASSPATH_MISSING", err.code)
+    }
+
+    @Test
+    fun `invalid ktlint classpath entries returns actionable error message`() {
+        val invalidClasspath = DefaultLintService(resourceOverrides = mapOf("ktlint.classpath.txt" to "/non/existent/ktlint.jar"))
+        val result = invalidClasspath.formatKtlint("fun main() {}")
+        assertTrue(result.isError)
+        val err = result as KotlinMcpResult.Error
+        assertEquals("KTLINT_CLASSPATH_MISSING", err.code)
+        assertTrue(err.message.contains("missing on disk") || err.message.contains("dumpToolingClasspaths"))
     }
 
     @Test

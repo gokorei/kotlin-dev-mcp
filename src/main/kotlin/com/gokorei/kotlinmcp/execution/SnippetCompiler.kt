@@ -149,10 +149,22 @@ object SnippetCompiler {
             }
             val names = manifest.use { it.bufferedReader().lineSequence().map { l -> l.trim() }.filter { n -> n.isNotBlank() }.toList() }
             val resolved = names.mapNotNull { name ->
-                val input = loader.getResourceAsStream("snippet-classpath/$name") ?: return@mapNotNull null
-                val target = dir.resolve(name.substringAfterLast('/'))
-                input.use { Files.copy(it, target) }
-                target.toAbsolutePath().toString()
+                try {
+                    val input = loader.getResourceAsStream("snippet-classpath/$name") ?: return@mapNotNull null
+                    val target = dir.resolve(name.substringAfterLast('/'))
+                    input.use { Files.copy(it, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING) }
+                    val targetFile = target.toFile()
+                    if (isValidZipFile(targetFile)) {
+                        target.toAbsolutePath().toString()
+                    } else {
+                        logger.warn { "Bundled snippet JAR '$name' failed zip validation; skipping" }
+                        targetFile.delete()
+                        null
+                    }
+                } catch (e: Throwable) {
+                    logger.warn(e) { "Failed to extract bundled snippet JAR '$name'; skipping" }
+                    null
+                }
             }
             if (resolved.isEmpty()) {
                 dir.toFile().deleteRecursively()
@@ -163,6 +175,29 @@ object SnippetCompiler {
             )
             bundledSnippetClasspath = resolved
             return resolved
+        }
+    }
+
+    private fun isValidZipFile(file: File): Boolean {
+        if (!file.isFile || file.length() < 4) return false
+        return try {
+            java.util.zip.ZipFile(file).use { zip ->
+                val entries = zip.entries()
+                val buffer = ByteArray(8192)
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    if (!entry.isDirectory) {
+                        zip.getInputStream(entry).use { stream ->
+                            while (stream.read(buffer) != -1) {
+                                // Drain stream to verify CRC checksum and decompression integrity
+                            }
+                        }
+                    }
+                }
+            }
+            true
+        } catch (_: Throwable) {
+            false
         }
     }
 

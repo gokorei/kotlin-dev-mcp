@@ -120,14 +120,15 @@ class DefaultLintService(
         compilerClasspath: List<String>
     ): KotlinMcpResult {
         val baseClasspath = detektClasspath()
-        if (baseClasspath == null) {
+        val (valid, errorMsg) = validateToolingClasspath(baseClasspath, "detekt")
+        if (!valid) {
             return KotlinMcpResult.Error(
-                message = "detekt tooling classpath missing. Run the Gradle `dumpToolingClasspaths` task (wired into processResources) or pass 'compilerClasspath' before using this tool.",
+                message = errorMsg,
                 code = "DETEKT_CLASSPATH_MISSING",
                 requireAnotherCall = true
             )
         }
-        val classpathEntries = listOf(baseClasspath) + compilerClasspath.filter { it.isNotBlank() }
+        val classpathEntries = listOfNotNull(baseClasspath) + compilerClasspath.filter { it.isNotBlank() }
         return when (val run = runDetektSubprocess(code, workspacePath, config, classpathEntries)) {
             is DetektRun.Failed -> KotlinMcpResult.Error(message = run.message, code = run.code, requireAnotherCall = true)
             is DetektRun.Findings -> {
@@ -157,6 +158,27 @@ class DefaultLintService(
 
     private fun ktlintClasspath(): String? =
         resourceText("ktlint.classpath.txt")
+
+    private fun validateToolingClasspath(classpath: String?, toolName: String): Pair<Boolean, String> {
+        if (classpath.isNullOrBlank()) {
+            return false to "$toolName tooling classpath missing. Run the Gradle `dumpToolingClasspaths` task (wired into processResources) or pass 'compilerClasspath' before using this tool."
+        }
+        val entries = classpath.split(File.pathSeparator).filter { it.isNotBlank() }
+        val missing = entries.filter { !File(it).exists() }
+        if (entries.isNotEmpty() && missing.size == entries.size) {
+            return false to "All $toolName tooling JARs are missing on disk (e.g. ${missing.first()}). Run `./gradlew dumpToolingClasspaths` and rebuild the server with `./gradlew uberJar` to refresh the tooling cache."
+        }
+        return true to ""
+    }
+
+    private fun formatExecutionErrorMessage(toolName: String, exitCode: Int, tailOutput: String): String {
+        val snippet = tailOutput.take(400).trim()
+        return if (tailOutput.contains("ZipFile invalid LOC header") || tailOutput.contains("ZipException") || tailOutput.contains("bad signature")) {
+            "$toolName execution encountered a corrupted JAR cache on disk (exit=$exitCode): $snippet. Rebuild tooling cache with `./gradlew dumpToolingClasspaths uberJar` and restart the MCP server."
+        } else {
+            "$toolName invocation failed (exit=$exitCode): $snippet"
+        }
+    }
 
     private fun resourceText(name: String): String? =
         if (resourceOverrides.containsKey(name)) {
@@ -303,7 +325,7 @@ class DefaultLintService(
                 timeoutSeconds = 180L
             )
             if (run.exitCode < 0 || (run.exitCode != 0 && !reportFile.exists())) {
-                return DetektRun.Failed("DETEKT_EXECUTION_ERROR", "detekt invocation failed (exit=${run.exitCode}): ${run.tailOutput.take(300)}")
+                return DetektRun.Failed("DETEKT_EXECUTION_ERROR", formatExecutionErrorMessage("detekt", run.exitCode, run.tailOutput))
             }
 
             val findings = if (reportFile.exists()) {
@@ -324,14 +346,15 @@ class DefaultLintService(
         compilerClasspath: List<String>
     ): KotlinMcpResult {
         val baseClasspath = ktlintClasspath()
-        if (baseClasspath == null) {
+        val (valid, errorMsg) = validateToolingClasspath(baseClasspath, "ktlint")
+        if (!valid) {
             return KotlinMcpResult.Error(
-                message = "ktlint tooling classpath missing. Run the Gradle `dumpToolingClasspaths` task (wired into processResources) or pass 'compilerClasspath' before using this tool.",
+                message = errorMsg,
                 code = "KTLINT_CLASSPATH_MISSING",
                 requireAnotherCall = true
             )
         }
-        val classpathEntries = listOf(baseClasspath) + compilerClasspath.filter { it.isNotBlank() }
+        val classpathEntries = listOfNotNull(baseClasspath) + compilerClasspath.filter { it.isNotBlank() }
 
         val tempDir = try {
             Files.createTempDirectory("ktlint-run")
@@ -344,24 +367,24 @@ class DefaultLintService(
             Files.writeString(snippetFile, code)
 
             val args = mutableListOf<String>()
-if (apply) {
-                    args.add("-F")
-                }
-                args.add(snippetFile.toAbsolutePath().toString())
+            if (apply) {
+                args.add("-F")
+            }
+            args.add(snippetFile.toAbsolutePath().toString())
 
-                val run = runJavaTool(
-                    mainClass = "com.pinterest.ktlint.Main",
-                    classpathEntries = classpathEntries,
-                    args = args,
-                    dir = tempDir,
-                    timeoutSeconds = 120L
+            val run = runJavaTool(
+                mainClass = "com.pinterest.ktlint.Main",
+                classpathEntries = classpathEntries,
+                args = args,
+                dir = tempDir,
+                timeoutSeconds = 120L
+            )
+            if (run.exitCode < 0 || (run.exitCode != 0 && run.exitCode != 1)) {
+                return KotlinMcpResult.Error(
+                    message = formatExecutionErrorMessage("ktlint", run.exitCode, run.tailOutput),
+                    code = "KTLINT_EXECUTION_ERROR"
                 )
-                if (run.exitCode < 0 || (run.exitCode != 0 && run.exitCode != 1)) {
-                    return KotlinMcpResult.Error(
-                        message = "ktlint invocation failed (exit=${run.exitCode}): ${run.tailOutput.take(300)}",
-                        code = "KTLINT_EXECUTION_ERROR"
-                    )
-                }
+            }
 
             val formattedCode = try {
                 Files.readString(snippetFile)

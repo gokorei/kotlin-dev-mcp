@@ -174,6 +174,83 @@ class SnippetCompilerTest {
     }
 
     @Test
+    fun `materializeBundledSnippetClasspath rejects invalid non-zip files and handles corrupted resources safely`() {
+        SnippetCompiler.resetBundledSnippetClasspathCache()
+        val corruptLoader = object : ClassLoader(SnippetCompiler::class.java.classLoader) {
+            override fun getResourceAsStream(name: String): java.io.InputStream? {
+                return when (name) {
+                    "snippet-classpath/snippet.classpath.txt" -> "corrupted.jar\n".byteInputStream()
+                    "snippet-classpath/corrupted.jar" -> "NOT_A_VALID_ZIP_HEADER".byteInputStream()
+                    else -> super.getResourceAsStream(name)
+                }
+            }
+        }
+
+        try {
+            val result = SnippetCompiler.materializeBundledSnippetClasspath(corruptLoader)
+            assertTrue(result.isEmpty(), "Expected empty list when all bundled jars are corrupt, got: $result")
+        } finally {
+            SnippetCompiler.resetBundledSnippetClasspathCache()
+        }
+    }
+
+    @Test
+    fun `materializeBundledSnippetClasspath rejects truncated PK header files`() {
+        SnippetCompiler.resetBundledSnippetClasspathCache()
+        val truncatedLoader = object : ClassLoader(SnippetCompiler::class.java.classLoader) {
+            override fun getResourceAsStream(name: String): java.io.InputStream? {
+                return when (name) {
+                    "snippet-classpath/snippet.classpath.txt" -> "truncated.jar\n".byteInputStream()
+                    // Starts with PK magic bytes but lacks valid ZIP central directory / header structures
+                    "snippet-classpath/truncated.jar" -> byteArrayOf(0x50, 0x4B, 0x03, 0x04, 0x00, 0x00).inputStream()
+                    else -> super.getResourceAsStream(name)
+                }
+            }
+        }
+
+        try {
+            val result = SnippetCompiler.materializeBundledSnippetClasspath(truncatedLoader)
+            assertTrue(result.isEmpty(), "Expected empty list when bundled jar has truncated PK header, got: $result")
+        } finally {
+            SnippetCompiler.resetBundledSnippetClasspathCache()
+        }
+    }
+
+    @Test
+    fun `materializeBundledSnippetClasspath rejects zip files with damaged entry data or CRC mismatch`() {
+        SnippetCompiler.resetBundledSnippetClasspathCache()
+        val baos = java.io.ByteArrayOutputStream()
+        java.util.zip.ZipOutputStream(baos).use { zos ->
+            zos.putNextEntry(java.util.zip.ZipEntry("test.txt"))
+            zos.write("some uncompressed data to create valid entry".toByteArray())
+            zos.closeEntry()
+        }
+        val zipBytes = baos.toByteArray()
+        // Corrupt entry payload bytes to trigger CRC / decompression failure when entry is read
+        if (zipBytes.size > 40) {
+            zipBytes[38] = (zipBytes[38] + 1).toByte()
+            zipBytes[39] = (zipBytes[39] + 1).toByte()
+        }
+
+        val damagedLoader = object : ClassLoader(SnippetCompiler::class.java.classLoader) {
+            override fun getResourceAsStream(name: String): java.io.InputStream? {
+                return when (name) {
+                    "snippet-classpath/snippet.classpath.txt" -> "damaged.jar\n".byteInputStream()
+                    "snippet-classpath/damaged.jar" -> zipBytes.inputStream()
+                    else -> super.getResourceAsStream(name)
+                }
+            }
+        }
+
+        try {
+            val result = SnippetCompiler.materializeBundledSnippetClasspath(damagedLoader)
+            assertTrue(result.isEmpty(), "Expected empty list when bundled jar has damaged entry data/CRC, got: $result")
+        } finally {
+            SnippetCompiler.resetBundledSnippetClasspathCache()
+        }
+    }
+
+    @Test
     fun `external library without classpath is a hard unresolved error`() {
         val snippet = """
             import org.example.missinglib.Widget
