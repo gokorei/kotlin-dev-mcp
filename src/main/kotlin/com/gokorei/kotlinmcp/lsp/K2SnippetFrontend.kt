@@ -45,40 +45,46 @@ object K2SnippetFrontend {
 
     val environment: KotlinCoreEnvironment
         get() {
-            synchronized(K2SnippetFrontend) {
-                var env = cachedEnvironment
-                if (env == null) {
-                    val configuration = CompilerConfiguration().apply {
-                        put(CommonConfigurationKeys.MESSAGE_COLLECTOR_KEY, org.jetbrains.kotlin.cli.common.messages.MessageCollector.NONE)
-                        put(CommonConfigurationKeys.MODULE_NAME, "snippet_module")
+            var env = cachedEnvironment
+            if (env == null) {
+                synchronized(this) {
+                    env = cachedEnvironment
+                    if (env == null) {
+                        val configuration = CompilerConfiguration().apply {
+                            put(CommonConfigurationKeys.MESSAGE_COLLECTOR_KEY, org.jetbrains.kotlin.cli.common.messages.MessageCollector.NONE)
+                            put(CommonConfigurationKeys.MODULE_NAME, "snippet_module")
+                        }
+                        val defaultRoots = SnippetCompiler.resolveDefaultImports(System.getProperty("java.class.path").orEmpty())
+                            .filter { it.isNotBlank() }
+                            .map { java.io.File(it) }
+                        if (defaultRoots.isNotEmpty()) {
+                            configuration.addJvmClasspathRoots(defaultRoots)
+                        }
+                        env = KotlinCoreEnvironment.createForProduction(
+                            rootDisposable,
+                            configuration,
+                            EnvironmentConfigFiles.JVM_CONFIG_FILES
+                        )
+                        cachedEnvironment = env
                     }
-                    val defaultRoots = SnippetCompiler.resolveDefaultImports(System.getProperty("java.class.path").orEmpty())
-                        .filter { it.isNotBlank() }
-                        .map { java.io.File(it) }
-                    if (defaultRoots.isNotEmpty()) {
-                        configuration.addJvmClasspathRoots(defaultRoots)
-                    }
-                    env = KotlinCoreEnvironment.createForProduction(
-                        rootDisposable,
-                        configuration,
-                        EnvironmentConfigFiles.JVM_CONFIG_FILES
-                    )
-                    cachedEnvironment = env
                 }
-                return env
             }
+            return env!!
         }
 
     val psiFactory: KtPsiFactory
         get() {
-            synchronized(K2SnippetFrontend) {
-                var factory = cachedPsiFactory
-                if (factory == null) {
-                    factory = KtPsiFactory(environment.project)
-                    cachedPsiFactory = factory
+            var factory = cachedPsiFactory
+            if (factory == null) {
+                synchronized(this) {
+                    factory = cachedPsiFactory
+                    if (factory == null) {
+                        factory = KtPsiFactory(environment.project)
+                        cachedPsiFactory = factory
+                    }
                 }
-                return factory
             }
+            return factory!!
         }
 
     val currentRootDisposable: Disposable
@@ -110,7 +116,6 @@ object K2SnippetFrontend {
         }
     }
 
-    @Synchronized
     fun parsePsi(code: String): KtFile? {
         if (disposed) return null
         return try {
@@ -136,7 +141,6 @@ object K2SnippetFrontend {
         }
     }
 
-    @Synchronized
     @Suppress("DEPRECATION", "DEPRECATION_ERROR", "OPT_IN_USAGE", "OPT_IN_USAGE_ERROR")
     @OptIn(org.jetbrains.kotlin.K1Deprecation::class)
     fun analyzeSession(code: String, extraFiles: List<KtFile> = emptyList()): K2AnalysisSession? {

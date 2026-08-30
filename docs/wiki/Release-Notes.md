@@ -16,6 +16,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 - **BTA Toolchain Manager & Session lifecycle** — implemented `BuildToolsToolchainManager` (`DefaultBuildToolsToolchainManager`) and `BuildToolsSession` for thread-safe discovery, caching, and lifecycle scoping of Kotlin Build Tools API `CompilationService` instances across snippet compilation calls.
 - **BTA-backed snippet compilation execution** — refactored `SnippetCompiler.compile(...)` to execute in-process `JvmCompilationOperation` via the Kotlin Build Tools API (`compileJvm`), maintaining strongly typed compiler argument lists, JVM target resolution, and structured diagnostic capture.
 - **Structured BTA diagnostics & severity mapping** — adapted `DiagnosticService` and `SnippetCompiler` to parse BTA compiler diagnostics into structured line/column spans, TOON table formatting, severity metadata counters, and actionable unresolved reference hints.
+- **K2 snippet frontend concurrency & lock-free AST parsing** — eliminated coarse monitor synchronization on `K2SnippetFrontend.parsePsi` and `analyzeSession`, introducing double-checked environment and `KtPsiFactory` initialization for non-blocking concurrent AST parsing across worker threads.
 
 ---
 
