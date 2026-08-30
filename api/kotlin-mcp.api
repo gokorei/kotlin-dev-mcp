@@ -46,14 +46,8 @@ public final class com/gokorei/kotlinmcp/analysis/CoroutinesSafetyAnalyzer {
 
 public final class com/gokorei/kotlinmcp/analysis/DefaultCodeAnalysisService : com/gokorei/kotlinmcp/analysis/CodeAnalysisService {
 	public fun <init> ()V
-	public fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;)V
-	public fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/analysis/FileContextAnalyzer;)V
-	public fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/analysis/FileContextAnalyzer;Lcom/gokorei/kotlinmcp/analysis/SymbolInspector;)V
-	public fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/analysis/FileContextAnalyzer;Lcom/gokorei/kotlinmcp/analysis/SymbolInspector;Lcom/gokorei/kotlinmcp/analysis/NullabilityAnalyzer;)V
-	public fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/analysis/FileContextAnalyzer;Lcom/gokorei/kotlinmcp/analysis/SymbolInspector;Lcom/gokorei/kotlinmcp/analysis/NullabilityAnalyzer;Lcom/gokorei/kotlinmcp/analysis/CoroutinesSafetyAnalyzer;)V
-	public fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/analysis/FileContextAnalyzer;Lcom/gokorei/kotlinmcp/analysis/SymbolInspector;Lcom/gokorei/kotlinmcp/analysis/NullabilityAnalyzer;Lcom/gokorei/kotlinmcp/analysis/CoroutinesSafetyAnalyzer;Lcom/gokorei/kotlinmcp/analysis/ComposeAnalyzer;)V
-	public fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/analysis/FileContextAnalyzer;Lcom/gokorei/kotlinmcp/analysis/SymbolInspector;Lcom/gokorei/kotlinmcp/analysis/NullabilityAnalyzer;Lcom/gokorei/kotlinmcp/analysis/CoroutinesSafetyAnalyzer;Lcom/gokorei/kotlinmcp/analysis/ComposeAnalyzer;Lcom/gokorei/kotlinmcp/analysis/WorkManagerAnalyzer;)V
-	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/analysis/FileContextAnalyzer;Lcom/gokorei/kotlinmcp/analysis/SymbolInspector;Lcom/gokorei/kotlinmcp/analysis/NullabilityAnalyzer;Lcom/gokorei/kotlinmcp/analysis/CoroutinesSafetyAnalyzer;Lcom/gokorei/kotlinmcp/analysis/ComposeAnalyzer;Lcom/gokorei/kotlinmcp/analysis/WorkManagerAnalyzer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/gokorei/kotlinmcp/analysis/FileContextAnalyzer;Lcom/gokorei/kotlinmcp/analysis/SymbolInspector;Lcom/gokorei/kotlinmcp/analysis/NullabilityAnalyzer;Lcom/gokorei/kotlinmcp/analysis/CoroutinesSafetyAnalyzer;Lcom/gokorei/kotlinmcp/analysis/ComposeAnalyzer;Lcom/gokorei/kotlinmcp/analysis/WorkManagerAnalyzer;)V
+	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/analysis/FileContextAnalyzer;Lcom/gokorei/kotlinmcp/analysis/SymbolInspector;Lcom/gokorei/kotlinmcp/analysis/NullabilityAnalyzer;Lcom/gokorei/kotlinmcp/analysis/CoroutinesSafetyAnalyzer;Lcom/gokorei/kotlinmcp/analysis/ComposeAnalyzer;Lcom/gokorei/kotlinmcp/analysis/WorkManagerAnalyzer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun execute (Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisAction;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun execute (Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisAction;Ljava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/models/ResponseProjection;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public synthetic fun execute (Ljava/lang/Object;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -61,7 +55,10 @@ public final class com/gokorei/kotlinmcp/analysis/DefaultCodeAnalysisService : c
 
 public final class com/gokorei/kotlinmcp/analysis/FileContextAnalyzer {
 	public fun <init> ()V
+	public fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;)V
+	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun fileContext (Ljava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun fileContext$default (Lcom/gokorei/kotlinmcp/analysis/FileContextAnalyzer;Ljava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
 public final class com/gokorei/kotlinmcp/analysis/NullabilityAnalyzer {

@@ -10,6 +10,8 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Improvements
 
+- **CodeAnalysisService architectural cleanup & DI decoupling** — simplified `DefaultCodeAnalysisService` and `FileContextAnalyzer` by constructor-injecting `WorkspaceSemanticIndexer` directly into `FileContextAnalyzer`, eliminating leaky parameter forwarding and removing redundant synthetic constructors.
+
 ---
 
 ## v1.5.0 — 2026-08-31
