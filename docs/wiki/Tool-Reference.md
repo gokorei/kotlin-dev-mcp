@@ -71,14 +71,14 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 
 ### `kotlin_check_snippet`
 
-**Description:** Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column, or run in-memory AST mutation testing.
+**Description:** Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column, run in-memory AST mutation testing, or perform compiler-backed semantic verification (when-exhaustiveness, value classes, contracts, expect/actual, inline-reified, opt-in, deprecated).
 
-**Supported Actions:** `check`, `mutate`
+**Supported Actions:** `check`, `mutate`, `when_exhaustiveness`, `value_class`, `inline_reified`, `contracts`, `expect_actual`, `experimental_optin`, `deprecated`
 
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `action` | `string` | No | Operation: 'check' (default, embedded compiler diagnostics) or 'mutate' (in-memory AST mutation testing against unit tests) |
-| `code` | `string` | **Yes** | Kotlin code snippet to compile-check or mutation-test |
+| `action` | `string` | No | Operation: 'check' (default, embedded compiler diagnostics), 'mutate' (in-memory AST mutation testing), 'when_exhaustiveness' (sealed/enum branch checking), 'value_class' (@JvmInline constraints), 'inline_reified' (reified generics & inline size), 'contracts' (contract blocks), 'expect_actual' (KMP multiplatform alignment), 'experimental_optin' (@RequiresOptIn/@OptIn), 'deprecated' (@Deprecated ReplaceWith) |
+| `code` | `string` | **Yes** | Kotlin code snippet to compile-check, mutation-test, or semantically verify |
 | `testCode` | `string` | No | Optional unit test code containing fun main() assertions to evaluate against generated mutants (used when action='mutate') |
 | `preset` | `string` | No | Optional response projection for mutation reports: 'compact', 'full' (default), or 'summary' |
 | `classpath` | `Array<string>` | No | Optional array of jar/dir paths added to compile classpath |

@@ -194,11 +194,11 @@ object ToolRegistrar {
 
         // 5. kotlin_check_snippet
         register("kotlin_check_snippet") {
-            description = "Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column, or run in-memory AST mutation testing."
+            description = "Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column, run in-memory AST mutation testing, or perform compiler-backed semantic verification (when-exhaustiveness, value classes, contracts, expect/actual, inline-reified, opt-in, deprecated)."
             readOnly = true
-            actions("check", "mutate")
-            param("action", "Operation: 'check' (default, embedded compiler diagnostics) or 'mutate' (in-memory AST mutation testing against unit tests)")
-            param("code", "Kotlin code snippet to compile-check or mutation-test")
+            actions("check", "mutate", "when_exhaustiveness", "value_class", "inline_reified", "contracts", "expect_actual", "experimental_optin", "deprecated")
+            param("action", "Operation: 'check' (default, embedded compiler diagnostics), 'mutate' (in-memory AST mutation testing), 'when_exhaustiveness' (sealed/enum branch checking), 'value_class' (@JvmInline constraints), 'inline_reified' (reified generics & inline size), 'contracts' (contract blocks), 'expect_actual' (KMP multiplatform alignment), 'experimental_optin' (@RequiresOptIn/@OptIn), 'deprecated' (@Deprecated ReplaceWith)")
+            param("code", "Kotlin code snippet to compile-check, mutation-test, or semantically verify")
             param("testCode", "Optional unit test code containing fun main() assertions to evaluate against generated mutants (used when action='mutate')")
             param("preset", "Optional response projection for mutation reports: 'compact', 'full' (default), or 'summary'")
             param("classpath", "Optional array of jar/dir paths added to compile classpath", type = "array", itemsType = "string")
@@ -206,13 +206,27 @@ object ToolRegistrar {
             required("code")
             handleSimple { k, a ->
                 val code = a["code"].orEmpty()
-                val action = a["action"]?.lowercase()?.trim()
-                if (action == "mutate" || action == "mutation_test") {
-                    k.mutationTest(code, a["testCode"], a["preset"])
-                } else {
-                    val cp = a["classpath"]?.split(",", ";")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
-                    k.checkSnippet(code, cp, a["projectPath"])
-                }
+                val projectPath = a["projectPath"] ?: a["workspacePath"] ?: a["path"]
+                val projectCp = com.gokorei.kotlinmcp.execution.SnippetCompiler.detectProjectClasspath(projectPath)
+                val explicitCp = a["classpath"]?.split(",", ";")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
+                val cp = (explicitCp + projectCp).distinct()
+                dispatchAction(
+                    action = a["action"],
+                    defaultAction = "check",
+                    args = a,
+                    handlers = mapOf(
+                        "check" to { k.checkSnippet(code, explicitCp, projectPath) },
+                        "mutate" to { k.mutationTest(code, a["testCode"], a["preset"]) },
+                        "mutation_test" to { k.mutationTest(code, a["testCode"], a["preset"]) },
+                        "when_exhaustiveness" to { k.checkWhenExhaustiveness(code, cp) },
+                        "value_class" to { k.checkValueClass(code, cp) },
+                        "inline_reified" to { k.checkInlineReified(code, cp) },
+                        "contracts" to { k.checkContracts(code, cp) },
+                        "expect_actual" to { k.checkExpectActual(code, cp) },
+                        "experimental_optin" to { k.checkExperimentalOptIn(code, cp) },
+                        "deprecated" to { k.checkDeprecated(code, cp) }
+                    )
+                )
             }
         }
     }
