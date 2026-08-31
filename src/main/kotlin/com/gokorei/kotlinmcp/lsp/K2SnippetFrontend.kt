@@ -160,13 +160,23 @@ object K2SnippetFrontend {
                 val hash = (code.hashCode() and 0x7fffffff).toString(16)
                 val nano = System.nanoTime()
                 val ktFile = psiFactory.createFile("Snippet_${hash}_$nano.kt", code)
-                val isScript = ktFile.script != null || ktFile.children.any { child ->
-                    child is org.jetbrains.kotlin.psi.KtScriptInitializer ||
-                    child is org.jetbrains.kotlin.psi.KtForExpression ||
-                    child is org.jetbrains.kotlin.psi.KtWhileExpression ||
-                    child is org.jetbrains.kotlin.psi.KtDoWhileExpression ||
-                    child is org.jetbrains.kotlin.psi.KtIfExpression ||
-                    child is org.jetbrains.kotlin.com.intellij.psi.PsiErrorElement
+                var isScript = ktFile.script != null
+                if (!isScript) {
+                    ktFile.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+                        override fun visitElement(element: org.jetbrains.kotlin.com.intellij.psi.PsiElement) {
+                            if (element.parent == ktFile) {
+                                if (element is org.jetbrains.kotlin.psi.KtScriptInitializer ||
+                                    element is org.jetbrains.kotlin.psi.KtForExpression ||
+                                    element is org.jetbrains.kotlin.psi.KtWhileExpression ||
+                                    element is org.jetbrains.kotlin.psi.KtDoWhileExpression ||
+                                    element is org.jetbrains.kotlin.psi.KtIfExpression ||
+                                    element is org.jetbrains.kotlin.com.intellij.psi.PsiErrorElement) {
+                                    isScript = true
+                                }
+                            }
+                            super.visitElement(element)
+                        }
+                    })
                 }
                 if (isScript) {
                     psiFactory.createFile("Snippet_${hash}_$nano.kts", code)
