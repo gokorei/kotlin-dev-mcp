@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BTA Toolchain Manager & Session lifecycle** — implemented `BuildToolsToolchainManager` (`DefaultBuildToolsToolchainManager`) and `BuildToolsSession` for thread-safe discovery, caching, and lifecycle scoping of Kotlin Build Tools API `CompilationService` instances across snippet compilation calls.
 - **BTA-backed snippet compilation execution** — refactored `SnippetCompiler.compile(...)` to execute in-process compilation via Kotlin Build Tools API `CompilationService.compileJvm`, maintaining strongly typed compiler argument lists, JVM target resolution, and structured diagnostic capture.
 - **Structured BTA diagnostics & severity mapping** — adapted `DiagnosticService` and `SnippetCompiler` to parse BTA compiler diagnostics into structured line/column spans, TOON table formatting, severity metadata counters, and actionable unresolved reference hints.
+- **K2 snippet frontend concurrency & read-locked AST parsing** — optimized `K2SnippetFrontend.parsePsi` and `analyzeSession` with reentrant read-write lifecycle locks and cached `KtPsiFactory` initialization for concurrent AST parsing across worker threads.
 
 ## [1.4.0] - 2026-08-30
 
