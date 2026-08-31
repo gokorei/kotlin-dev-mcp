@@ -104,6 +104,29 @@ class K2SnippetFrontendTest {
         assertNotNull(psi2)
         assertEquals("val b = 20", psi2!!.text)
     }
+
+    @Test
+    fun `parsePsi and resetEnvironment safely synchronize under concurrent execution`() {
+        val pool = Executors.newFixedThreadPool(8)
+        val count = 40
+        val results = java.util.concurrent.ConcurrentLinkedQueue<Boolean>()
+
+        for (i in 0 until count) {
+            pool.submit {
+                if (i % 10 == 0) {
+                    K2SnippetFrontend.resetEnvironment()
+                }
+                val code = "val conc_$i = $i"
+                val psi = K2SnippetFrontend.parsePsi(code)
+                results.add(psi != null && psi.text == code)
+            }
+        }
+
+        pool.shutdown()
+        assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS))
+        assertEquals(count, results.size)
+        assertTrue(results.all { it }, "all concurrent parse and reset operations must succeed")
+    }
 }
 
 
