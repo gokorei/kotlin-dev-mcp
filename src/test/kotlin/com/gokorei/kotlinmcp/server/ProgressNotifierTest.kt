@@ -26,6 +26,45 @@ class ProgressNotifierTest {
     }
 
     @Test
+    fun `reportProgress preserves numeric progress tokens`() {
+        val notifications = mutableListOf<ProgressNotification>()
+        val notifier = DefaultProgressNotifier { notif ->
+            notifications.add(notif)
+        }
+
+        notifier.reportProgress(42L, 10.0, 50.0, "Numeric token progress")
+
+        assertEquals(1, notifications.size)
+        assertEquals(42L, notifications[0].progressToken)
+        assertEquals(10.0, notifications[0].progress)
+        assertEquals(50.0, notifications[0].total)
+    }
+
+    @Test
+    fun `reportProgress handles null and non-positive totals without errors`() {
+        val notifications = mutableListOf<ProgressNotification>()
+        val notifier = DefaultProgressNotifier { notif ->
+            notifications.add(notif)
+        }
+
+        assertDoesNotThrow {
+            notifier.reportProgress("token-unbounded", 150.0, null, "Unbounded")
+            notifier.reportProgress("token-zero-total", 50.0, 0.0, "Zero total")
+            notifier.reportProgress("token-negative-total", 50.0, -10.0, "Negative total")
+        }
+
+        assertEquals(3, notifications.size)
+        assertEquals(150.0, notifications[0].progress)
+        assertNull(notifications[0].total)
+
+        assertEquals(50.0, notifications[1].progress)
+        assertNull(notifications[1].total)
+
+        assertEquals(50.0, notifications[2].progress)
+        assertNull(notifications[2].total)
+    }
+
+    @Test
     fun `reportProgress ignores null or blank progress tokens`() {
         val notifications = mutableListOf<ProgressNotification>()
         val notifier = DefaultProgressNotifier { notif ->
@@ -44,6 +83,7 @@ class ProgressNotifierTest {
         assertDoesNotThrow {
             DefaultProgressNotifier.NOOP.reportProgress("token-456", 50.0, 100.0, "No-op")
             DefaultProgressNotifier.NOOP.reportProgress(null, 0.0, 100.0, null)
+            DefaultProgressNotifier.NOOP.reportProgress(99, 10.0, -5.0, null)
         }
     }
 }
