@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Synthetic main wrapper for scratchpad expressions** — added automatic `fun main()` synthesis in `RunSnippetService` for top-level scratchpad expressions and variables without explicit main functions, preserving package declarations and imports while eliminating `NO_MAIN_FOUND` boilerplate.
+
 ### Changed
 - **Kotlin Build Tools API dependencies** — added `org.jetbrains.kotlin:kotlin-build-tools-api` and `kotlin-build-tools-impl` (2.3.20) dependencies to `build.gradle.kts` in preparation for compiler daemon and in-process compilation execution.
 - **BTA Toolchain Manager & Session lifecycle** — implemented `BuildToolsToolchainManager` (`DefaultBuildToolsToolchainManager`) and `BuildToolsSession` for thread-safe discovery, caching, and lifecycle scoping of Kotlin Build Tools API `CompilationService` instances across snippet compilation calls.
