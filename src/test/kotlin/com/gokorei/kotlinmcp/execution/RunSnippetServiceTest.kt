@@ -449,6 +449,59 @@ class RunSnippetServiceTest {
         val success = result as KotlinMcpResult.Success
         assertTrue(success.content.contains("hello-from-package"), "expected packaged output, got: ${success.content}")
     }
+
+    @Test
+    fun `run_snippet executes snippet with custom file JvmName`() {
+        val code = """
+            @file:JvmName("CustomLauncher")
+            package com.example.launcher
+
+            fun main() {
+                println("custom-jvmname-executed")
+            }
+        """.trimIndent()
+
+        val result = service.execute(code, timeoutMillis = 30_000L)
+
+        assertTrue(result.isSuccess, "expected success for custom JvmName snippet, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("custom-jvmname-executed"), "expected custom JvmName output, got: ${success.content}")
+    }
+
+    @Test
+    fun `run_snippet executes snippet with JvmStatic object main`() {
+        val code = """
+            package com.example.app
+
+            object AppRunner {
+                @JvmStatic
+                fun main(args: Array<String>) {
+                    println("object-main-executed")
+                }
+            }
+        """.trimIndent()
+
+        val result = service.execute(code, timeoutMillis = 30_000L)
+
+        assertTrue(result.isSuccess, "expected success for object main snippet, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertTrue(success.content.contains("object-main-executed"), "expected object main output, got: ${success.content}")
+    }
+
+    @Test
+    fun `run_snippet redirects in_process execution to host_jvm when terminating calls are detected`() {
+        val code = """
+            fun main() {
+                kotlin.system.exitProcess(0)
+            }
+        """.trimIndent()
+
+        val result = service.execute(code, timeoutMillis = 30_000L, runner = "in_process")
+
+        assertTrue(result.isSuccess, "expected safe host JVM execution, got: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertEquals("host_jvm", success.metadata["mode"], "expected redirection to host_jvm for terminating snippet")
+    }
 }
 
 

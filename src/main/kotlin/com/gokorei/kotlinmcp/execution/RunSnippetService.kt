@@ -131,10 +131,40 @@ class DefaultRunSnippetService(
     private fun resolveMainClassName(code: String): String {
         val file = K2SnippetFrontend.parsePsi(code) ?: return SnippetCompiler.MAIN_CLASS
         val pkg = file.packageFqName.asString()
+
+        var fileJvmName: String? = null
+        for (annotationEntry in file.fileAnnotationList?.annotationEntries.orEmpty()) {
+            val shortName = annotationEntry.shortName?.asString()
+            if (shortName == "JvmName") {
+                val valueArgument = annotationEntry.valueArguments.firstOrNull()?.getArgumentExpression()
+                if (valueArgument is org.jetbrains.kotlin.psi.KtStringTemplateExpression) {
+                    val entries = valueArgument.entries
+                    if (entries.size == 1 && entries[0] is org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry) {
+                        fileJvmName = entries[0].text
+                    }
+                }
+            }
+        }
+
+        var objectMainName: String? = null
+        file.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+            override fun visitNamedFunction(function: org.jetbrains.kotlin.psi.KtNamedFunction) {
+                if (function.name == "main" && isExecutableMain(function)) {
+                    val isJvmStatic = function.annotationEntries.any { it.shortName?.asString() == "JvmStatic" }
+                    val parent = function.parent?.parent
+                    if (isJvmStatic && parent is org.jetbrains.kotlin.psi.KtObjectDeclaration) {
+                        parent.name?.let { objectMainName = it }
+                    }
+                }
+                super.visitNamedFunction(function)
+            }
+        })
+
+        val simpleClassName = objectMainName ?: fileJvmName ?: SnippetCompiler.MAIN_CLASS
         return if (pkg.isNotBlank()) {
-            "$pkg.${SnippetCompiler.MAIN_CLASS}"
+            "$pkg.$simpleClassName"
         } else {
-            SnippetCompiler.MAIN_CLASS
+            simpleClassName
         }
     }
 
@@ -175,14 +205,19 @@ class DefaultRunSnippetService(
         val executionClasspath = (extraClasspath + autoClasspath).distinct().filter { it.isNotBlank() }
         val mainClassName = resolveMainClassName(trimmed)
 
-        return if (runner == "in_process") {
+        val shouldUseHostJvm = runner != "in_process" ||
+            jvmArgs.isNotEmpty() ||
+            !javaPath.isNullOrBlank() ||
+            SnippetAstSafetyChecker.containsHostTerminatingCalls(trimmed)
+
+        return if (shouldUseHostJvm) {
+            runHostJvm(compiled.outDir, timeoutMillis, executionClasspath, jvmArgs, javaPath, mainClassName)
+        } else {
             fastSnippetRunner.run(
                 outDir = compiled.outDir,
                 timeoutMillis = timeoutMillis,
                 extraClasspath = executionClasspath
             )
-        } else {
-            runHostJvm(compiled.outDir, timeoutMillis, executionClasspath, jvmArgs, javaPath, mainClassName)
         }
     }
 
