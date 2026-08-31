@@ -162,7 +162,7 @@ dependencies {
 
     // Kotlin Build Tools API for compiler daemon & in-process compilation execution
     implementation("org.jetbrains.kotlin:kotlin-build-tools-api:2.3.20")
-    implementation("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.20")
+    runtimeOnly("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.20")
 
     // Logging: kotlin-logging over slf4j, with slf4j-simple as the backend
     // (writes to stderr, keeping stdout reserved for MCP JSON-RPC frames).
@@ -193,6 +193,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
         suppressWarnings.set(true)
         allWarningsAsErrors.set(false)
         optIn.add("org.jetbrains.kotlin.K1Deprecation")
+        optIn.add("org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi")
     }
 }
 
