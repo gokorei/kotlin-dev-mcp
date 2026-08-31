@@ -7,16 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-08-31
+
 ### Added
 - **Synthetic main wrapper for scratchpad expressions** — added automatic `fun main()` synthesis in `RunSnippetService` for top-level scratchpad expressions and variables without explicit main functions, preserving package declarations and imports while eliminating `NO_MAIN_FOUND` boilerplate.
 - **MCP progress notification token support** — added `ProgressNotifier` (`DefaultProgressNotifier`) and `ProgressNotification` supporting MCP `$/progress` notifications for incremental progress reporting across long-running compiler, workspace indexing, and linter operations.
 
 ### Changed
-- **Kotlin Build Tools API dependencies** — added `org.jetbrains.kotlin:kotlin-build-tools-api` and `kotlin-build-tools-impl` (2.3.20) dependencies to `build.gradle.kts` and aligned shadow/fat JAR distribution packaging in preparation for compiler daemon and in-process compilation execution.
+- **Kotlin Build Tools API dependencies** — added `org.jetbrains.kotlin:kotlin-build-tools-api` and `kotlin-build-tools-impl` (2.3.20) dependencies to `build.gradle.kts` in preparation for compiler daemon and in-process compilation execution.
 - **BTA Toolchain Manager & Session lifecycle** — implemented `BuildToolsToolchainManager` (`DefaultBuildToolsToolchainManager`) and `BuildToolsSession` for thread-safe discovery, caching, and lifecycle scoping of Kotlin Build Tools API `CompilationService` instances across snippet compilation calls.
-- **BTA-backed snippet compilation execution** — refactored `SnippetCompiler.compile(...)` to execute in-process `JvmCompilationOperation` via the Kotlin Build Tools API (`compileJvm`), maintaining strongly typed compiler argument lists, JVM target resolution, and structured diagnostic capture.
+- **BTA-backed snippet compilation execution** — refactored `SnippetCompiler.compile(...)` to execute in-process compilation via Kotlin Build Tools API `CompilationService.compileJvm`, maintaining strongly typed compiler argument lists, JVM target resolution, and structured diagnostic capture.
 - **Structured BTA diagnostics & severity mapping** — adapted `DiagnosticService` and `SnippetCompiler` to parse BTA compiler diagnostics into structured line/column spans, TOON table formatting, severity metadata counters, and actionable unresolved reference hints.
-- **K2 snippet frontend concurrency & lock-free AST parsing** — eliminated coarse monitor synchronization on `K2SnippetFrontend.parsePsi` and `analyzeSession`, introducing double-checked environment and `KtPsiFactory` initialization for non-blocking concurrent AST parsing across worker threads.
+- **K2 snippet frontend concurrency & read-locked AST parsing** — optimized `K2SnippetFrontend.parsePsi` and `analyzeSession` with reentrant read-write lifecycle locks and cached `KtPsiFactory` initialization for concurrent AST parsing across worker threads.
 
 ## [1.4.0] - 2026-08-30
 
@@ -164,7 +166,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sandboxed network audits** — network security audits in project inspection disabled by default (`kmcp.disable_network_audits`), guaranteeing safe offline/isolated runs.
 - **Hardened Maven dependency resolution** — handles malformed artifact versions and pre-release markers gracefully during library analysis.
 
-[Unreleased]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.1.0...v1.2.0

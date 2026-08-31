@@ -13,6 +13,11 @@ import java.util.UUID
 /**
  * A single parsed diagnostic produced by the compiler, with the
  * `Snippet.kt:LINE:COL` location already extracted.
+ *
+ * @property severity Diagnostic severity string ("error", "warning", "info").
+ * @property line 1-based source line number, if available.
+ * @property column 1-based source column number, if available.
+ * @property message The human-readable diagnostic message.
  */
 data class CompilerDiagnostic(
     val severity: String,
@@ -23,12 +28,25 @@ data class CompilerDiagnostic(
 
 /** Outcome of an in-process snippet compilation. */
 sealed class CompileResult {
+    /**
+     * Successful compilation or compilation with structured diagnostics.
+     *
+     * @property outDir Directory containing compiled `.class` bytecode files.
+     * @property diagnostics List of diagnostics reported during compilation.
+     * @property tempRoot Temporary directory backing the compilation workspace.
+     */
     data class Compiled(
         val outDir: Path,
         val diagnostics: List<CompilerDiagnostic>,
         val tempRoot: Path
     ) : CompileResult()
 
+    /**
+     * Catastrophic compiler invocation failure.
+     *
+     * @property message Error explanation.
+     * @property code Machine-readable error code.
+     */
     data class Failed(val message: String, val code: String) : CompileResult()
 }
 
@@ -47,6 +65,12 @@ object SnippetCompiler {
 
     var toolchainManager: BuildToolsToolchainManager = DefaultBuildToolsToolchainManager.instance
 
+    /**
+     * Scans a workspace project directory to detect compiled class outputs and generated sources.
+     *
+     * @param projectPath The root directory path of the project.
+     * @return List of discovered classpath entries on disk.
+     */
     fun detectProjectClasspath(projectPath: String?): List<String> {
         if (projectPath.isNullOrBlank()) return emptyList()
         val root = File(projectPath)
@@ -86,6 +110,9 @@ object SnippetCompiler {
 
     /**
      * Resolves the default classpath for snippet compilation/execution.
+     *
+     * @param javaClassPath System classpath string separated by path separators.
+     * @return List of verified classpath JAR and directory paths.
      */
     fun resolveDefaultImports(javaClassPath: String): List<String> {
         val fromSystem = javaClassPath
@@ -124,6 +151,9 @@ object SnippetCompiler {
     /**
      * Materializes the library jars bundled as resources by `dumpSnippetClasspath`
      * into a temp dir and returns their on-disk paths.
+     *
+     * @param classLoader The [ClassLoader] from which to extract bundled jar resources.
+     * @return List of extracted JAR file paths on disk.
      */
     internal fun materializeBundledSnippetClasspath(
         classLoader: ClassLoader? = SnippetCompiler::class.java.classLoader
@@ -193,13 +223,27 @@ object SnippetCompiler {
         }
     }
 
+    /**
+     * Resets the cached bundled snippet classpath.
+     */
     internal fun resetBundledSnippetClasspathCache() {
         bundledSnippetClasspath = null
     }
 
+    /**
+     * The runtime execution classpath containing default snippet standard libraries.
+     */
     val runtimeExecutionClasspath: List<String>
         get() = defaultImportsClasspath
 
+    /**
+     * Compiles Kotlin source code in-process using the Kotlin Build Tools API.
+     *
+     * @param code Kotlin source snippet.
+     * @param extraClasspath Additional classpath entries to include during compilation.
+     * @param projectPath Optional project root path for automatic workspace class discovery.
+     * @return [CompileResult.Compiled] on successful compilation invocation, or [CompileResult.Failed] on crash.
+     */
     fun compile(
         code: String,
         extraClasspath: List<String> = emptyList(),
@@ -238,13 +282,17 @@ object SnippetCompiler {
             )
 
             val projectId = ProjectId.ProjectUUID(UUID.randomUUID())
-            val compilationResult = service.compileJvm(
-                projectId,
-                strategyConfig,
-                jvmConfig,
-                listOf(sourceFile.toFile()),
-                compilerArgs
-            )
+            val compilationResult = try {
+                service.compileJvm(
+                    projectId,
+                    strategyConfig,
+                    jvmConfig,
+                    listOf(sourceFile.toFile()),
+                    compilerArgs
+                )
+            } finally {
+                runCatching { service.finishProjectCompilation(projectId) }
+            }
 
             val diagnostics = collector.diagnostics
             if (compilationResult != CompilationResult.COMPILATION_SUCCESS && diagnostics.none { it.severity == "error" }) {
@@ -285,11 +333,6 @@ object SnippetCompiler {
         override fun lifecycle(msg: String) {}
 
         private fun parseDiagnosticMessage(severity: String, rawMsg: String): CompilerDiagnostic {
-            // Typical formats:
-            // "e: /path/to/Snippet.kt:1:15 Type mismatch..."
-            // "w: /path/to/Snippet.kt:2:5 Unused variable..."
-            // "Snippet.kt: (1, 15): error: ..."
-            // "/path/to/Snippet.kt:1:15: error: ..."
             var text = rawMsg.trim()
             if (text.startsWith("e: ") || text.startsWith("w: ") || text.startsWith("i: ")) {
                 text = text.substring(3).trim()
@@ -301,24 +344,36 @@ object SnippetCompiler {
 
             if (text.contains(SOURCE_FILE_NAME)) {
                 val afterFile = text.substringAfter(SOURCE_FILE_NAME)
-                if (afterFile.startsWith(":")) {
-                    val parts = afterFile.removePrefix(":").split(":")
-                    if (parts.size >= 2) {
-                        line = parts[0].trim().toIntOrNull()
-                        column = parts[1].trim().takeWhile { it.isDigit() }.toIntOrNull()
-                        cleanMessage = if (parts.size >= 3) {
-                            parts.drop(2).joinToString(":").trim().removePrefix("error:").removePrefix("warning:").trim()
-                        } else {
-                            parts[1].trim().dropWhile { it.isDigit() }.trim()
-                        }
-                    }
-                } else if (afterFile.startsWith(": (") || afterFile.startsWith(" (")) {
+                if (afterFile.startsWith(": (") || afterFile.startsWith(" (")) {
                     val coordPart = afterFile.substringAfter("(").substringBefore(")")
                     val coords = coordPart.split(",")
                     if (coords.size == 2) {
                         line = coords[0].trim().toIntOrNull()
                         column = coords[1].trim().toIntOrNull()
-                        cleanMessage = afterFile.substringAfter("):").trim().removePrefix("error:").removePrefix("warning:").trim()
+                        cleanMessage = afterFile.substringAfter("):").trim()
+                            .removePrefix("error:").removePrefix("warning:").trim()
+                    }
+                } else if (afterFile.startsWith(":")) {
+                    val remainder = afterFile.removePrefix(":")
+                    val firstColon = remainder.indexOf(':')
+                    if (firstColon != -1) {
+                        val lineStr = remainder.substring(0, firstColon).trim()
+                        val parsedLine = lineStr.toIntOrNull()
+                        if (parsedLine != null) {
+                            line = parsedLine
+                            val afterLine = remainder.substring(firstColon + 1).trim()
+                            val colDigits = afterLine.takeWhile { it.isDigit() }
+                            if (colDigits.isNotEmpty()) {
+                                column = colDigits.toIntOrNull()
+                                var msgRemainder = afterLine.substring(colDigits.length).trim()
+                                if (msgRemainder.startsWith(":")) {
+                                    msgRemainder = msgRemainder.removePrefix(":").trim()
+                                }
+                                cleanMessage = msgRemainder.removePrefix("error:").removePrefix("warning:").trim()
+                            } else {
+                                cleanMessage = afterLine.removePrefix("error:").removePrefix("warning:").trim()
+                            }
+                        }
                     }
                 }
             }
@@ -336,6 +391,11 @@ object SnippetCompiler {
         }
     }
 
+    /**
+     * Cleans up the temporary directory backing a [CompileResult.Compiled] instance.
+     *
+     * @param result The compilation result whose resources should be deleted.
+     */
     fun cleanup(result: CompileResult) {
         if (result is CompileResult.Compiled) {
             runCatching { result.tempRoot.toFile().deleteRecursively() }

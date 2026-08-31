@@ -15,6 +15,18 @@ import java.util.concurrent.TimeUnit
  * only relying on static diagnostics.
  */
 interface RunSnippetService {
+    /**
+     * Executes the given Kotlin snippet code.
+     *
+     * @param code The Kotlin source code to compile and execute.
+     * @param timeoutMillis Execution timeout in milliseconds.
+     * @param classpath Optional extra classpath entries.
+     * @param runner Execution runner engine ("host_jvm" or "in_process").
+     * @param jvmArgs Extra JVM arguments for execution.
+     * @param javaPath Optional explicit path to java executable.
+     * @param projectPath Optional project directory path.
+     * @return [KotlinMcpResult] containing runtime output or execution error details.
+     */
     fun execute(
         code: String,
         timeoutMillis: Long,
@@ -25,15 +37,29 @@ interface RunSnippetService {
         projectPath: String? = null
     ): KotlinMcpResult
 
+    /**
+     * Parses JUnit XML test reports from a project build directory.
+     *
+     * @param projectPath Root path of the project.
+     * @return [KotlinMcpResult] summarizing test results.
+     */
     fun parseTestReport(projectPath: String): KotlinMcpResult
 }
 
-
+/**
+ * Default implementation of [RunSnippetService] executing snippets via host JVM process or in-process.
+ *
+ * @property javaResolver Resolver used to locate the system Java executable.
+ * @property fastSnippetRunner Fast runner for in-process snippet execution.
+ */
 class DefaultRunSnippetService(
     private val javaResolver: JavaResolver = DefaultJavaResolver(),
     private val fastSnippetRunner: FastSnippetRunner = DefaultFastSnippetRunner()
 ) : RunSnippetService {
 
+    /**
+     * Compiles and executes the Kotlin snippet.
+     */
     override fun execute(
         code: String,
         timeoutMillis: Long,
@@ -65,26 +91,26 @@ class DefaultRunSnippetService(
         }
     }
 
+    /**
+     * Synthesizes a top-level `fun main()` wrapper for scratchpad expressions while preserving
+     * package and import directives via K2 PSI traversal.
+     *
+     * @param code Input Kotlin source code.
+     * @return Executable Kotlin code with a valid `fun main()` entry point.
+     */
     internal fun prepareExecutableCode(code: String): String {
         if (hasMainFunction(code)) return code
         val file = K2SnippetFrontend.parsePsi(code) ?: return "fun main() {\n$code\n}"
-        val pkg = file.packageDirective?.text?.trim().orEmpty()
+        val pkgDirective = file.packageDirective
+        val pkg = pkgDirective?.text?.trim().orEmpty()
         val imports = file.importDirectives.map { it.text.trim() }
 
-        var body = code
-        if (pkg.isNotEmpty()) {
-            val pkgText = file.packageDirective?.text.orEmpty()
-            val idx = body.indexOf(pkgText)
-            if (idx != -1) {
-                body = (body.substring(0, idx) + body.substring(idx + pkgText.length)).trim()
-            }
-        }
-        for (imp in file.importDirectives) {
-            val impText = imp.text
-            val idx = body.indexOf(impText)
-            if (idx != -1) {
-                body = (body.substring(0, idx) + body.substring(idx + impText.length)).trim()
-            }
+        val directives = listOfNotNull(pkgDirective?.takeIf { it.text.isNotBlank() }) + file.importDirectives
+        val body = if (directives.isNotEmpty()) {
+            val maxOffset = directives.maxOf { it.textRange.endOffset }
+            code.substring(maxOffset).trim()
+        } else {
+            code.trim()
         }
 
         return buildString {
@@ -99,6 +125,46 @@ class DefaultRunSnippetService(
             appendLine("fun main() {")
             appendLine(body)
             appendLine("}")
+        }
+    }
+
+    private fun resolveMainClassName(code: String): String {
+        val file = K2SnippetFrontend.parsePsi(code) ?: return SnippetCompiler.MAIN_CLASS
+        val pkg = file.packageFqName.asString()
+
+        var fileJvmName: String? = null
+        for (annotationEntry in file.fileAnnotationList?.annotationEntries.orEmpty()) {
+            val shortName = annotationEntry.shortName?.asString()
+            if (shortName == "JvmName") {
+                val valueArgument = annotationEntry.valueArguments.firstOrNull()?.getArgumentExpression()
+                if (valueArgument is org.jetbrains.kotlin.psi.KtStringTemplateExpression) {
+                    val entries = valueArgument.entries
+                    if (entries.size == 1 && entries[0] is org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry) {
+                        fileJvmName = entries[0].text
+                    }
+                }
+            }
+        }
+
+        var objectMainName: String? = null
+        file.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
+            override fun visitNamedFunction(function: org.jetbrains.kotlin.psi.KtNamedFunction) {
+                if (function.name == "main" && isExecutableMain(function)) {
+                    val isJvmStatic = function.annotationEntries.any { it.shortName?.asString() == "JvmStatic" }
+                    val parent = function.parent?.parent
+                    if (isJvmStatic && parent is org.jetbrains.kotlin.psi.KtObjectDeclaration) {
+                        parent.name?.let { objectMainName = it }
+                    }
+                }
+                super.visitNamedFunction(function)
+            }
+        })
+
+        val simpleClassName = objectMainName ?: fileJvmName ?: SnippetCompiler.MAIN_CLASS
+        return if (pkg.isNotBlank()) {
+            "$pkg.$simpleClassName"
+        } else {
+            simpleClassName
         }
     }
 
@@ -135,20 +201,23 @@ class DefaultRunSnippetService(
                 code = "NO_MAIN_FOUND"
             )
         }
-        // The workspace's compiled classes / jars must be on the execution classpath
-        // too, otherwise a snippet that compiled against project types fails at
-        // runtime with ClassNotFoundError.
-        val projectClasspath = SnippetCompiler.detectProjectClasspath(projectPath)
-        val executionClasspath = (extraClasspath + projectClasspath).distinct().filter { it.isNotBlank() }
-        val hasDangerousCalls = SnippetAstSafetyChecker.containsHostTerminatingCalls(trimmed)
-        val allowInMemory = jvmArgs.isEmpty() && javaPath == null && !hasDangerousCalls
+        val autoClasspath = SnippetCompiler.detectProjectClasspath(projectPath)
+        val executionClasspath = (extraClasspath + autoClasspath).distinct().filter { it.isNotBlank() }
+        val mainClassName = resolveMainClassName(trimmed)
 
-        return if (allowInMemory && (runner.equals("in_memory", ignoreCase = true) || runner.equals("fast", ignoreCase = true))) {
-            fastSnippetRunner.run(compiled.outDir, timeoutMillis, executionClasspath)
-        } else if (runner.equals("host_jvm", ignoreCase = true) || hasDangerousCalls || jvmArgs.isNotEmpty() || javaPath != null) {
-            runHostJvm(compiled.outDir, timeoutMillis, executionClasspath, jvmArgs, javaPath)
+        val shouldUseHostJvm = runner != "in_process" ||
+            jvmArgs.isNotEmpty() ||
+            !javaPath.isNullOrBlank() ||
+            SnippetAstSafetyChecker.containsHostTerminatingCalls(trimmed)
+
+        return if (shouldUseHostJvm) {
+            runHostJvm(compiled.outDir, timeoutMillis, executionClasspath, jvmArgs, javaPath, mainClassName)
         } else {
-            runCompiled(compiled.outDir, timeoutMillis, executionClasspath)
+            fastSnippetRunner.run(
+                outDir = compiled.outDir,
+                timeoutMillis = timeoutMillis,
+                extraClasspath = executionClasspath
+            )
         }
     }
 
@@ -192,7 +261,8 @@ class DefaultRunSnippetService(
         timeoutMillis: Long,
         extraClasspath: List<String>,
         jvmArgs: List<String>,
-        javaPath: String?
+        javaPath: String?,
+        mainClass: String = SnippetCompiler.MAIN_CLASS
     ): KotlinMcpResult {
         val javaExecutable = javaResolver.resolve(javaPath)
             ?: return KotlinMcpResult.Error(
@@ -218,7 +288,7 @@ class DefaultRunSnippetService(
         cmd.addAll(jvmArgs.filter { it.isNotBlank() })
         cmd.add("-cp")
         cmd.add(cpString)
-        cmd.add(SnippetCompiler.MAIN_CLASS)
+        cmd.add(mainClass)
 
         return try {
             val process = ProcessBuilder(cmd)
@@ -246,11 +316,6 @@ class DefaultRunSnippetService(
                     details = mapOf("timeoutMillis" to timeoutMillis.toString())
                 )
             } else {
-                // The process has exited, so its stdout/stderr pipe is closed and
-                // the reader thread is guaranteed to reach EOF and finish. Join it
-                // to completion (no deadline) so the captured output is fully
-                // drained before being reported — a fixed-time join could truncate
-                // large output yet report it as complete.
                 try {
                     readerThread.join()
                 } catch (e: InterruptedException) {
