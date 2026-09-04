@@ -54,13 +54,13 @@ class JavaToKotlinRefactorer {
             }.getOrNull()
         }
 
-        val cls = psiJavaFile?.classes?.firstOrNull()
-        val recordComponents = cls?.recordComponents
+        val cls = psiJavaFile?.let { runCatching { it.classes.firstOrNull() }.getOrNull() }
+        val recordComponents = cls?.let { runCatching { it.recordComponents }.getOrNull() }
         val isRecord = cls != null && (cls.recordHeader != null || cls.text.contains("record "))
         if (cls != null && isRecord && recordComponents != null && recordComponents.isNotEmpty()) {
             val name = cls.name ?: "ConvertedRecord"
             val params = recordComponents.map { rc ->
-                val rawType = rc.typeElement?.text ?: rc.type.presentableText
+                val rawType = rc.typeElement?.text ?: runCatching { rc.type.presentableText }.getOrElse { "Any" }
                 val type = mapJavaTypeToKotlin(rawType, false)
                 "val ${rc.name}: $type"
             }
@@ -73,16 +73,16 @@ class JavaToKotlinRefactorer {
 
         val className = cls?.name ?: "ConvertedClass"
 
-        val fields = cls?.fields?.map { field ->
+        val fields = cls?.let { runCatching { it.fields }.getOrNull() }?.map { field ->
             val isNullable = field.isNullableAnnotated()
-            val rawType = field.typeElement?.text ?: field.type.presentableText
+            val rawType = field.typeElement?.text ?: runCatching { field.type.presentableText }.getOrElse { "Any" }
             mapJavaTypeToKotlin(rawType, isNullable) to field.name
         }.orEmpty()
 
         val fieldNames = fields.map { it.second }.toSet()
         val properties = fields.map { (type, name) -> "var $name: $type" }
 
-        val renderedMethods = cls?.methods?.mapNotNull { m ->
+        val renderedMethods = cls?.let { runCatching { it.methods }.getOrNull() }?.mapNotNull { m ->
             if (m.name == "syntheticMethod") {
                 m.body?.let { convertJavaBodyPsi(it).second }
             } else {
@@ -160,8 +160,9 @@ class JavaToKotlinRefactorer {
     private fun org.jetbrains.kotlin.com.intellij.psi.PsiModifierListOwner.isNullableAnnotated(): Boolean {
         val annotations = modifierList?.annotations ?: return false
         return annotations.any { ann ->
-            val qName = ann.qualifiedName ?: ann.nameReferenceElement?.referenceName
-            qName == "Nullable" || qName?.endsWith(".Nullable") == true || ann.text.contains("Nullable")
+            val refName = ann.nameReferenceElement?.text?.trim()
+            val text = ann.text.orEmpty()
+            refName == "Nullable" || refName?.endsWith(".Nullable") == true || text.contains("Nullable")
         }
     }
 

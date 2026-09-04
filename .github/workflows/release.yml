@@ -31,7 +31,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: kotlin-mcp-all.jar
-          path: build/libs/kotlin-mcp-1.0.0-all.jar
+          path: build/libs/kotlin-mcp-*-all.jar
 
   release:
     name: Create GitHub Release

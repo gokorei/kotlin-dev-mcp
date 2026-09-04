@@ -12,7 +12,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ---
 
-## v1.5.0 — 2026-08-31
+## v1.5.0 — 2026-09-05
 
 ### New Features
 
@@ -21,6 +21,8 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Bug Fixes
 
+- **Safe Java-to-Kotlin PSI annotation extraction** — prevented `UninitializedPropertyAccessException` in `JavaToKotlinRefactorer` by inspecting annotation AST reference text directly without invoking full compiler trace resolution on standalone PSI trees.
+
 ### Improvements
 
 - **Kotlin Build Tools API dependencies** — added `org.jetbrains.kotlin:kotlin-build-tools-api` and `kotlin-build-tools-impl` (2.3.20) dependencies to `build.gradle.kts` in preparation for compiler daemon and in-process compilation execution.
@@ -28,6 +30,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 - **BTA-backed snippet compilation execution** — refactored `SnippetCompiler.compile(...)` to execute in-process compilation via Kotlin Build Tools API `CompilationService.compileJvm`, maintaining strongly typed compiler argument lists, JVM target resolution, and structured diagnostic capture.
 - **Structured BTA diagnostics & severity mapping** — adapted `DiagnosticService` and `SnippetCompiler` to parse BTA compiler diagnostics into structured line/column spans, TOON table formatting, severity metadata counters, and actionable unresolved reference hints.
 - **K2 snippet frontend concurrency & read-locked AST parsing** — optimized `K2SnippetFrontend.parsePsi` and `analyzeSession` with reentrant read-write lifecycle locks and cached `KtPsiFactory` initialization for concurrent AST parsing across worker threads.
+- **Gradle test worker memory & lifecycle tuning** — configured `maxHeapSize = "2048m"` on `tasks.test` to prevent worker memory exhaustion during full test suite runs.
 
 ---
 

@@ -27,7 +27,7 @@ kotlin {
 }
 
 group = "com.gokorei"
-version = "1.4.0"
+version = "1.5.0"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -225,12 +225,7 @@ tasks.test {
         "--enable-native-access=ALL-UNNAMED",
         "--sun-misc-unsafe-memory-access=allow"
     )
-    val testTmpDir = layout.buildDirectory.dir("tmp/test-workers")
-    doFirst {
-        testTmpDir.get().asFile.mkdirs()
-    }
-    systemProperty("java.io.tmpdir", testTmpDir.get().asFile.path)
-    systemProperty("jna.tmpdir", testTmpDir.get().asFile.path)
+    maxHeapSize = "2048m"
     systemProperty("kmcp.disable_network_audits", "true")
 }
 
