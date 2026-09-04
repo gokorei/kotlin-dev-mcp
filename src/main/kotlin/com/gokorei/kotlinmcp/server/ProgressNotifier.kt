@@ -1,5 +1,6 @@
 package com.gokorei.kotlinmcp.server
 
+import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 /**
@@ -28,13 +29,14 @@ interface ProgressNotifier {
      * @param progress Current progress value.
      * @param total Total expected progress, if known and positive.
      * @param message Optional human-readable status message.
+     * @return [KotlinMcpResult.Success] when notification is delivered or safely ignored, or [KotlinMcpResult.Error] if delivery fails.
      */
     fun reportProgress(
         progressToken: Any?,
         progress: Double,
         total: Double? = null,
         message: String? = null
-    )
+    ): KotlinMcpResult
 }
 
 /**
@@ -55,16 +57,21 @@ class DefaultProgressNotifier(
      * @param progress Current progress value.
      * @param total Total expected progress, if known and positive.
      * @param message Optional human-readable status message.
+     * @return [KotlinMcpResult.Success] on success, or [KotlinMcpResult.Error] on failure.
      */
     override fun reportProgress(
         progressToken: Any?,
         progress: Double,
         total: Double?,
         message: String?
-    ) {
-        if (progressToken == null) return
+    ): KotlinMcpResult {
+        if (progressToken == null) {
+            return KotlinMcpResult.Success("No progress token provided; progress ignored.")
+        }
         val tokenString = progressToken.toString()
-        if (tokenString.isBlank()) return
+        if (tokenString.isBlank()) {
+            return KotlinMcpResult.Success("Blank progress token provided; progress ignored.")
+        }
 
         val hasValidTotal = total != null && total > 0.0
         val clampedProgress = if (hasValidTotal) {
@@ -80,7 +87,16 @@ class DefaultProgressNotifier(
             message = message
         )
         logger.debug { "Progress [token=$progressToken]: ${notif.progress}/${notif.total ?: "unbounded"} (${notif.message.orEmpty()})" }
-        runCatching { notificationSink(notif) }
+        return try {
+            notificationSink(notif)
+            KotlinMcpResult.Success("Progress reported.")
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to deliver progress notification: ${e.message}" }
+            KotlinMcpResult.Error(
+                message = "Failed to deliver progress notification: ${e.message}",
+                code = "NOTIFICATION_ERROR"
+            )
+        }
     }
 
     companion object {
@@ -93,7 +109,7 @@ class DefaultProgressNotifier(
                 progress: Double,
                 total: Double?,
                 message: String?
-            ) {}
+            ): KotlinMcpResult = KotlinMcpResult.Success("Progress reported (no-op).")
         }
     }
 }

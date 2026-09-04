@@ -6,6 +6,16 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### New Features
 
+### Bug Fixes
+
+### Improvements
+
+---
+
+## v1.5.0 — 2026-08-31
+
+### New Features
+
 - **Synthetic main wrapper for scratchpad expressions** — added automatic `fun main()` synthesis in `RunSnippetService` for top-level scratchpad expressions and variables without explicit main functions, preserving package declarations and imports while eliminating `NO_MAIN_FOUND` boilerplate.
 - **MCP progress notification token support** — added `ProgressNotifier` (`DefaultProgressNotifier`) and `ProgressNotification` supporting MCP `$/progress` notifications for incremental progress reporting across long-running compiler, workspace indexing, and linter operations.
 

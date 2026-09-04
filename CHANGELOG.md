@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-08-31
+
 ### Added
 - **Synthetic main wrapper for scratchpad expressions** — added automatic `fun main()` synthesis in `RunSnippetService` for top-level scratchpad expressions and variables without explicit main functions, preserving package declarations and imports while eliminating `NO_MAIN_FOUND` boilerplate.
 - **MCP progress notification token support** — added `ProgressNotifier` (`DefaultProgressNotifier`) and `ProgressNotification` supporting MCP `$/progress` notifications for incremental progress reporting across long-running compiler, workspace indexing, and linter operations.
@@ -164,7 +166,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sandboxed network audits** — network security audits in project inspection disabled by default (`kmcp.disable_network_audits`), guaranteeing safe offline/isolated runs.
 - **Hardened Maven dependency resolution** — handles malformed artifact versions and pre-release markers gracefully during library analysis.
 
-[Unreleased]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/gokorei/kotlin-dev-mcp/compare/v1.1.0...v1.2.0
