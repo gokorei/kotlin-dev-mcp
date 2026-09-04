@@ -2066,7 +2066,7 @@ public final class com/gokorei/kotlinmcp/server/DefaultProgressNotifier : com/go
 	public fun <init> ()V
 	public fun <init> (Lkotlin/jvm/functions/Function1;)V
 	public synthetic fun <init> (Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun reportProgress (Ljava/lang/Object;DLjava/lang/Double;Ljava/lang/String;)V
+	public fun reportProgress (Ljava/lang/Object;DLjava/lang/Double;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
 public final class com/gokorei/kotlinmcp/server/DefaultProgressNotifier$Companion {
@@ -2217,12 +2217,12 @@ public final class com/gokorei/kotlinmcp/server/ProgressNotification {
 }
 
 public abstract interface class com/gokorei/kotlinmcp/server/ProgressNotifier {
-	public abstract fun reportProgress (Ljava/lang/Object;DLjava/lang/Double;Ljava/lang/String;)V
-	public static synthetic fun reportProgress$default (Lcom/gokorei/kotlinmcp/server/ProgressNotifier;Ljava/lang/Object;DLjava/lang/Double;Ljava/lang/String;ILjava/lang/Object;)V
+	public abstract fun reportProgress (Ljava/lang/Object;DLjava/lang/Double;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun reportProgress$default (Lcom/gokorei/kotlinmcp/server/ProgressNotifier;Ljava/lang/Object;DLjava/lang/Double;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
 public final class com/gokorei/kotlinmcp/server/ProgressNotifier$DefaultImpls {
-	public static synthetic fun reportProgress$default (Lcom/gokorei/kotlinmcp/server/ProgressNotifier;Ljava/lang/Object;DLjava/lang/Double;Ljava/lang/String;ILjava/lang/Object;)V
+	public static synthetic fun reportProgress$default (Lcom/gokorei/kotlinmcp/server/ProgressNotifier;Ljava/lang/Object;DLjava/lang/Double;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
 public final class com/gokorei/kotlinmcp/server/PromptRegistrar {

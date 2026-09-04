@@ -1,5 +1,6 @@
 package com.gokorei.kotlinmcp.server
 
+import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -12,9 +13,11 @@ class ProgressNotifierTest {
             notifications.add(notif)
         }
 
-        notifier.reportProgress("token-123", 25.0, 100.0, "Compiling snippet")
-        notifier.reportProgress("token-123", 100.0, 100.0, "Compilation finished")
+        val res1 = notifier.reportProgress("token-123", 25.0, 100.0, "Compiling snippet")
+        val res2 = notifier.reportProgress("token-123", 100.0, 100.0, "Compilation finished")
 
+        assertTrue(res1.isSuccess)
+        assertTrue(res2.isSuccess)
         assertEquals(2, notifications.size)
         assertEquals("token-123", notifications[0].progressToken)
         assertEquals(25.0, notifications[0].progress)
@@ -32,8 +35,9 @@ class ProgressNotifierTest {
             notifications.add(notif)
         }
 
-        notifier.reportProgress(42L, 10.0, 50.0, "Numeric token progress")
+        val res = notifier.reportProgress(42L, 10.0, 50.0, "Numeric token progress")
 
+        assertTrue(res.isSuccess)
         assertEquals(1, notifications.size)
         assertEquals(42L, notifications[0].progressToken)
         assertEquals(10.0, notifications[0].progress)
@@ -47,11 +51,13 @@ class ProgressNotifierTest {
             notifications.add(notif)
         }
 
-        assertDoesNotThrow {
-            notifier.reportProgress("token-unbounded", 150.0, null, "Unbounded")
-            notifier.reportProgress("token-zero-total", 50.0, 0.0, "Zero total")
-            notifier.reportProgress("token-negative-total", 50.0, -10.0, "Negative total")
-        }
+        val r1 = notifier.reportProgress("token-unbounded", 150.0, null, "Unbounded")
+        val r2 = notifier.reportProgress("token-zero-total", 50.0, 0.0, "Zero total")
+        val r3 = notifier.reportProgress("token-negative-total", 50.0, -10.0, "Negative total")
+
+        assertTrue(r1.isSuccess)
+        assertTrue(r2.isSuccess)
+        assertTrue(r3.isSuccess)
 
         assertEquals(3, notifications.size)
         assertEquals(150.0, notifications[0].progress)
@@ -65,25 +71,45 @@ class ProgressNotifierTest {
     }
 
     @Test
+    fun `reportProgress catches sink exceptions and returns structured error`() {
+        val notifier = DefaultProgressNotifier {
+            throw IllegalStateException("Sink connection broken")
+        }
+
+        val res = notifier.reportProgress("token-error", 50.0, 100.0, "Failing")
+        assertFalse(res.isSuccess)
+        assertTrue(res is KotlinMcpResult.Error)
+        val err = res as KotlinMcpResult.Error
+        assertEquals("NOTIFICATION_ERROR", err.code)
+        assertTrue(err.message.contains("Sink connection broken"))
+    }
+
+    @Test
     fun `reportProgress ignores null or blank progress tokens`() {
         val notifications = mutableListOf<ProgressNotification>()
         val notifier = DefaultProgressNotifier { notif ->
             notifications.add(notif)
         }
 
-        notifier.reportProgress(null, 50.0, 100.0, "Ignored")
-        notifier.reportProgress("", 50.0, 100.0, "Ignored")
-        notifier.reportProgress("   ", 50.0, 100.0, "Ignored")
+        val r1 = notifier.reportProgress(null, 50.0, 100.0, "Ignored")
+        val r2 = notifier.reportProgress("", 50.0, 100.0, "Ignored")
+        val r3 = notifier.reportProgress("   ", 50.0, 100.0, "Ignored")
 
+        assertTrue(r1.isSuccess)
+        assertTrue(r2.isSuccess)
+        assertTrue(r3.isSuccess)
         assertTrue(notifications.isEmpty(), "No notifications should be sent for blank tokens")
     }
 
     @Test
     fun `NOOP progress notifier safely executes without errors`() {
         assertDoesNotThrow {
-            DefaultProgressNotifier.NOOP.reportProgress("token-456", 50.0, 100.0, "No-op")
-            DefaultProgressNotifier.NOOP.reportProgress(null, 0.0, 100.0, null)
-            DefaultProgressNotifier.NOOP.reportProgress(99, 10.0, -5.0, null)
+            val r1 = DefaultProgressNotifier.NOOP.reportProgress("token-456", 50.0, 100.0, "No-op")
+            val r2 = DefaultProgressNotifier.NOOP.reportProgress(null, 0.0, 100.0, null)
+            val r3 = DefaultProgressNotifier.NOOP.reportProgress(99, 10.0, -5.0, null)
+            assertTrue(r1.isSuccess)
+            assertTrue(r2.isSuccess)
+            assertTrue(r3.isSuccess)
         }
     }
 }
