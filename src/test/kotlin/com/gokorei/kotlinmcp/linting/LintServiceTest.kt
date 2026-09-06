@@ -211,5 +211,64 @@ class LintServiceTest {
         assertTrue(result.isSuccess, "expected success, got: ${result.toFormattedText()}")
         assertTrue(elapsed < 2500, "in-process ktlint formatting should execute under 2500ms, took ${elapsed}ms")
     }
+
+    @Test
+    fun `parseDetektXml parses valid detekt XML findings`() {
+        val defaultService = service as DefaultLintService
+        val tempFile = File.createTempFile("detekt-report", ".xml")
+        try {
+            tempFile.writeText(
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <checkstyle version="4.3">
+                  <file name="/path/to/MyFile.kt">
+                    <error line="10" column="5" severity="warning" message="Testing finding" source="detekt.style.UnusedPrivateProperty" />
+                  </file>
+                </checkstyle>
+                """.trimIndent()
+            )
+            val findings = defaultService.parseDetektXml(tempFile)
+            assertEquals(1, findings.size)
+            assertEquals("UnusedPrivateProperty", findings[0].rule)
+            assertEquals("warning", findings[0].severity)
+            assertEquals(10, findings[0].line)
+            assertEquals(5, findings[0].column)
+            assertEquals("Testing finding", findings[0].message)
+        } finally {
+            tempFile.delete()
+        }
+    }
+
+    @Test
+    fun `parseDetektXml safely rejects XML with malicious external entity doctype without expansion`() {
+        val defaultService = service as DefaultLintService
+        val tempTarget = File.createTempFile("secret-file", ".txt").apply { writeText("super_secret_token_12345") }
+        val xmlFile = File.createTempFile("xxe-report", ".xml")
+        try {
+            xmlFile.writeText(
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE checkstyle [
+                  <!ENTITY xxe SYSTEM "${tempTarget.toURI()}">
+                ]>
+                <checkstyle version="4.3">
+                  <file name="File.kt">
+                    <error line="1" column="1" severity="warning" message="Secret: &xxe;" source="detekt.style.UnusedPrivateProperty" />
+                  </file>
+                </checkstyle>
+                """.trimIndent()
+            )
+            val findings = defaultService.parseDetektXml(xmlFile)
+            // With disallow-doctype-decl, parsing fails and returns empty list (handled gracefully)
+            // or if parsed, the secret must NEVER appear in the finding message.
+            assertFalse(
+                findings.any { it.message.contains("super_secret_token_12345") },
+                "External entity was resolved in parseDetektXml!"
+            )
+        } finally {
+            tempTarget.delete()
+            xmlFile.delete()
+        }
+    }
 }
 

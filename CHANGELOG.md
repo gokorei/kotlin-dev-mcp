@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Secure XML parsing in LintService** — configured `DocumentBuilderFactory` in `parseDetektXml` with `XMLConstants.FEATURE_SECURE_PROCESSING`, `disallow-doctype-decl`, and disabled external general/parameter entities to prevent XXE injection when ingesting Detekt reports (YSY5E9EW).
+
 ## [1.5.0] - 2026-09-05
 
 ### Added
