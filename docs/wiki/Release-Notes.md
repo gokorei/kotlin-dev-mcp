@@ -14,6 +14,8 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Improvements
 
+- **Snippet runner security alignment & hardening configuration** — aligned `SECURITY.md` with the dual-runner model (`host_jvm` subprocess vs `in_process` classloader) and added `KMCP_DISABLE_IN_PROCESS_RUNNER` (`-Dkmcp.disable_in_process_runner`) to enforce strict isolated subprocess execution across all snippet invocations in security-restricted environments (D9BY9NVQ).
+
 ---
 
 ## v1.5.0 — 2026-09-05

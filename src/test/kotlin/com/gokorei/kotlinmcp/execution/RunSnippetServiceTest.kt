@@ -502,6 +502,22 @@ class RunSnippetServiceTest {
         val success = result as KotlinMcpResult.Success
         assertEquals("host_jvm", success.metadata["mode"], "expected redirection to host_jvm for terminating snippet")
     }
+
+    @Test
+    fun `run_snippet forces host_jvm when in-process runner is disabled via property or flag`() {
+        val code = """
+            fun main() {
+                println("runner-test")
+            }
+        """.trimIndent()
+
+        val serviceWithDisabledInProcess = DefaultRunSnippetService(disableInProcessRunner = true)
+        val result = serviceWithDisabledInProcess.execute(code, timeoutMillis = 30_000L, runner = "in_process")
+
+        assertTrue(result.isSuccess, "expected success: ${result.toFormattedText()}")
+        val success = result as KotlinMcpResult.Success
+        assertEquals("host_jvm", success.metadata["mode"], "expected host_jvm when in-process runner is disabled")
+    }
 }
 
 

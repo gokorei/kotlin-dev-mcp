@@ -54,8 +54,16 @@ interface RunSnippetService {
  */
 class DefaultRunSnippetService(
     private val javaResolver: JavaResolver = DefaultJavaResolver(),
-    private val fastSnippetRunner: FastSnippetRunner = DefaultFastSnippetRunner()
+    private val fastSnippetRunner: FastSnippetRunner = DefaultFastSnippetRunner(),
+    private val disableInProcessRunner: Boolean? = null
 ) : RunSnippetService {
+
+    private fun isInProcessRunnerDisabled(): Boolean {
+        if (disableInProcessRunner != null) return disableInProcessRunner
+        val env = System.getenv("KMCP_DISABLE_IN_PROCESS_RUNNER")?.equals("true", ignoreCase = true) == true
+        val prop = System.getProperty("kmcp.disable_in_process_runner")?.equals("true", ignoreCase = true) == true
+        return env || prop
+    }
 
     /**
      * Compiles and executes the Kotlin snippet.
@@ -206,6 +214,7 @@ class DefaultRunSnippetService(
         val mainClassName = resolveMainClassName(trimmed)
 
         val shouldUseHostJvm = runner != "in_process" ||
+            isInProcessRunnerDisabled() ||
             jvmArgs.isNotEmpty() ||
             !javaPath.isNullOrBlank() ||
             SnippetAstSafetyChecker.containsHostTerminatingCalls(trimmed)
