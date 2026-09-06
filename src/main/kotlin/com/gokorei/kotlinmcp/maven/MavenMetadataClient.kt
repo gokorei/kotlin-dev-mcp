@@ -6,6 +6,7 @@ import org.w3c.dom.Element
 import org.w3c.dom.Node
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.net.InetAddress
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -160,10 +161,84 @@ class DefaultMavenMetadataClient(
         return target
     }
 
+    private fun validateCustomRepoUrl(rawUrl: String): FetchResult.Error? {
+        val trimmed = rawUrl.trim()
+        val uri = try {
+            val parsed = URI(trimmed)
+            if (parsed.scheme == null || parsed.host == null) {
+                return FetchResult.Error(
+                    code = "INVALID_REPOSITORY_URL",
+                    message = "Invalid repository URL '$rawUrl': must be an absolute URL with a valid host."
+                )
+            }
+            parsed
+        } catch (e: Exception) {
+            return FetchResult.Error(
+                code = "INVALID_REPOSITORY_URL",
+                message = "Invalid repository URL '$rawUrl': ${e.message}"
+            )
+        }
+
+        if (!uri.scheme.equals("https", ignoreCase = true)) {
+            return FetchResult.Error(
+                code = "INVALID_REPOSITORY_URL",
+                message = "Insecure repository scheme '${uri.scheme}': custom repository URLs must use HTTPS."
+            )
+        }
+
+        val host = uri.host
+        if (host.equals("localhost", ignoreCase = true) || host.endsWith(".localhost", ignoreCase = true)) {
+            return FetchResult.Error(
+                code = "INVALID_REPOSITORY_URL",
+                message = "Rejected repository URL host '$host': loopback addresses are forbidden."
+            )
+        }
+
+        val addresses = try {
+            InetAddress.getAllByName(host)
+        } catch (e: Exception) {
+            return FetchResult.Error(
+                code = "INVALID_REPOSITORY_URL",
+                message = "Failed to resolve repository URL host '$host': ${e.message}"
+            )
+        }
+
+        for (addr in addresses) {
+            if (addr.isLoopbackAddress) {
+                return FetchResult.Error(
+                    code = "INVALID_REPOSITORY_URL",
+                    message = "Rejected repository URL host '$host': loopback address '${addr.hostAddress}' is forbidden."
+                )
+            }
+            if (addr.isAnyLocalAddress || addr.isLinkLocalAddress || addr.isSiteLocalAddress) {
+                return FetchResult.Error(
+                    code = "INVALID_REPOSITORY_URL",
+                    message = "Rejected repository URL host '$host': internal/private address '${addr.hostAddress}' is forbidden."
+                )
+            }
+            val ipStr = addr.hostAddress
+            if (ipStr == "169.254.169.254" || ipStr.startsWith("169.254.") || ipStr.startsWith("10.") || ipStr.startsWith("192.168.")) {
+                return FetchResult.Error(
+                    code = "INVALID_REPOSITORY_URL",
+                    message = "Rejected repository URL host '$host': private or cloud-metadata address '$ipStr' is forbidden."
+                )
+            }
+        }
+
+        return null
+    }
+
     private fun fetchOrReadMetadata(
         coordinate: MavenCoordinate,
         customRepoUrl: String?
     ): FetchResult? {
+        if (!customRepoUrl.isNullOrBlank()) {
+            val validationError = validateCustomRepoUrl(customRepoUrl)
+            if (validationError != null) {
+                return validationError
+            }
+        }
+
         val cacheFile = getCacheFile(coordinate)
         val offline = checkOffline()
 

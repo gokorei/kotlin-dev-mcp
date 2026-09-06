@@ -273,4 +273,50 @@ class MavenMetadataClientTest {
         assertFalse(DefaultMavenMetadataClient.isPreRelease("2.3.12"))
         assertFalse(DefaultMavenMetadataClient.isPreRelease("3.0.3-jvm"))
     }
+
+    @Test
+    fun `customRepoUrl rejects non-https schemes`() {
+        val client = DefaultMavenMetadataClient(cacheDir = tempDir, isOffline = false)
+        val coord = MavenCoordinate("io.ktor", "ktor-client-core")
+
+        val resultHttp = client.resolveVersions(coord, customRepoUrl = "http://repo1.maven.org/maven2")
+        assertTrue(resultHttp is KotlinMcpResult.Error)
+        assertEquals("INVALID_REPOSITORY_URL", (resultHttp as KotlinMcpResult.Error).code)
+
+        val resultFile = client.getLatestVersion(coord, customRepoUrl = "file:///etc/passwd")
+        assertTrue(resultFile is KotlinMcpResult.Error)
+        assertEquals("INVALID_REPOSITORY_URL", (resultFile as KotlinMcpResult.Error).code)
+
+        val resultGopher = client.resolveVersions(coord, customRepoUrl = "gopher://evil.com")
+        assertTrue(resultGopher is KotlinMcpResult.Error)
+        assertEquals("INVALID_REPOSITORY_URL", (resultGopher as KotlinMcpResult.Error).code)
+    }
+
+    @Test
+    fun `customRepoUrl rejects loopback addresses`() {
+        val client = DefaultMavenMetadataClient(cacheDir = tempDir, isOffline = false)
+        val coord = MavenCoordinate("io.ktor", "ktor-client-core")
+
+        val result127 = client.resolveVersions(coord, customRepoUrl = "https://127.0.0.1:8080/maven")
+        assertTrue(result127 is KotlinMcpResult.Error)
+        assertEquals("INVALID_REPOSITORY_URL", (result127 as KotlinMcpResult.Error).code)
+
+        val resultLocalhost = client.getLatestVersion(coord, customRepoUrl = "https://localhost:8080/maven")
+        assertTrue(resultLocalhost is KotlinMcpResult.Error)
+        assertEquals("INVALID_REPOSITORY_URL", (resultLocalhost as KotlinMcpResult.Error).code)
+    }
+
+    @Test
+    fun `customRepoUrl rejects cloud metadata and private addresses`() {
+        val client = DefaultMavenMetadataClient(cacheDir = tempDir, isOffline = false)
+        val coord = MavenCoordinate("io.ktor", "ktor-client-core")
+
+        val resultMetadata = client.resolveVersions(coord, customRepoUrl = "https://169.254.169.254/latest/meta-data")
+        assertTrue(resultMetadata is KotlinMcpResult.Error)
+        assertEquals("INVALID_REPOSITORY_URL", (resultMetadata as KotlinMcpResult.Error).code)
+
+        val resultPrivate = client.getLatestVersion(coord, customRepoUrl = "https://10.0.0.1/maven")
+        assertTrue(resultPrivate is KotlinMcpResult.Error)
+        assertEquals("INVALID_REPOSITORY_URL", (resultPrivate as KotlinMcpResult.Error).code)
+    }
 }
