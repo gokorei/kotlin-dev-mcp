@@ -184,6 +184,53 @@ class VersionCatalogServiceTest {
     }
 
     @Test
+    fun `parses complex toml with dotted keys, multiline tables, and string coordinates`() {
+        val complexToml = """
+            # Header comment
+            [versions]
+            kotlin = "2.0.0"
+            plugin-foo = "1.2.3"
+
+            [libraries]
+            simple-lib = "com.google.guava:guava:31.0-jre"
+            complex-lib = { group = "org.test", name = "complex", version = { strictly = "1.0.0" } }
+            ref-lib = { group = "org.test", name = "ref", version = { ref = "kotlin" } }
+
+            [plugins]
+            simple-plugin = "org.jetbrains.kotlin.jvm:2.0.0"
+            complex-plugin = { id = "com.android.application", version.ref = "plugin-foo" }
+        """.trimIndent()
+
+        val gradleDir = File(tempDir, "gradle").apply { mkdirs() }
+        File(gradleDir, "libs.versions.toml").writeText(complexToml)
+
+        val service = DefaultVersionCatalogService()
+        val parsed = service.parseCatalog(tempDir.absolutePath)
+
+        assertEquals("2.0.0", parsed.versions["kotlin"])
+        assertEquals("1.2.3", parsed.versions["plugin-foo"])
+
+        val simpleLib = parsed.libraries["simple-lib"]
+        assertNotNull(simpleLib)
+        assertEquals("com.google.guava:guava:31.0-jre", simpleLib?.module)
+        assertEquals("31.0-jre", simpleLib?.version)
+
+        val complexLib = parsed.libraries["complex-lib"]
+        assertNotNull(complexLib)
+        assertEquals("org.test", complexLib?.group)
+        assertEquals("complex", complexLib?.name)
+        assertEquals("1.0.0", complexLib?.version)
+
+        val refLib = parsed.libraries["ref-lib"]
+        assertNotNull(refLib)
+        assertEquals("kotlin", refLib?.versionRef)
+        assertEquals("2.0.0", refLib?.version)
+
+        assertEquals("org.jetbrains.kotlin.jvm:2.0.0", parsed.plugins["simple-plugin"])
+        assertEquals("com.android.application:1.2.3", parsed.plugins["complex-plugin"])
+    }
+
+    @Test
     fun `addLibrary rejects duplicate alias`() {
         val gradleDir = File(tempDir, "gradle").apply { mkdirs() }
         File(gradleDir, "libs.versions.toml").writeText(sampleToml)

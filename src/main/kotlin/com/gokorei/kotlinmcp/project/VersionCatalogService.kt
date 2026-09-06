@@ -5,6 +5,8 @@ import com.gokorei.kotlinmcp.maven.MavenCoordinate
 import com.gokorei.kotlinmcp.maven.MavenMetadataClient
 import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.tomlj.Toml
+import org.tomlj.TomlTable
 import java.io.File
 
 data class CatalogLibraryEntry(
@@ -93,64 +95,96 @@ class DefaultVersionCatalogService(
         val file = getTomlFile(projectPath)
         if (!file.exists()) return VersionCatalogModel()
 
-        val lines = runCatching { file.readLines() }.getOrNull() ?: return VersionCatalogModel()
+        val content = runCatching { file.readText() }.getOrNull() ?: return VersionCatalogModel()
+        val result = Toml.parse(content)
+        if (result.hasErrors()) {
+            logger.warn { "Errors parsing version catalog at ${file.path}: ${result.errors()}" }
+        }
+
         val versions = mutableMapOf<String, String>()
-        val libraries = mutableMapOf<String, CatalogLibraryEntry>()
-        val plugins = mutableMapOf<String, String>()
-        var currentSection = ""
-
-        lines.forEach { rawLine ->
-            val trimmed = stripTrailingComment(rawLine)
-            if (trimmed.isBlank()) return@forEach
-
-            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                currentSection = trimmed.removeSurrounding("[", "]").trim().lowercase()
-                return@forEach
-            }
-
-            if (currentSection == "versions" && "=" in trimmed) {
-                val key = trimmed.substringBefore("=").trim()
-                val value = trimmed.substringAfter("=").trim().trim('"', '\'')
-                versions[key] = value
-            } else if (currentSection == "libraries" && "=" in trimmed) {
-                val rawAlias = trimmed.substringBefore("=").trim()
-                val rhs = trimmed.substringAfter("=").trim()
-
-                if (rhs.startsWith("{") && rhs.endsWith("}")) {
-                    val body = rhs.removeSurrounding("{", "}").trim()
-                    val kvMap = mutableMapOf<String, String>()
-                    body.split(",").forEach { part ->
-                        if ("=" in part) {
-                            val k = part.substringBefore("=").trim()
-                            val v = part.substringAfter("=").trim().trim('"', '\'')
-                            kvMap[k] = v
-                        }
+        result.getTable("versions")?.let { versionsTable ->
+            versionsTable.dottedKeySet().forEach { key ->
+                val str = versionsTable.getString(listOf(key)) ?: versionsTable.getString(key)
+                if (str != null) {
+                    versions[key] = str
+                } else {
+                    val obj = versionsTable.get(listOf(key)) ?: versionsTable.get(key)
+                    if (obj != null && !versionsTable.isTable(key)) {
+                        versions[key] = obj.toString()
                     }
-                    val group = kvMap["group"]
-                    val name = kvMap["name"]
-                    val module = kvMap["module"]
-                    val versionRef = kvMap["version.ref"]
-                    val version = kvMap["version"] ?: versionRef?.let { versions[it] }
+                }
+            }
+        }
 
-                    libraries[rawAlias] = CatalogLibraryEntry(
-                        alias = rawAlias,
+        val libraries = mutableMapOf<String, CatalogLibraryEntry>()
+        result.getTable("libraries")?.let { libsTable ->
+            libsTable.keySet().forEach { alias ->
+                if (libsTable.isTable(alias)) {
+                    val libTable = libsTable.getTable(alias)!!
+                    val group = libTable.getString("group")
+                    val name = libTable.getString("name")
+                    val module = libTable.getString("module")
+                    val versionRef = if (libTable.isTable("version")) {
+                        libTable.getTable("version")?.getString("ref")
+                    } else {
+                        libTable.getString("version.ref")
+                    }
+                    val version = if (libTable.isString("version")) {
+                        libTable.getString("version")
+                    } else if (libTable.isTable("version")) {
+                        libTable.getTable("version")?.getString("strictly")
+                            ?: libTable.getTable("version")?.getString("prefer")
+                            ?: versionRef?.let { versions[it] }
+                    } else {
+                        versionRef?.let { versions[it] }
+                    }
+
+                    libraries[alias] = CatalogLibraryEntry(
+                        alias = alias,
                         group = group,
                         name = name,
                         module = module,
                         version = version,
                         versionRef = versionRef
                     )
-                } else if (rhs.startsWith("\"") || rhs.startsWith("'")) {
-                    val coord = rhs.trim('"', '\'')
-                    libraries[rawAlias] = CatalogLibraryEntry(
-                        alias = rawAlias,
+                } else if (libsTable.isString(alias)) {
+                    val coord = libsTable.getString(alias).orEmpty()
+                    libraries[alias] = CatalogLibraryEntry(
+                        alias = alias,
                         module = coord,
                         version = coord.substringAfterLast(":", "")
                     )
                 }
-            } else if (currentSection == "plugins" && "=" in trimmed) {
-                val rawAlias = trimmed.substringBefore("=").trim()
-                plugins[rawAlias] = trimmed.substringAfter("=").trim()
+            }
+        }
+
+        val plugins = mutableMapOf<String, String>()
+        result.getTable("plugins")?.let { pluginsTable ->
+            pluginsTable.keySet().forEach { alias ->
+                if (pluginsTable.isTable(alias)) {
+                    val pluginTable = pluginsTable.getTable(alias)!!
+                    val id = pluginTable.getString("id")
+                    val versionRef = if (pluginTable.isTable("version")) {
+                        pluginTable.getTable("version")?.getString("ref")
+                    } else {
+                        pluginTable.getString("version.ref")
+                    }
+                    val version = if (pluginTable.isString("version")) {
+                        pluginTable.getString("version")
+                    } else {
+                        versionRef?.let { versions[it] }
+                    }
+                    val formatted = if (id != null && version != null) {
+                        "$id:$version"
+                    } else {
+                        id ?: pluginTable.toJson()
+                    }
+                    plugins[alias] = formatted
+                } else if (pluginsTable.isString(alias)) {
+                    plugins[alias] = pluginsTable.getString(alias).orEmpty()
+                } else {
+                    plugins[alias] = pluginsTable.get(alias)?.toString().orEmpty()
+                }
             }
         }
 

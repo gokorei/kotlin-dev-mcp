@@ -177,6 +177,9 @@ dependencies {
     implementation("io.ktor:ktor-server-content-negotiation:3.0.3")
     implementation("io.mockk:mockk:1.13.13")
 
+    // Standard TOML parser for Gradle version catalogs (08CFNKGM)
+    implementation("org.tomlj:tomlj:1.1.1")
+
     // Testing
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
