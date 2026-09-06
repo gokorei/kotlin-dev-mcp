@@ -5,6 +5,8 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import javax.xml.XMLConstants
+import javax.xml.parsers.DocumentBuilderFactory
 
 /**
  * Structured detekt finding for LLM consumption.
@@ -510,7 +512,14 @@ class DefaultLintService(
     fun parseDetektXml(file: File): List<LintFinding> {
         val list = mutableListOf<LintFinding>()
         try {
-            val doc = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
+            val factory = DocumentBuilderFactory.newInstance().apply {
+                isNamespaceAware = true
+                setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+                setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+                setFeature("http://xml.org/sax/features/external-general-entities", false)
+                setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+            }
+            val doc = factory.newDocumentBuilder().parse(file)
             val fileNodes = doc.getElementsByTagName("file")
             for (i in 0 until fileNodes.length) {
                 val fileElem = fileNodes.item(i) as org.w3c.dom.Element
