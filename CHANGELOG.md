@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Centralized dependencies via `gradle/libs.versions.toml` Version Catalog** — defined Gradle version catalog with versions, libraries, and plugins tables, refactoring `build.gradle.kts` to consume type-safe `libs` accessors and aligning with CI caching policies (SJY2GH3Z).
+- **Adjust build toolchain to Java 21 LTS** — changed Gradle build toolchain languageVersion from JDK 25 to JDK 21 LTS, removed JDK 25-specific unsafe flags, updated CI/Release workflows and contribution guidelines to ensure smooth contributor onboarding and LTS compatibility (CDJSKQC4).
 
 ### Fixed
 - **Secure XML parsing in LintService** — configured `DocumentBuilderFactory` in `parseDetektXml` with `XMLConstants.FEATURE_SECURE_PROCESSING`, `disallow-doctype-decl`, and disabled external general/parameter entities to prevent XXE injection when ingesting Detekt reports (YSY5E9EW).
