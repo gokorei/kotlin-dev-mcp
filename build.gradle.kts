@@ -15,10 +15,10 @@ buildscript {
 }
 
 plugins {
-    kotlin("jvm") version "2.3.20"
-    kotlin("plugin.serialization") version "2.3.20"
-    id("org.jetbrains.dokka") version "2.2.0"
-    id("org.jetbrains.kotlinx.binary-compatibility-validator") version "0.18.1"
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.dokka)
+    alias(libs.plugins.binary.compatibility.validator)
     application
 }
 
@@ -62,8 +62,8 @@ val detektTooling by configurations.creating
 val ktlintTooling by configurations.creating
 
 dependencies {
-    detektTooling("io.gitlab.arturbosch.detekt:detekt-cli:1.23.7")
-    ktlintTooling("com.pinterest.ktlint:ktlint-cli:1.3.1")
+    detektTooling(libs.detekt.cli)
+    ktlintTooling(libs.ktlint.cli)
 }
 
 val dumpToolingClasspaths = tasks.register("dumpToolingClasspaths") {
@@ -150,42 +150,42 @@ repositories {
 
 dependencies {
     // Official MCP SDK for Kotlin
-    implementation("io.modelcontextprotocol:kotlin-sdk:0.14.0")
+    implementation(libs.mcp.sdk)
 
     // Kotlinx Serialization & Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-    implementation("com.lukelast.ktoon:ktoon:5.0.0")
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.ktoon)
 
     // Embedded Kotlin Compiler for lightweight in-memory snippet diagnostics & K2 PSI analysis
-    implementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.3.20")
+    implementation(libs.kotlin.compiler.embeddable)
 
     // Kotlin Build Tools API for compiler daemon & in-process compilation execution
-    implementation("org.jetbrains.kotlin:kotlin-build-tools-api:2.3.20")
-    runtimeOnly("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.20")
+    implementation(libs.kotlin.build.tools.api)
+    runtimeOnly(libs.kotlin.build.tools.impl)
 
     // Logging: kotlin-logging over slf4j, with slf4j-simple as the backend
     // (writes to stderr, keeping stdout reserved for MCP JSON-RPC frames).
-    implementation("io.github.oshai:kotlin-logging-jvm:8.0.4")
-    implementation("org.slf4j:slf4j-simple:2.0.17")
+    implementation(libs.kotlin.logging.jvm)
+    implementation(libs.slf4j.simple)
 
     // Phase C library-awareness dependencies (9PJYFA83). Additive: existing
     // tools are unaffected; these back the library-specific analysis tools.
-    implementation("io.arrow-kt:arrow-core:2.0.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.2")
-    implementation("io.ktor:ktor-server-core:3.0.3")
-    implementation("io.ktor:ktor-server-content-negotiation:3.0.3")
-    implementation("io.mockk:mockk:1.13.13")
+    implementation(libs.arrow.core)
+    implementation(libs.kotlinx.datetime)
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.content.negotiation)
+    implementation(libs.mockk)
 
     // Testing
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.0")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
     // Turbine (an advertised snippet-importable library) depends on
     // kotlinx-coroutines-test at runtime, so both must be on runtimeClasspath
     // for the fat-jar fallback (dumpSnippetClasspath) to bundle them. Moving
     // them to implementation keeps them visible to tests as well.
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
-    implementation("app.cash.turbine:turbine:1.1.0")
+    implementation(libs.kotlinx.coroutines.test)
+    implementation(libs.turbine)
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {

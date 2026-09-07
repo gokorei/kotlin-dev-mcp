@@ -12,6 +12,8 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Improvements
 
+- **Centralized dependencies via `gradle/libs.versions.toml` Version Catalog** — defined Gradle version catalog with versions, libraries, and plugins tables, refactoring `build.gradle.kts` to consume type-safe `libs` accessors and aligning with CI caching policies (SJY2GH3Z).
+
 ---
 
 ## v1.5.0 — 2026-09-05
