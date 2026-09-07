@@ -226,6 +226,7 @@ class JavaToKotlinRefactorer {
             var currentCase: String? = null
             for (s in switchStatements) {
                 if (s is PsiSwitchLabelStatement) {
+                    @Suppress("DEPRECATION")
                     currentCase = if (s.isDefaultCase) "else" else s.caseValue?.text
                 } else if (currentCase != null) {
                     val bodyText = cleanJavaStatementPsi(s).removePrefix("return ").trim()

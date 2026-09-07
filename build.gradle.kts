@@ -193,8 +193,9 @@ dependencies {
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions {
-        suppressWarnings.set(true)
-        allWarningsAsErrors.set(false)
+        suppressWarnings.set(false)
+        val warningsAsErrors = providers.gradleProperty("warningsAsErrors").map { it.toBoolean() }.orElse(false)
+        allWarningsAsErrors.set(warningsAsErrors)
         optIn.add("org.jetbrains.kotlin.K1Deprecation")
         optIn.add("org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi")
     }

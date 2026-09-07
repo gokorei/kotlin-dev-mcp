@@ -73,9 +73,9 @@ class DefaultProgressNotifier(
             return KotlinMcpResult.Success("Blank progress token provided; progress ignored.")
         }
 
-        val hasValidTotal = total != null && total > 0.0
-        val clampedProgress = if (hasValidTotal) {
-            progress.coerceIn(0.0, total!!)
+        val validTotal = total?.takeIf { it > 0.0 }
+        val clampedProgress = if (validTotal != null) {
+            progress.coerceIn(0.0, validTotal)
         } else {
             progress.coerceAtLeast(0.0)
         }
@@ -83,7 +83,7 @@ class DefaultProgressNotifier(
         val notif = ProgressNotification(
             progressToken = progressToken,
             progress = clampedProgress,
-            total = if (hasValidTotal) total else null,
+            total = validTotal,
             message = message
         )
         logger.debug { "Progress [token=$progressToken]: ${notif.progress}/${notif.total ?: "unbounded"} (${notif.message.orEmpty()})" }
