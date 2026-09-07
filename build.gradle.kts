@@ -19,6 +19,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.dokka)
     alias(libs.plugins.binary.compatibility.validator)
+    alias(libs.plugins.kover)
     application
 }
 
@@ -256,9 +257,60 @@ val stressTest = tasks.register<Test>("stressTest") {
     systemProperty("kmcp.include_internal_classpath", "true")
 }
 
+kover {
+    reports {
+        verify {
+            rule {
+                minBound(75) // Enforce minimum 75% line coverage threshold
+            }
+        }
+    }
+}
 
+val detektCheck = tasks.register<JavaExec>("detektCheck") {
+    group = "verification"
+    description = "Runs Detekt static code analysis against kotlin-mcp sources."
+    dependsOn(dumpToolingClasspaths)
+    classpath = detektTooling
+    mainClass.set("io.gitlab.arturbosch.detekt.cli.Main")
+    val configFile = layout.projectDirectory.file("config/detekt/detekt.yml")
+    val baselineFile = layout.projectDirectory.file("config/detekt/baseline.xml")
+    inputs.file(configFile)
+    inputs.file(baselineFile)
+    inputs.dir("src/main/kotlin")
+    inputs.dir("src/test/kotlin")
+    outputs.file(layout.buildDirectory.file("reports/detekt/detekt.xml"))
+    args = listOf(
+        "--input", "src/main/kotlin,src/test/kotlin",
+        "--config", configFile.asFile.absolutePath,
+        "--baseline", baselineFile.asFile.absolutePath,
+        "--report", "xml:${layout.buildDirectory.file("reports/detekt/detekt.xml").get().asFile.absolutePath}"
+    )
+}
 
+val ktlintCheck = tasks.register<JavaExec>("ktlintCheck") {
+    group = "verification"
+    description = "Runs KtLint style and formatting verification against kotlin-mcp sources."
+    dependsOn(dumpToolingClasspaths)
+    classpath = ktlintTooling
+    mainClass.set("com.pinterest.ktlint.Main")
+    val baselineFile = layout.projectDirectory.file("config/ktlint/baseline.xml")
+    val editorConfigFile = layout.projectDirectory.file(".editorconfig")
+    inputs.file(baselineFile)
+    inputs.file(editorConfigFile)
+    inputs.dir("src/main/kotlin")
+    inputs.dir("src/test/kotlin")
+    args = listOf(
+        "--baseline", baselineFile.asFile.absolutePath,
+        "src/**/*.kt"
+    )
+}
 
+tasks.check {
+    dependsOn(detektCheck)
+    dependsOn(ktlintCheck)
+    dependsOn("koverVerify")
+}
 
 java {
     toolchain {

@@ -37,4 +37,4 @@ jobs:
             gradle-build-cache-
 
       - name: Build and Test
-        run: ./gradlew test uberJar
+        run: ./gradlew check uberJar
