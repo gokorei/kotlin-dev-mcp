@@ -30,7 +30,7 @@ import java.io.File
  * boundary. Structured [com.gokorei.kotlinmcp.models.KotlinMcpResult] wrapping
  * happens in the service layer that consumes this engine.
  */
-interface K2SemanticEngine {
+interface K2SemanticEngine : AutoCloseable {
 
     /**
      * Builds (or reuses) a K2 analysis session over the workspace plus the
@@ -119,7 +119,7 @@ interface K2SemanticEngine {
     val workspaceRebuilds: Int
 
     /** Releases cached PSI state; the shared environment stays owned by [K2SnippetFrontend]. */
-    fun close()
+    override fun close()
 }
 
 class DefaultK2SemanticEngine(

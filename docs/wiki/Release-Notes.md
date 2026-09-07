@@ -19,6 +19,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 - **K2 PSI AST parsing for `.gradle.kts` scripts** — introduced `GradleKtsPsiInspector` using the embedded compiler's K2 PSI AST visitors (`KtCallExpression`, `KtBinaryExpression`, `KtSimpleNameExpression`, and `KtStringTemplateExpression`) to replace fragile regex matching in `ProjectService`, `GradleProjectInspector`, and `VulnerabilityAuditor`, strictly adhering to AGENTS.md Rule #1 while preserving Groovy DSL compatibility fallbacks (DD90ZGEB).
 - **Standard TOML parser for version catalogs** — adopted `org.tomlj:tomlj` in `VersionCatalogService` to parse Gradle `libs.versions.toml` files robustly according to the TOML specification, replacing brittle line-based custom parsing (08CFNKGM).
 - **Consolidate duplicated symbol catalogs and strategy reporters** — eliminated redundant symbol documentation in `DocService` by sourcing entries directly from `StdlibSymbolCatalog`, and delegated `ProjectService` coverage, package API, and environment profile detection to dedicated `CoverageReporter`, `PackageApiExporter`, and `EnvironmentProfileDetector` strategy components (5PNQDER7).
+- **AutoCloseable resource lifecycle management** — implemented `AutoCloseable` across `KotlinMcpServer`, `K2SemanticEngine`, `LspService`, and `SemanticService` with idempotent atomic state guards and graceful disposal of embedded compilers, analyzers, and PSI caches (839ZH49J).
 
 ---
 

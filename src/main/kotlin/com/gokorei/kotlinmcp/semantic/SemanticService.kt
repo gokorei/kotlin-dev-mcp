@@ -8,7 +8,7 @@ import com.gokorei.kotlinmcp.semantic.analyzers.*
 /**
  * Service interface for compiler-backed deep semantic analysis and K2 compiler session management.
  */
-interface SemanticService {
+interface SemanticService : AutoCloseable {
     fun checkWhenExhaustiveness(code: String, classpath: List<String> = emptyList()): KotlinMcpResult
     fun checkValueClass(code: String, classpath: List<String> = emptyList()): KotlinMcpResult
     fun checkInlineReified(code: String, classpath: List<String> = emptyList()): KotlinMcpResult
@@ -17,7 +17,7 @@ interface SemanticService {
     fun checkExperimentalOptIn(code: String, classpath: List<String> = emptyList()): KotlinMcpResult
     fun checkDeprecated(code: String, classpath: List<String> = emptyList()): KotlinMcpResult
     fun acquireSession(code: String, classpath: List<String> = emptyList()): K2AnalysisSession?
-    fun close() {}
+    override fun close() {}
 }
 
 /**
@@ -34,8 +34,12 @@ class DefaultSemanticService(
     private val expectActualAnalyzer = ExpectActualAnalyzer()
     private val optInAndDeprecationAnalyzer = OptInAndDeprecationAnalyzer()
 
+    private val closed = java.util.concurrent.atomic.AtomicBoolean(false)
+
     override fun close() {
-        sessionProvider.dispose()
+        if (closed.compareAndSet(false, true)) {
+            runCatching { sessionProvider.dispose() }
+        }
     }
 
     override fun acquireSession(code: String, classpath: List<String>): K2AnalysisSession? {

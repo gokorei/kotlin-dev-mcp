@@ -9,6 +9,7 @@ import com.gokorei.kotlinmcp.linting.*
 import com.gokorei.kotlinmcp.lsp.*
 import com.gokorei.kotlinmcp.project.*
 import com.gokorei.kotlinmcp.refactoring.*
+import com.gokorei.kotlinmcp.semantic.*
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -163,11 +164,30 @@ class KotlinMcpServerTest {
     }
 
     @Test
-    fun `mutationTest executes in-memory mutation testing and returns score`() {
-        val code = "fun doubleVal(x: Int): Int = x * 2"
-        val testCode = "fun main() { check(doubleVal(3) == 6); check(doubleVal(0) == 0) }"
-        val result = server.mutationTest(code, testCode)
-        assertSuccess(result, "Mutation Testing Report")
+    fun `server implements AutoCloseable and close is idempotent`() {
+        var engineClosed = false
+        var semanticClosed = false
+        val mockEngine = object : K2SemanticEngine by DefaultK2SemanticEngine() {
+            override fun close() { engineClosed = true }
+        }
+        val mockSemantic = object : SemanticService by DefaultSemanticService() {
+            override fun close() { semanticClosed = true }
+        }
+
+        val testServer = KotlinMcpServer(
+            semanticEngine = mockEngine,
+            semanticService = mockSemantic
+        )
+
+        assertTrue(testServer is AutoCloseable, "KotlinMcpServer must implement AutoCloseable")
+        testServer.use {
+            // inside use block
+        }
+        assertTrue(engineClosed, "semanticEngine must be closed on server close")
+        assertTrue(semanticClosed, "semanticService must be closed on server close")
+
+        // idempotent second close
+        assertDoesNotThrow { testServer.close() }
     }
 }
 

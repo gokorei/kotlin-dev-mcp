@@ -24,7 +24,7 @@ enum class LspAction {
  * definition resolution, reference searching, code completion, and symbol
  * renaming.
  */
-interface LspService {
+interface LspService : AutoCloseable {
     fun execute(
         action: LspAction,
         code: String,
@@ -34,7 +34,7 @@ interface LspService {
     ): KotlinMcpResult
 
     /** Releases the semantic engine's cached workspace PSI state (no-op by default). */
-    fun close() {}
+    override fun close() {}
 }
 
 class DefaultLspService @JvmOverloads constructor(
@@ -65,8 +65,12 @@ class DefaultLspService @JvmOverloads constructor(
         }
     }
 
+    private val closed = java.util.concurrent.atomic.AtomicBoolean(false)
+
     override fun close() {
-        semanticEngine.close()
+        if (closed.compareAndSet(false, true)) {
+            runCatching { semanticEngine.close() }
+        }
     }
 
 
