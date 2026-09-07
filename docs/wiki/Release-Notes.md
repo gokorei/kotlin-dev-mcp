@@ -11,6 +11,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 - **SSRF mitigation for custom repository URLs** — validated `customRepoUrl` in `DefaultMavenMetadataClient` to strictly enforce HTTPS schemes and block loopback (`localhost`, `127.0.0.1`, `::1`), link-local/site-local private subnets, and cloud metadata addresses (`169.254.169.254`) before issuing HTTP requests (8VSB2S25).
 - **Secure XML parsing in LintService** — configured `DocumentBuilderFactory` in `parseDetektXml` with `XMLConstants.FEATURE_SECURE_PROCESSING`, `disallow-doctype-decl`, and disabled external general/parameter entities to prevent XXE injection when ingesting Detekt reports (YSY5E9EW).
 - **Bounded subprocess stream consumption & process tree cleanup** — replaced unbounded `readBytes()` in `RunSnippetService` and `GradleRunService` with tail-preserving circular `BoundedStreamDrainer` (1 MB upper bound) to protect host JVM memory from runaway child processes, and added recursive process descendant termination on execution timeout (926759R9).
+- **Eliminate read-lock mutation in DefaultVfsPsiCache** — switched the internal bounded cache to insertion-ordered LinkedHashMap under reentrant read-write lock, eliminating concurrent structural pointer mutations and race conditions during read operations (YWHCGCXG).
 
 ### Improvements
 

@@ -42,14 +42,12 @@ class DefaultVfsPsiCache(
 
     private val rwLock = ReentrantReadWriteLock()
 
-    // Bounded LRU cache for parsed KtFiles
-    private val cache: MutableMap<String, CachedEntry> = Collections.synchronizedMap(
-        object : LinkedHashMap<String, CachedEntry>(maxCapacity, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedEntry>?): Boolean {
-                return size > maxCapacity
-            }
+    // Insertion-ordered bounded cache for parsed KtFiles protected by rwLock
+    private val cache: MutableMap<String, CachedEntry> = object : LinkedHashMap<String, CachedEntry>(maxCapacity, 0.75f, false) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedEntry>?): Boolean {
+            return size > maxCapacity
         }
-    )
+    }
 
     private val watchKeys = ConcurrentHashMap<WatchKey, Path>()
     @Volatile
