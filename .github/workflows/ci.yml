@@ -12,10 +12,10 @@ jobs:
 
     steps:
       - name: Checkout Codebase
-        uses: actions/checkout@v5
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up Java 21 JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4.7.0
         with:
           distribution: 'temurin'
           java-version: '21'
@@ -29,7 +29,7 @@ jobs:
       # instead of rebuilt from scratch on every push. Tasks are keyed by
       # their real inputs, so changed sources simply miss and recompile.
       - name: Restore Gradle Build Cache
-        uses: actions/cache@v4
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
           path: ~/.gradle/caches/build-cache-1
           key: gradle-build-cache-${{ hashFiles('build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml') }}
