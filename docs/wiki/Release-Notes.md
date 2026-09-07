@@ -23,6 +23,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 - **Kotlin Analysis API architectural roadmap & prototype blueprint** — documented comprehensive catalog of deprecated K1 compiler usages, architecture blueprint, prototype standalone KaSession resolution patterns, and a phased 4-stage migration plan to the official Kotlin Analysis API (FIR) (G76PJ006).
 - **Unsuppressed compiler warnings & code hygiene remediation** — removed blanket `suppressWarnings.set(true)` from `build.gradle.kts`, resolved unnecessary assertions, redundant instance checks, and deprecation warnings across snippet safety checkers, progress notifiers, and refactorers, and enabled configurable project property `-PwarningsAsErrors=true` (TDSDYRTV).
 - **Hermetic and offline-safe build pipeline** — pre-bundled `stdlib-index.json` into `src/main/resources/` and decoupled network-fetching `syncKotlinDocs` and `processStdlibIndex` tasks from `processResources`, enabling 100% offline, reproducible builds (`./gradlew assemble --offline`) without network latency or external HTTP failures (BN94YR37).
+- **Centralized dependencies via `gradle/libs.versions.toml` Version Catalog** — defined Gradle version catalog with versions, libraries, and plugins tables, refactoring `build.gradle.kts` to consume type-safe `libs` accessors and aligning with CI caching policies (SJY2GH3Z).
 
 ---
 
