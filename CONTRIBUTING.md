@@ -7,8 +7,8 @@ Thank you for developing and maintaining `kotlin-mcp`! This document outlines lo
 ## Local Development Workflow
 
 ### Build & Compilation
-The project uses Gradle with a Kotlin JVM toolchain of 25 (auto-provisioned via the
-foojay resolver if a JDK 25 is not already installed). A Gradle wrapper
+The project uses Gradle with a Kotlin JVM toolchain of 21 LTS (auto-provisioned via the
+foojay resolver if a JDK 21 is not already installed). A Gradle wrapper
 (`./gradlew`) is committed and can be used anywhere a `gradle` command appears
 below.
 

@@ -46,7 +46,7 @@ configurations.configureEach {
             eachDependency {
                 if (requested.group == "org.jetbrains.kotlin" && requested.name == "kotlin-compiler-embeddable") {
                     useVersion("2.3.20")
-                    because("Align embedded compiler version for JDK 25 compatibility")
+                    because("Align embedded compiler version for Kotlin 2.3 compiler runtime compatibility")
                 }
             }
         }
@@ -224,8 +224,7 @@ tasks.test {
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
     jvmArgs(
-        "--enable-native-access=ALL-UNNAMED",
-        "--sun-misc-unsafe-memory-access=allow"
+        "--enable-native-access=ALL-UNNAMED"
     )
     maxHeapSize = "2048m"
     systemProperty("kmcp.disable_network_audits", "true")
@@ -246,8 +245,7 @@ val stressTest = tasks.register<Test>("stressTest") {
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
     jvmArgs(
-        "--enable-native-access=ALL-UNNAMED",
-        "--sun-misc-unsafe-memory-access=allow"
+        "--enable-native-access=ALL-UNNAMED"
     )
     val testTmpDir = layout.buildDirectory.dir("tmp/stress-workers")
     doFirst {
@@ -266,7 +264,7 @@ val stressTest = tasks.register<Test>("stressTest") {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
@@ -275,8 +273,7 @@ java {
 application {
     mainClass.set("com.gokorei.kotlinmcp.MainKt")
     applicationDefaultJvmArgs = listOf(
-        "--enable-native-access=ALL-UNNAMED",
-        "--sun-misc-unsafe-memory-access=allow"
+        "--enable-native-access=ALL-UNNAMED"
     )
 }
 
