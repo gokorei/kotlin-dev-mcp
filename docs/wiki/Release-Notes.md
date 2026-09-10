@@ -9,6 +9,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 ### Bug Fixes
 
 - **Secure XML parsing in LintService** — configured `DocumentBuilderFactory` in `parseDetektXml` with `XMLConstants.FEATURE_SECURE_PROCESSING`, `disallow-doctype-decl`, and disabled external general/parameter entities to prevent XXE injection when ingesting Detekt reports (YSY5E9EW).
+- **Bounded subprocess stream consumption & process tree cleanup** — replaced unbounded `readBytes()` in `RunSnippetService` and `GradleRunService` with tail-preserving circular `BoundedStreamDrainer` (1 MB upper bound) to protect host JVM memory from runaway child processes, and added recursive process descendant termination on execution timeout (926759R9).
 
 ### Improvements
 

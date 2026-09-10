@@ -295,33 +295,24 @@ class DefaultRunSnippetService(
                 .redirectErrorStream(true)
                 .start()
 
-            val output = ByteArrayOutputStream()
-            val readerThread = Thread {
-                output.write(process.inputStream.readBytes())
-            }.apply {
-                isDaemon = true
-                start()
-            }
+            val drainHandle = com.gokorei.kotlinmcp.shared.BoundedStreamDrainer.drain(process.inputStream)
 
             val startNanos = System.nanoTime()
             val completed = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)
             val durationMs = (System.nanoTime() - startNanos) / 1_000_000
 
             if (!completed) {
+                runCatching { process.descendants().forEach { it.destroyForcibly() } }
                 process.destroyForcibly()
-                readerThread.join(1000)
+                drainHandle.join(1000)
                 KotlinMcpResult.Error(
                     message = "Execution timed out after ${timeoutMillis}ms; process destroyed.",
                     code = "EXECUTION_TIMEOUT",
                     details = mapOf("timeoutMillis" to timeoutMillis.toString())
                 )
             } else {
-                try {
-                    readerThread.join()
-                } catch (e: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                }
-                val rawText = String(output.toByteArray(), Charsets.UTF_8)
+                drainHandle.join(2000)
+                val rawText = drainHandle.readUtf8()
                 val text = LogTruncator.truncate(rawText)
                 val exit = process.exitValue()
                 if (exit == 0) {

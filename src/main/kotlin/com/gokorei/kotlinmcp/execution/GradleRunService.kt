@@ -58,29 +58,24 @@ class DefaultGradleRunService : GradleRunService {
                 .redirectErrorStream(true)
                 .start()
 
-            val output = ByteArrayOutputStream()
-            val readerThread = Thread {
-                output.write(process.inputStream.readBytes())
-            }.apply {
-                isDaemon = true
-                start()
-            }
+            val drainHandle = com.gokorei.kotlinmcp.shared.BoundedStreamDrainer.drain(process.inputStream)
 
             val startNanos = System.nanoTime()
             val completed = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)
             val durationMs = (System.nanoTime() - startNanos) / 1_000_000
 
             if (!completed) {
+                runCatching { process.descendants().forEach { it.destroyForcibly() } }
                 process.destroyForcibly()
-                readerThread.join(1000)
+                drainHandle.join(1000)
                 KotlinMcpResult.Error(
                     message = "Gradle task '$trimmedTask' timed out after ${timeoutMillis}ms; process tree destroyed.",
                     code = "EXECUTION_TIMEOUT",
                     details = mapOf("timeoutMillis" to timeoutMillis.toString(), "task" to trimmedTask)
                 )
             } else {
-                readerThread.join(2000)
-                val text = String(output.toByteArray(), Charsets.UTF_8)
+                drainHandle.join(2000)
+                val text = drainHandle.readUtf8()
                 val exit = process.exitValue()
                 if (exit == 0) {
                     KotlinMcpResult.Success(
