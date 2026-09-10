@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Snippet runner security alignment & hardening configuration** — aligned `SECURITY.md` with the dual-runner model (`host_jvm` subprocess vs `in_process` classloader) and added `KMCP_DISABLE_IN_PROCESS_RUNNER` (`-Dkmcp.disable_in_process_runner`) to enforce strict isolated subprocess execution across all snippet invocations in security-restricted environments (D9BY9NVQ).
+
 ### Fixed
 - **SSRF mitigation for custom repository URLs** — validated `customRepoUrl` in `DefaultMavenMetadataClient` to strictly enforce HTTPS schemes and block loopback (`localhost`, `127.0.0.1`, `::1`), link-local/site-local private subnets, and cloud metadata addresses (`169.254.169.254`) before issuing HTTP requests (8VSB2S25).
 - **Secure XML parsing in LintService** — configured `DocumentBuilderFactory` in `parseDetektXml` with `XMLConstants.FEATURE_SECURE_PROCESSING`, `disallow-doctype-decl`, and disabled external general/parameter entities to prevent XXE injection when ingesting Detekt reports (YSY5E9EW).
