@@ -768,5 +768,69 @@ class ProjectServiceTest {
         assertTrue(result.isError)
         assertEquals("INVALID_ARGUMENTS", (result as KotlinMcpResult.Error).code)
     }
+
+    @Test
+    fun `diagnoseBuild handles complex multiline and formatted kts without regex breakage`() {
+        val complexKts = """
+            plugins {
+                kotlin(
+                    "jvm"
+                ) version "2.1.0"
+                id(
+                    "org.jetbrains.kotlin.jvm"
+                ) version "2.1.0"
+                id("com.android.application") version "8.1.0"
+            }
+            repositories {
+                mavenCentral()
+            }
+            dependencies {
+                implementation("org.apache.commons:commons-compress:1.18")
+                api("com.squareup.okhttp3:okhttp:4.12.0")
+                testImplementation("io.mockk:mockk:1.13.13")
+            }
+        """.trimIndent()
+
+        val diagResult = projectService.diagnoseBuild(complexKts)
+        assertTrue(diagResult.isSuccess)
+        val diag = diagResult as KotlinMcpResult.Success
+        assertTrue(diag.content.contains("Plugin conflict: `org.jetbrains.kotlin.jvm` is declared 2 time(s)"))
+        assertTrue(diag.content.contains("AGP `8.1.0` with Kotlin `2.1.0`"))
+        assertTrue(diag.content.contains("3 dependencies hardcode versions inline"))
+    }
+
+    @Test
+    fun `analyzeDependencies and extractDependencyCoordinates correctly parse complex kts AST with comments and whitespace`() {
+        val scriptContent = """
+            // Comment before plugins
+            plugins {
+                id("org.jetbrains.kotlin.jvm") version "2.1.0"
+            }
+            dependencies {
+                // Inline comment
+                implementation(
+                    "org.apache.commons:commons-compress:1.18"
+                )
+                api(
+                    group = "io.ktor",
+                    name = "ktor-client-core",
+                    version = "2.3.0"
+                )
+                testImplementation(
+                    platform("org.junit:junit-bom:5.10.0")
+                )
+            }
+        """.trimIndent()
+
+        val vulnResult = projectService.execute(
+            action = ProjectAction.CHECK_VULNERABILITIES,
+            buildScriptContent = scriptContent
+        )
+        assertTrue(vulnResult.isSuccess)
+        val vuln = vulnResult as KotlinMcpResult.Success
+        val count = vuln.metadata["scannedCoordinateCount"]?.toIntOrNull() ?: 0
+        assertTrue(count >= 3, "expected at least 3 dependencies parsed from AST, got $count")
+        assertTrue(vuln.content.contains("commons-compress"))
+    }
 }
 

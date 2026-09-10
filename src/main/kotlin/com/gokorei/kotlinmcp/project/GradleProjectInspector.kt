@@ -101,25 +101,22 @@ class GradleProjectInspector {
     fun analyzeDependencies(buildScriptContent: String): KotlinMcpResult {
         val deps = mutableListOf<String>()
 
-        // Kotlin DSL: configuration("group:artifact:version")
-        Regex("""(implementation|api|testImplementation|compileOnly)\s*\(\s*["']([^"']+)["']\s*\)""")
-            .findAll(buildScriptContent)
-            .forEach { deps.add("${it.groupValues[1]}: ${it.groupValues[2]}") }
+        // 1. Kotlin DSL via K2 PSI AST
+        val knownConfigs = setOf("implementation", "api", "testImplementation", "compileOnly", "runtimeOnly", "testRuntimeOnly", "androidTestImplementation")
+        val parsedDeps = GradleKtsPsiInspector.extractDependencies(buildScriptContent, knownConfigs)
+        parsedDeps.forEach { dep ->
+            deps.add("${dep.configuration}: ${dep.coordinate}")
+        }
 
-        // Groovy DSL: configuration 'group:artifact:version' or "group:artifact:version"
-        Regex("""(implementation|api|testImplementation|compileOnly)\s+["']([^"']+)["']""")
-            .findAll(buildScriptContent)
-            .forEach { deps.add("${it.groupValues[1]}: ${it.groupValues[2]}") }
-
-        // Version catalog / project references: configuration(libs.foo.bar) or configuration(project(":core"))
-        Regex("""(implementation|api|testImplementation|compileOnly)\s*\(\s*([a-zA-Z0-9._]+|project\([^)]+\))\s*\)""")
-            .findAll(buildScriptContent)
-            .forEach {
-                val ref = it.groupValues[2]
-                if (!ref.startsWith("\"") && !ref.startsWith("'")) {
-                    deps.add("${it.groupValues[1]}: $ref")
-                }
-            }
+        // 2. Groovy DSL fallback: configuration 'group:artifact:version' or "group:artifact:version"
+        if (deps.isEmpty()) {
+            Regex("""(implementation|api|testImplementation|compileOnly)\s+["']([^"']+)["']""")
+                .findAll(buildScriptContent)
+                .forEach { deps.add("${it.groupValues[1]}: ${it.groupValues[2]}") }
+            Regex("""(implementation|api|testImplementation|compileOnly)\s*\(\s*["']([^"']+)["']\s*\)""")
+                .findAll(buildScriptContent)
+                .forEach { deps.add("${it.groupValues[1]}: ${it.groupValues[2]}") }
+        }
 
         val content = buildString {
             appendLine("# Project Dependencies (${deps.distinct().size})")
@@ -309,19 +306,21 @@ class GradleProjectInspector {
     }
 
     private fun extractPlugins(content: String): List<String> {
-        val plugins = mutableListOf<String>()
-        // Kotlin DSL: id("...") / id('...')
-        Regex("""id\s*\(\s*["']([^"']+)["']\s*\)""").findAll(content).forEach { plugins.add(it.groupValues[1]) }
-        // Groovy DSL: id '...' / id "..."
-        Regex("""id\s+["']([^"']+)["']""").findAll(content).forEach { plugins.add(it.groupValues[1]) }
-        // Kotlin DSL helper: kotlin("...")
-        Regex("""kotlin\s*\(\s*["']([^"']+)["']\s*\)""").findAll(content).forEach { plugins.add("kotlin-${it.groupValues[1]}") }
-        // Groovy DSL apply plugin: '...'
-        Regex("""apply\s+plugin:\s*["']([^"']+)["']""").findAll(content).forEach { plugins.add(it.groupValues[1]) }
+        val parsed = GradleKtsPsiInspector.extractPlugins(content)
+        val plugins = parsed.map { it.id }.toMutableList()
+        // Groovy DSL fallback
+        if (plugins.isEmpty()) {
+            Regex("""id\s*\(\s*["']([^"']+)["']\s*\)""").findAll(content).forEach { plugins.add(it.groupValues[1]) }
+            Regex("""id\s+["']([^"']+)["']""").findAll(content).forEach { plugins.add(it.groupValues[1]) }
+            Regex("""apply\s+plugin:\s*["']([^"']+)["']""").findAll(content).forEach { plugins.add(it.groupValues[1]) }
+        }
         return plugins.distinct()
     }
 
     private fun extractKmpTargets(content: String): List<String> {
+        val astTargets = GradleKtsPsiInspector.extractKmpTargets(content)
+        if (astTargets.isNotEmpty()) return astTargets
+
         val targets = mutableListOf<String>()
         val knownTargets = listOf("jvm", "androidTarget", "iosX64", "iosArm64", "iosSimulatorArm64", "js", "wasmJs", "linuxX64", "macosX64", "macosArm64")
         knownTargets.forEach { t ->
@@ -331,6 +330,9 @@ class GradleProjectInspector {
     }
 
     private fun extractSubprojects(settingsContent: String): List<String> {
+        val ktsSubprojects = GradleKtsPsiInspector.extractSubprojects(settingsContent)
+        if (ktsSubprojects.isNotEmpty()) return ktsSubprojects
+
         val projects = mutableListOf<String>()
         Regex("""include\s*\(\s*["']([^"']+)["']\s*\)""").findAll(settingsContent).forEach { projects.add(it.groupValues[1]) }
         Regex("""include\s+["']([^"']+)["']""").findAll(settingsContent).forEach { projects.add(it.groupValues[1]) }

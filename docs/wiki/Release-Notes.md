@@ -15,6 +15,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 ### Improvements
 
 - **Snippet runner security alignment & hardening configuration** — aligned `SECURITY.md` with the dual-runner model (`host_jvm` subprocess vs `in_process` classloader) and added `KMCP_DISABLE_IN_PROCESS_RUNNER` (`-Dkmcp.disable_in_process_runner`) to enforce strict isolated subprocess execution across all snippet invocations in security-restricted environments (D9BY9NVQ).
+- **K2 PSI AST parsing for `.gradle.kts` scripts** — introduced `GradleKtsPsiInspector` using the embedded compiler's K2 PSI AST visitors (`KtCallExpression`, `KtBinaryExpression`, `KtSimpleNameExpression`, and `KtStringTemplateExpression`) to replace fragile regex matching in `ProjectService`, `GradleProjectInspector`, and `VulnerabilityAuditor`, strictly adhering to AGENTS.md Rule #1 while preserving Groovy DSL compatibility fallbacks (DD90ZGEB).
 
 ---
 

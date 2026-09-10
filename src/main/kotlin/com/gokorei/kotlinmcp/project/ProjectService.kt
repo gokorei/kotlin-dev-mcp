@@ -216,32 +216,15 @@ class DefaultProjectService(
         val settingsFile = File(projectPath, "settings.gradle.kts")
         if (settingsFile.exists()) {
             val text = runCatching { settingsFile.readText() }.getOrNull().orEmpty()
-            val subprojects = mutableListOf<String>()
-            val psi = K2SnippetFrontend.parsePsi(text)
-            if (psi != null) {
-                psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
-                    override fun visitCallExpression(expression: org.jetbrains.kotlin.psi.KtCallExpression) {
-                        val calleeText = expression.calleeExpression?.text
-                        if (calleeText == "include") {
-                            expression.valueArguments.forEach { arg ->
-                                val expr = arg.getArgumentExpression()
-                                val raw = expr?.text?.trim()?.removeSurrounding("\"")?.removeSurrounding("'")
-                                if (!raw.isNullOrBlank()) {
-                                    subprojects.add(raw)
-                                }
-                            }
-                        }
-                        super.visitCallExpression(expression)
-                    }
-                })
-            }
-            if (subprojects.isEmpty()) {
-                val found = Regex("""include\s*\(([^)]+)\)""").findAll(text).flatMap { match ->
-                    Regex("""["']([^"']+)["']""").findAll(match.groupValues[1]).map { it.groupValues[1] }
-                }.toList()
-                subprojects.addAll(found)
-            }
-            return subprojects.distinct()
+            return GradleKtsPsiInspector.extractSubprojects(text)
+        }
+        val groovySettings = File(projectPath, "settings.gradle")
+        if (groovySettings.exists()) {
+            val text = runCatching { groovySettings.readText() }.getOrNull().orEmpty()
+            val found = Regex("""include\s*\(([^)]+)\)""").findAll(text).flatMap { match ->
+                Regex("""["']([^"']+)["']""").findAll(match.groupValues[1]).map { it.groupValues[1] }
+            }.toList()
+            return found.distinct()
         }
         return emptyList()
     }
@@ -390,18 +373,25 @@ class DefaultProjectService(
         val all = buildScriptContent + "\n" + settingsContent + "\n" + gradlePropertiesContent
 
         // 1. Plugin conflicts: duplicate plugin ids in the plugins block.
-        // `kotlin("jvm")` and `id("org.jetbrains.kotlin.jvm")` are the same plugin, so aliases are
-        // normalised to their canonical id before counting duplicates.
-        val pluginIds = Regex("""(?:kotlin\("|id\(")([^"]+)""").findAll(all)
-            .map { canonicalPluginId(it.groupValues[1]) }
-            .toList()
+        // Normalise aliases to canonical id before counting duplicates.
+        val ktsPlugins = GradleKtsPsiInspector.extractPlugins(all)
+        val pluginIds = if (ktsPlugins.isNotEmpty()) {
+            ktsPlugins.map { canonicalPluginId(it.id.removePrefix("kotlin-")) }
+        } else {
+            Regex("""(?:kotlin\("|id\(")([^"]+)""").findAll(all)
+                .map { canonicalPluginId(it.groupValues[1]) }
+                .toList()
+        }
         pluginIds.groupingBy { it }.eachCount().filter { it.value > 1 }.forEach { (id, count) ->
             findings.add("🔴 Plugin conflict: `$id` is declared $count time(s).")
         }
 
         // 2. AGP vs Kotlin compatibility hint.
-        val agp = Regex("""id\("com\.android\.(?:application|library)"\)\s*version\s*"([^"]+)""" ).find(all)?.groupValues?.get(1)
-        val kotlin = Regex("""kotlin\("(?:jvm|android|multiplatform)"\)\s*version\s*"([^"]+)""" ).find(all)?.groupValues?.get(1)
+        val agpPlugin = ktsPlugins.firstOrNull { it.id == "com.android.application" || it.id == "com.android.library" }
+        val kotlinPlugin = ktsPlugins.firstOrNull { it.id == "kotlin-jvm" || it.id == "kotlin-android" || it.id == "kotlin-multiplatform" || it.id == "org.jetbrains.kotlin.jvm" || it.id == "org.jetbrains.kotlin.android" || it.id == "org.jetbrains.kotlin.multiplatform" }
+
+        val agp = agpPlugin?.version ?: Regex("""id\("com\.android\.(?:application|library)"\)\s*version\s*"([^"]+)""" ).find(all)?.groupValues?.get(1)
+        val kotlin = kotlinPlugin?.version ?: Regex("""kotlin\("(?:jvm|android|multiplatform)"\)\s*version\s*"([^"]+)""" ).find(all)?.groupValues?.get(1)
         if (agp != null && kotlin != null) {
             val agpMajor = agp.substringBefore('.').toIntOrNull()
             val kotlinMajor = kotlin.substringBefore('.').toIntOrNull()
@@ -413,7 +403,9 @@ class DefaultProjectService(
         }
 
         // 3. Missing repository declarations.
-        val hasRepos = Regex("""\brepositories\s*\{""").containsMatchIn(buildScriptContent) ||
+        val hasRepos = GradleKtsPsiInspector.hasRepositories(buildScriptContent) ||
+            GradleKtsPsiInspector.hasRepositories(settingsContent) ||
+            Regex("""\brepositories\s*\{""").containsMatchIn(buildScriptContent) ||
             Regex("""dependencyResolutionManagement\s*\{""").containsMatchIn(settingsContent) ||
             Regex("""pluginManagement\s*\{""").containsMatchIn(settingsContent)
         if (!hasRepos && all.isNotBlank()) {
@@ -421,9 +413,16 @@ class DefaultProjectService(
         }
 
         // 4. Hardcoded versions without a version catalog / BOM.
-        val hardcoded = Regex("""(?:\w+|libs\.\w+)?["(]([a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+):(\d+[a-zA-Z0-9_.-]*)[")]""").findAll(all).map { "${it.groupValues[1]}:${it.groupValues[2]}" }.toList()
-        val usesCatalog = Regex("""\blibs\.[A-Za-z0-9_.]+""").containsMatchIn(all)
-        val usesBom = Regex("""platform\s*\(|bom""", RegexOption.IGNORE_CASE).containsMatchIn(all)
+        val knownConfigs = setOf("implementation", "api", "testImplementation", "compileOnly", "runtimeOnly", "testRuntimeOnly", "androidTestImplementation")
+        val parsedDeps = GradleKtsPsiInspector.extractDependencies(all, knownConfigs)
+        val hardcoded = if (parsedDeps.isNotEmpty()) {
+            parsedDeps.filter { !it.isProject && !it.isCatalog && it.coordinate.count { ch -> ch == ':' } >= 2 }
+                .map { it.coordinate }
+        } else {
+            Regex("""(?:\w+|libs\.\w+)?["(]([a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+):(\d+[a-zA-Z0-9_.-]*)[")]""").findAll(all).map { "${it.groupValues[1]}:${it.groupValues[2]}" }.toList()
+        }
+        val usesCatalog = parsedDeps.any { it.isCatalog } || Regex("""\blibs\.[A-Za-z0-9_.]+""").containsMatchIn(all)
+        val usesBom = parsedDeps.any { it.isPlatform } || Regex("""platform\s*\(|bom""", RegexOption.IGNORE_CASE).containsMatchIn(all)
         if (hardcoded.size >= 3 && !usesCatalog && !usesBom) {
             findings.add("🟡 ${hardcoded.size} dependencies hardcode versions inline (e.g. `${hardcoded.first()}`). Consider a version catalog (`libs.versions.toml`) or a BOM to keep versions consistent.")
         }
@@ -627,41 +626,29 @@ class DefaultProjectService(
         val catalogMap = parseVersionCatalog(projectPath)
         val psi = K2SnippetFrontend.parsePsi(effectiveContent)
 
-        val configs = "implementation|api|testImplementation|runtimeOnly|compileOnly|testRuntimeOnly|androidTestImplementation"
-        // Groovy DSL fallback on caller-supplied content: configuration 'group:artifact:version' or "group:artifact:version"
-        Regex("""($configs)\s+["']([^"']+)["']""").findAll(content).forEach {
-            entries.add("- `${it.groupValues[2]}` (${it.groupValues[1]})")
+        val parsedDeps = GradleKtsPsiInspector.extractDependencies(effectiveContent, knownConfigs)
+        parsedDeps.forEach { dep ->
+            val formatted = when {
+                dep.isProject -> "- `project(\"${dep.coordinate}\")` (${dep.configuration}, module)"
+                dep.isCatalog -> {
+                    val mapped = catalogMap[dep.coordinate] ?: catalogMap[dep.coordinate.replace("-", ".")]
+                    if (mapped != null) {
+                        "- `${dep.coordinate}` → `$mapped` (${dep.configuration}, version catalog)"
+                    } else {
+                        "- `${dep.coordinate}` (${dep.configuration}, version catalog)"
+                    }
+                }
+                else -> "- `${dep.coordinate}` (${dep.configuration})"
+            }
+            entries.add(formatted)
         }
 
-        if (psi != null) {
-            psi.accept(object : org.jetbrains.kotlin.psi.KtTreeVisitorVoid() {
-                override fun visitCallExpression(expression: org.jetbrains.kotlin.psi.KtCallExpression) {
-                    val callee = expression.calleeExpression?.text.orEmpty()
-                    if (callee in knownConfigs) {
-                        val argExpr = expression.valueArguments.firstOrNull()?.getArgumentExpression()
-                        if (argExpr != null) {
-                            val argText = argExpr.text.trim()
-                            val formatted = when {
-                                argText.startsWith("project(") -> {
-                                    val inner = argText.removePrefix("project(").removeSuffix(")").trim().removeSurrounding("\"").removePrefix(":")
-                                    "- `project(\":$inner\")` ($callee, module)"
-                                }
-                                argText.startsWith("libs.") -> {
-                                    val mapped = catalogMap[argText] ?: catalogMap[argText.replace("-", ".")]
-                                    if (mapped != null) {
-                                        "- `$argText` → `$mapped` ($callee, version catalog)"
-                                    } else {
-                                        "- `$argText` ($callee, version catalog)"
-                                    }
-                                }
-                                else -> "- `${argText.removeSurrounding("\"").removeSurrounding("'")}` ($callee)"
-                            }
-                            entries.add(formatted)
-                        }
-                    }
-                    super.visitCallExpression(expression)
-                }
-            })
+        // Groovy DSL fallback on caller-supplied content if no KTS dependencies extracted
+        if (entries.isEmpty()) {
+            val configs = "implementation|api|testImplementation|runtimeOnly|compileOnly|testRuntimeOnly|androidTestImplementation"
+            Regex("""($configs)\s+["']([^"']+)["']""").findAll(content).forEach {
+                entries.add("- `${it.groupValues[2]}` (${it.groupValues[1]})")
+            }
         }
 
         val output = if (entries.isNotEmpty()) {
