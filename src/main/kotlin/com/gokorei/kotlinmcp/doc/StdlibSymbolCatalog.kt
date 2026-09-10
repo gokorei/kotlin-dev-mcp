@@ -135,73 +135,286 @@ object StdlibSymbolCatalog {
             # `fun CoroutineScope.async(context, start, block: suspend CoroutineScope.() -> T): Deferred<T>`
             Creates a coroutine that returns a Deferred — a future result that can be awaited with `await()`.
         """.trimIndent(),
-        "runTest" to """
-            # `fun runTest(context: CoroutineContext = EmptyCoroutineContext, timeout: Duration = 60.seconds, testBody: suspend TestScope.() -> Unit): TestResult`
-            Executes a coroutine test block with virtualized time skipping. Standard entry point for coroutines testing.
+        "delay" to """
+            # `suspend fun delay(timeMillis: Long)`
+            Suspends the current coroutine for the given time without blocking a thread.
         """.trimIndent(),
-        "MainDispatcherRule" to """
-            # `class MainDispatcherRule(val testDispatcher: TestDispatcher = UnconfinedTestDispatcher()) : TestWatcher()`
-            JUnit4 / JUnit5 rule that overrides `Dispatchers.Main` with a test dispatcher during test execution.
+        "withContext" to """
+            # `suspend fun <T> withContext(context: CoroutineContext, block: suspend CoroutineScope.() -> T): T`
+            Calls the block with a new coroutine context, suspending until it completes. Commonly used to switch dispatchers (e.g. Dispatchers.IO).
         """.trimIndent(),
-        "Turbine.test" to """
-            # `suspend fun <T> Flow<T>.test(timeout: Duration? = null, validate: suspend ReceiveTurbine<T>.() -> Unit)`
-            AppCash Turbine extension function on `Flow<T>` for testing emissions sequentially: `awaitItem()`, `awaitComplete()`, `awaitError()`.
+        "withTimeout" to """
+            # `suspend fun <T> withTimeout(timeMillis: Long, block: suspend CoroutineScope.() -> T): T`
+            Runs the block, throwing TimeoutCancellationException if it does not complete within the given time.
         """.trimIndent(),
-        "mockk" to """
-            # `inline fun <reified T : Any> mockk(name: String? = null, relaxed: Boolean = false, vararg relaxUnitFun: Boolean, block: T.() -> Unit = {}): T`
-            Creates a mock object for type T using MockK.
-        """.trimIndent(),
-        "every" to """
-            # `fun <T> every(stubBlock: MockKMatcherScope.() -> T): MockKStubScope<T, T>`
-            Stubs a method call behavior in MockK. Pair with `returns` or `answers`.
-        """.trimIndent(),
-        "verify" to """
-            # `fun verify(ordering: Ordering = Ordering.UNORDERED, exactly: Int = -1, atLeast: Int = -1, atMost: Int = -1, verifyBlock: MockKVerificationScope.() -> Unit)`
-            Verifies that stubbed calls occurred on a mock object.
-        """.trimIndent(),
-        "Ktor/Routing" to """
-            # `fun Application.routing(configuration: Routing.() -> Unit): Routing`
-            Defines the HTTP routing tree for a Ktor Application using verb builders (`get`, `post`, `put`, `delete`).
-        """.trimIndent(),
-        "Ktor/ContentNegotiation" to """
-            # `fun Application.install(plugin: ContentNegotiation, configure: ContentNegotiation.Config.() -> Unit)`
-            Ktor plugin for automatic JSON request/response serialization/deserialization.
-        """.trimIndent(),
-        "Either" to """
-            # `sealed class Either<out A, out B>`
-            Arrow functional data type representing a value of one of two possible types: `Either.Left(A)` for failure or `Either.Right(B)` for success.
-        """.trimIndent(),
-        "Raise" to """
-            # `interface Raise<in E>`
-            Arrow 2.x DSL for short-circuiting error computation without exception throwing using `raise(e)`.
-        """.trimIndent(),
-        "valid" to """
-            # `fun <A> A.valid(): Validated<Nothing, A>`
-            Creates a Validated.Valid instance wrapping value A.
-        """.trimIndent(),
-        "validNel" to """
-            # `fun <E, A> A.validNel(): ValidatedNel<E, A>`
-            Creates a Validated instance wrapping A as Valid with an empty NonEmptyList of errors.
-        """.trimIndent(),
-        "kotlinx.datetime.Instant" to """
-            # `class Instant`
-            Represents a moment on the UTC time line in `kotlinx-datetime`.
-        """.trimIndent(),
-        "kotlinx.datetime.Clock" to """
-            # `interface Clock`
-            Provider for current instant: `Clock.System.now()`.
-        """.trimIndent(),
-        "kotlinx.datetime.LocalDate" to """
-            # `class LocalDate`
-            Civil date (year, month, day) without time or time-zone in `kotlinx-datetime`.
+        "collect" to """
+            # `suspend fun <T> Flow<T>.collect(action: suspend (T) -> Unit)`
+            Terminal operator that collects values from the flow, executing action for each emitted value.
         """.trimIndent(),
         "kotlinx.serialization.json.Json" to """
-            # `sealed class Json`
-            Main entry point for Kotlin serialization JSON operations: `Json.encodeToString(...)` and `Json.decodeFromString(...)`.
+            # `object Json : StringFormat`
+            The entry point for JSON (de)serialization with kotlinx.serialization.
+            
+            ## Usage
+            ```kotlin
+            val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
+            val text = json.encodeToString(user)
+            val user = json.decodeFromString<User>(text)
+            ```
+        """.trimIndent(),
+        "encodeToString" to """
+            # `inline fun <reified T> StringFormat.encodeToString(value: T): String`
+            Serializes a value to a string (JSON etc.). Requires the type to be `@Serializable`.
+        """.trimIndent(),
+        "decodeFromString" to """
+            # `inline fun <reified T> StringFormat.decodeFromString(string: String): T`
+            Deserializes a string into a value of type T. Throws SerializationException on malformed input.
+        """.trimIndent(),
+        "Json.encodeToList" to """
+            # `fun <T> Json.encodeToList(value: T, serializer: KSerializer<T>): List<JsonElement>`
+            Serializes a value into a JSON array of elements (extension in kotlinx.serialization.json).
+            Useful for streaming large collections without materializing the whole string.
+        """.trimIndent(),
+        "Either" to """
+            # `sealed interface Either<out L, out R>` (arrow.core, Arrow 2.x)
+            A right-biased discriminated union representing success (`Right`) or failure (`Left`).
+            
+            ## Usage
+            ```kotlin
+            import arrow.core.Either
+            import arrow.core.right
+            fun parse(s: String): Either<Throwable, Int> = Either.catch { s.toInt() }
+            val r: Either<Throwable, Int> = parse("42")
+            r.fold({ err -> println("failed: ${'$'}err") }, { v -> println(v) })
+            ```
+        """.trimIndent(),
+        "Raise" to """
+            # `interface Raise<E>` (arrow.core.raise, Arrow 2.x)
+            The Arrow Raise context: a function `context(Raise<E>)` can short-circuit with `raise(e)`.
+            Build Either/Result via `either { ... }` or `result { ... }`.
+            
+            ## Usage
+            ```kotlin
+            import arrow.core.raise.either
+            import arrow.core.raise.ensure
+            val x: Either<String, Int> = either {
+                val n = 3
+                ensure(n > 0) { "must be positive" }
+                n * 2
+            }
+            ```
+        """.trimIndent(),
+        "valid" to """
+            # `fun <A> A.valid(): Validated<Nothing, A>` (arrow.core, Arrow 2.x)
+            Wraps a value as a `Validated` success. Combine with `zip` for all-errors accumulation.
+        """.trimIndent(),
+        "validNel" to """
+            # `fun <A> A.validNel(): ValidatedNel<Nothing, A>` (arrow.core, Arrow 2.x)
+            Wraps a value as a `Validated<NonEmptyList<E>, A>` success; pairs with `invalidNel` to
+            accumulate multiple errors into a `NonEmptyList`.
+        """.trimIndent(),
+        "kotlinx.datetime.Instant" to """
+            # `class Instant` (kotlinx.datetime)
+            A moment on the UTC time line, independent of time zone. Nanosecond precision.
+            
+            ## Usage
+            ```kotlin
+            import kotlinx.datetime.Instant
+            import kotlinx.datetime.Clock
+            val now: Instant = Clock.System.now()
+            ```
+        """.trimIndent(),
+        "kotlinx.datetime.Clock" to """
+            # `interface Clock` (kotlinx.datetime)
+            Provides the current `Instant`. `Clock.System.now()` is the platform clock.
+            Prefer over `java.util.Date`/`System.currentTimeMillis()` for explicit, type-safe time.
+        """.trimIndent(),
+        "kotlinx.datetime.LocalDate" to """
+            # `class LocalDate(year, month, day)` (kotlinx.datetime)
+            A date without a time zone. Obtain today's date with
+            `Clock.System.todayIn(TimeZone.currentSystemDefault())`.
+        """.trimIndent(),
+        "runTest" to """
+            # `fun runTest(context: CoroutineContext = ..., block: suspend TestScope.() -> Unit)` (kotlinx-coroutines-test)
+            Runs a test coroutine with virtual time; delays advance instantly and
+            `StandardTestDispatcher` is used by default. Prefer over `runBlocking` in tests.
+        """.trimIndent(),
+        "MainDispatcherRule" to """
+            # `class MainDispatcherRule` (kotlinx-coroutines-test test helper)
+            A JUnit rule that swaps `Dispatchers.Main` for a `StandardTestDispatcher` via
+            `Dispatchers.setMain` / `resetMain`, making Main deterministic in unit tests.
+            
+            ## Usage
+            ```kotlin
+            class MyTest {
+                @get:Rule
+                val mainDispatcherRule = MainDispatcherRule()
+            }
+            ```
+        """.trimIndent(),
+        "Turbine.test" to """
+            # `suspend fun <T> Flow<T>.test(block: suspend Turbine<T>.() -> Unit)` (app.cash.turbine)
+            Collects a Flow in a test scope and exposes `awaitItem()`, `awaitError()`,
+            `awaitComplete()` to assert each emission. Unconsumed emissions are discarded.
+        """.trimIndent(),
+        "mockk" to """
+            # `mockk<T>()` (io.mockk)
+            Creates a MockK mock of type T. Stub behavior with `every { }`, assert interactions
+            with `verify { }`, and reset global mocks with `unmockkAll()` in `@AfterEach`.
+        """.trimIndent(),
+        "every" to """
+            # `every { ... } returns value` (io.mockk)
+            Stubs behavior for a mock: `every { repo.fetch() } returns 42`. Use `verify { }`
+            to assert the call actually happened.
+        """.trimIndent(),
+        "verify" to """
+            # `verify { ... }` / `verify(exactly = n) { ... }` (io.mockk)
+            Asserts a stubbed mock interaction occurred. Pair `every` stubs with `verify` and
+            call `confirmVerified(mock)` to ensure no unexpected calls remain.
+        """.trimIndent(),
+        "Ktor/Routing" to """
+            # `fun Application.module() { routing { ... } }` (io.ktor.server.routing)
+            The Ktor routing DSL declares HTTP routes. Install plugins on the server with
+            `install(ContentNegotiation) { json() }` before routing so DTO serialization works.
+        """.trimIndent(),
+        "Ktor/ContentNegotiation" to """
+            # `install(ContentNegotiation) { json() }` (io.ktor.server.contentnegotiation)
+            Registers the JSON (de)serializer for @Serializable request/response bodies.
+            Missing this plugin is a common cause of `SerializationException` or raw-string bodies.
+        """.trimIndent(),
+        "File" to """
+            # `class File(path: String)` (java.io)
+            Represents a file/directory path. Kotlin adds ergonomic extensions.
+            
+            ## Key Extensions
+            - `readText(): String`, `writeText(text: String)`
+            - `readLines(): List<String>`, `forEachLine { }`
+            - `exists()`, `isFile`, `isDirectory`, `listFiles()`
+        """.trimIndent(),
+        "Path" to """
+            # `interface Path` (java.nio.file)
+            Modern NIO file path. Prefer over java.io.File for new code.
+            
+            ## Key APIs
+            - `Files.readString(path)`, `Files.writeString(path, content)`
+            - `path.resolve("child")`, `Paths.get("a", "b")`
+            - `file.use { }` via `File.inputStream()` for auto-closing
         """.trimIndent(),
         "readText" to """
             # `fun File.readText(charset: Charset = Charsets.UTF_8): String`
-            Reads the entire content of a file as a String.
+            Reads the entire contents of a file into a string.
+        """.trimIndent(),
+        "Regex" to """
+            # `class Regex(pattern: String)`
+            Regular-expression support.
+            
+            ## Usage
+            ```kotlin
+            val re = Regex("\\d+")
+            re.find("abc123")?.value        // "123"
+            re.findAll("a1b22").map { it.value } // ["1","22"]
+            "a1b2".replace(Regex("\\d"), "#")    // "a#b#"
+            ```
+        """.trimIndent(),
+        "buildString" to """
+            # `inline fun buildString(builderAction: StringBuilder.() -> Unit): String`
+            Builds a string via a StringBuilder receiver lambda.
+            
+            ## Example
+            ```kotlin
+            val s = buildString {
+                appendLine("header")
+                items.forEach { appendLine("- ${'$'}it") }
+            }
+            ```
+        """.trimIndent(),
+        "@JvmStatic" to """
+            # `@JvmStatic` (kotlin.jvm)
+            Marks a member of a companion object/object to be compiled as a real static method for Java interop.
+        """.trimIndent(),
+        "@JvmField" to """
+            # `@JvmField` (kotlin.jvm)
+            Exposes a Kotlin property as a plain Java field (no getter/setter) for interop.
+        """.trimIndent(),
+        "assertEquals" to """
+            # `fun <T> assertEquals(expected: T, actual: T, message: String? = null)` (kotlin.test)
+            Asserts two values are equal; fails the test otherwise. Use `import kotlin.test.assertEquals`.
+        """.trimIndent(),
+        "@Test" to """
+            # `@Test` (kotlin.test / org.junit)
+            Marks a function as a test case. On JVM this maps to JUnit's `@Test`.
+        """.trimIndent(),
+        "kotlin.Nothing" to """
+            # `class Nothing` (kotlin)
+            The bottom type in Kotlin. `Nothing` is a subtype of EVERY type, so a
+            value of type `Nothing` can be used anywhere. Combined with a covariant
+            (`out T`) generic, an `object Empty : Tree<Nothing>` becomes assignable to
+            `Tree<Int>`. Use it (never `Any?`) for the empty/base case of algebraic data types.
+        """.trimIndent(),
+        "tailrec" to """
+            # `tailrec` (modifier)
+            Asks the compiler to replace a self-recursive call with a loop, preventing stack
+            overflow. Constraint: every self-recursive call must be the FINAL operation on its
+            execution path (tail position). Multiple branches (e.g. if/else) may each recurse,
+            as long as each call is the last thing done on its path — there is no "one call only"
+            limit. If NO call is in tail position the compiler warns "a function is marked as
+            tail-recursive but no tail calls are found" and the keyword is silently ignored.
+            Tail-recursive functions cannot be `open`/`override` on JVM.
+        """.trimIndent(),
+        "require" to """
+            # `inline fun require(value: Boolean, lazyMessage: () -> Any = {...})`
+            Validates a PRECONDITION / input argument; throws `IllegalArgumentException` when
+            `value` is false. Prefer over hand-rolled `if (x < 0) throw IllegalArgumentException()`.
+            The message lambda is only evaluated on failure.
+        """.trimIndent(),
+        "check" to """
+            # `inline fun check(value: Boolean, lazyMessage: () -> Any = {...})`
+            Validates a POSTCONDITION / internal invariant or object state; throws
+            `IllegalStateException` when `value` is false. Use for "this object is in a bad state",
+            NOT for bad caller input (that is `require`). Message lambda evaluated only on failure.
+        """.trimIndent(),
+        "requireNotNull" to """
+            # `inline fun <T : Any> requireNotNull(value: T?, lazyMessage: () -> Any = {...}): T`
+            Returns `value` after asserting it is non-null; throws `IllegalArgumentException`
+            otherwise. Same input-contract role as `require`, for nullables.
+        """.trimIndent(),
+        "checkNotNull" to """
+            # `inline fun <T : Any> checkNotNull(value: T?, lazyMessage: () -> Any = {...}): T`
+            Returns `value` after asserting it is non-null; throws `IllegalStateException`
+            otherwise. Same state-contract role as `check`, for nullables.
+        """.trimIndent(),
+        "supervisorScope" to """
+            # `suspend fun <R> supervisorScope(block: suspend CoroutineScope.() -> R): R`
+            Creates a scope whose failure of one child does NOT cancel siblings or the scope.
+            Default structured concurrency cancels siblings on any child failure; wrap work that
+            must be failure-isolated in `supervisorScope`. Does NOT change cancellation of the
+            scope itself by its parent.
+        """.trimIndent(),
+        "select" to """
+            # `select { }` (kotlinx.coroutines.selects)
+            Suspends until one of several clauses completes, then resumes once. BIASED: when
+            several clauses are ready simultaneously, the EARLIEST-listed clause wins — the choice
+            is NOT random. `selectUnbiased { }` randomizes the winner among ready clauses.
+        """.trimIndent(),
+        "selectUnbiased" to """
+            # `selectUnbiased { }` (kotlinx.coroutines.selects)
+            Like `select { }` but chooses uniformly at random among simultaneously-ready clauses
+            instead of always preferring the earliest listed one. Use when fairness is required.
+        """.trimIndent(),
+        "@BeforeAll" to """
+            # `@BeforeAll` / `@AfterAll` (org.junit.jupiter)
+            Run once before/after ALL tests in a class. These require STATIC methods in Java;
+            Kotlin has no `static`, so a plain instance `@BeforeAll fun setup()` throws a JUnit
+            Jupiter configuration error at runtime ("must be static unless ... PER_CLASS") — it is
+            NOT silently skipped. Fix: annotate the test class `@TestInstance(TestInstance
+            .Lifecycle.PER_CLASS)` (instance methods then run), or put the functions in a
+            `companion object` with `@JvmStatic`. `@BeforeEach`/`@AfterEach` are unaffected.
+        """.trimIndent(),
+        "awaitAll" to """
+            # `suspend fun <T> Iterable<Deferred<T>>.awaitAll(): List<T>`
+            Awaits every Deferred, collecting results in order. Prefer `listOf(a, b, c).awaitAll()`
+            over sequential `val a = x.async().await(); val b = y.async().await()` — the latter
+            SERIALIZES the two coroutines (launch all first, then await all).
         """.trimIndent()
     )
 }

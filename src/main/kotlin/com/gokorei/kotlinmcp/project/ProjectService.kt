@@ -100,7 +100,10 @@ class DefaultProjectService(
     private val androidManifestInspector: AndroidManifestInspector = AndroidManifestInspector(),
     private val androidAppAuditor: AndroidAppAuditor = AndroidAppAuditor(),
     private val mavenMetadataClient: com.gokorei.kotlinmcp.maven.MavenMetadataClient = com.gokorei.kotlinmcp.maven.DefaultMavenMetadataClient(),
-    private val versionCatalogService: VersionCatalogService = DefaultVersionCatalogService(mavenMetadataClient)
+    private val versionCatalogService: VersionCatalogService = DefaultVersionCatalogService(mavenMetadataClient),
+    private val coverageReporter: CoverageReporter = CoverageReporter(),
+    private val packageApiExporter: PackageApiExporter = PackageApiExporter(),
+    private val environmentProfileDetector: EnvironmentProfileDetector = EnvironmentProfileDetector()
 ) : ProjectService {
 
     override fun execute(action: ProjectAction, buildScriptContent: String, projectPath: String?, packageName: String?): KotlinMcpResult {
@@ -684,122 +687,14 @@ class DefaultProjectService(
      * surface — classes/interfaces/functions/properties with visibility and
      * signatures. Semantic mode resolves inferred return types via BindingContext.
      */
-    override fun packageApi(projectPath: String?, packageName: String?): KotlinMcpResult {
-        if (projectPath.isNullOrBlank()) {
-            return KotlinMcpResult.Error(
-                message = "projectPath is required for package_api.",
-                code = "INVALID_ARGUMENTS"
-            )
-        }
-        val root = File(projectPath)
-        if (!root.isDirectory) {
-            return KotlinMcpResult.Error(
-                message = "projectPath must be a readable directory for package_api.",
-                code = "INVALID_ARGUMENTS"
-            )
-        }
-        val files = root.walkTopDown()
-            .filter { it.isFile && it.extension == "kt" }
-            .toList()
-        val (elements, _) = indexer.publicApiOf(files, root.invariantSeparatorsPath, packageName)
-        if (elements.isEmpty()) {
-            return KotlinMcpResult.Error(
-                message = "No public declarations found for package '${packageName ?: "(any)"}'.",
-                code = "NOT_FOUND"
-            )
-        }
+    override fun packageApi(projectPath: String?, packageName: String?): KotlinMcpResult =
+        packageApiExporter.packageApi(projectPath, packageName, indexer)
 
-        val content = buildString {
-            appendLine("# Public API Surface — ${packageName ?: "all packages"} (${elements.size} declarations)")
-            appendLine()
-            elements.groupBy { it.file }.forEach { (file, list) ->
-                appendLine("## `$file`")
-                list.forEach { el ->
-                    val doc = el.docSummary?.let { " — $it" }.orEmpty()
-                    appendLine("- `${el.visibility} ${el.signature}`$doc")
-                }
-                appendLine()
-            }
-            appendLine("> Mode: semantic (inferred return types resolved)")
-        }
+    override fun detectProfile(buildScriptContent: String, projectPath: String?): com.gokorei.kotlinmcp.models.ProjectEnvironmentProfile =
+        environmentProfileDetector.detectProfile(buildScriptContent, projectPath)
 
-        return KotlinMcpResult.Success(
-            content = content,
-            metadata = mapOf(
-                "packageName" to (packageName ?: ""),
-                "declarationCount" to elements.size.toString(),
-                "fileCount" to elements.map { it.file }.distinct().size.toString()
-            )
-        )
-    }
-
-    override fun detectProfile(buildScriptContent: String, projectPath: String?): com.gokorei.kotlinmcp.models.ProjectEnvironmentProfile {
-        val allContent = if (projectPath != null) {
-            val file = java.io.File(projectPath, "build.gradle.kts")
-            if (file.exists()) file.readText() + "\n" + buildScriptContent else buildScriptContent
-        } else {
-            buildScriptContent
-        }
-
-        val active = mutableSetOf<com.gokorei.kotlinmcp.models.FrameworkFeature>()
-        val text = allContent.lowercase()
-
-        if (text.contains("ktor") || text.contains("io.ktor")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.KTOR)
-        if (text.contains("spring") || text.contains("org.springframework")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.SPRING)
-        if (text.contains("compose") || text.contains("androidx.compose")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.COMPOSE)
-        if (text.contains("arrow-core") || text.contains("io.arrow-kt")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.ARROW)
-        if (text.contains("serialization") || text.contains("kotlinx-serialization")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.SERIALIZATION)
-        if (text.contains("mockk") || text.contains("io.mockk")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.MOCKK)
-        if (text.contains("coroutines") || text.contains("kotlinx-coroutines")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.COROUTINES)
-        if (text.contains("turbine") || text.contains("app.cash.turbine")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.TURBINE)
-        if (text.contains("datetime") || text.contains("kotlinx-datetime")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.DATETIME)
-        if (text.contains("exposed") || text.contains("org.jetbrains.exposed")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.EXPOSED)
-        if (text.contains("room") || text.contains("androidx.room")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.ROOM)
-
-        val isKmp = text.contains("multiplatform") || detectTargets(allContent).size > 1
-
-        return com.gokorei.kotlinmcp.models.ProjectEnvironmentProfile(activeFrameworks = active, isKmp = isKmp)
-    }
-
-    override fun coverageReport(projectPath: String?): KotlinMcpResult {
-        val root = if (projectPath != null) File(projectPath) else File(".")
-        val jacocoDir = File(root, "build/reports/jacoco/test")
-        if (!jacocoDir.exists() || !jacocoDir.isDirectory) {
-            return KotlinMcpResult.Error(
-                message = "No JaCoCo coverage directory found at ${jacocoDir.path}. Run `./gradlew jacocoTestReport` first.",
-                code = "NOT_FOUND"
-            )
-        }
-
-        val xmlReport = File(jacocoDir, "jacocoTestReport.xml")
-        val content = if (xmlReport.exists()) {
-            val text = xmlReport.readText()
-            val lineCov = Regex("""<counter type="LINE"\s+missed="(\d+)"\s+covered="(\d+)"/>""").find(text)
-            val branchCov = Regex("""<counter type="BRANCH"\s+missed="(\d+)"\s+covered="(\d+)"/>""").find(text)
-
-            buildString {
-                appendLine("# JaCoCo Code Coverage Report")
-                if (lineCov != null) {
-                    val missed = lineCov.groupValues[1].toInt()
-                    val covered = lineCov.groupValues[2].toInt()
-                    val total = missed + covered
-                    val pct = if (total > 0) (covered * 100) / total else 0
-                    appendLine("- Line Coverage: $pct% ($covered / $total lines)")
-                }
-                if (branchCov != null) {
-                    val missed = branchCov.groupValues[1].toInt()
-                    val covered = branchCov.groupValues[2].toInt()
-                    val total = missed + covered
-                    val pct = if (total > 0) (covered * 100) / total else 0
-                    appendLine("- Branch Coverage: $pct% ($covered / $total branches)")
-                }
-            }
-        } else {
-            "# JaCoCo Code Coverage Report\nHTML report directory exists at `${jacocoDir.path}`."
-        }
-
-        return KotlinMcpResult.Success(content = content)
-    }
+    override fun coverageReport(projectPath: String?): KotlinMcpResult =
+        coverageReporter.coverageReport(projectPath)
 }
 
 /** Maven-aware version comparison shared by the vulnerability baseline and helpers. */
