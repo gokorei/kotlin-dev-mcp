@@ -290,6 +290,22 @@ val detektCheck = tasks.register<JavaExec>("detektCheck") {
     )
 }
 
+val detektBaseline = tasks.register<JavaExec>("detektBaseline") {
+    group = "verification"
+    description = "Generates or updates Detekt code smell baseline."
+    dependsOn(dumpToolingClasspaths)
+    classpath = detektTooling
+    mainClass.set("io.gitlab.arturbosch.detekt.cli.Main")
+    val configFile = layout.projectDirectory.file("config/detekt/detekt.yml")
+    val baselineFile = layout.projectDirectory.file("config/detekt/baseline.xml")
+    args = listOf(
+        "--input", "src/main/kotlin,src/test/kotlin",
+        "--config", configFile.asFile.absolutePath,
+        "--baseline", baselineFile.asFile.absolutePath,
+        "--create-baseline"
+    )
+}
+
 val ktlintCheck = tasks.register<JavaExec>("ktlintCheck") {
     group = "verification"
     description = "Runs KtLint style and formatting verification against kotlin-mcp sources."
@@ -302,6 +318,24 @@ val ktlintCheck = tasks.register<JavaExec>("ktlintCheck") {
     inputs.file(editorConfigFile)
     inputs.dir("src/main/kotlin")
     inputs.dir("src/test/kotlin")
+    args = listOf(
+        "--baseline", baselineFile.asFile.absolutePath,
+        "src/**/*.kt"
+    )
+}
+
+val ktlintBaseline = tasks.register<JavaExec>("ktlintBaseline") {
+    group = "verification"
+    description = "Generates or updates KtLint style baseline."
+    dependsOn(dumpToolingClasspaths)
+    classpath = ktlintTooling
+    mainClass.set("com.pinterest.ktlint.Main")
+    val baselineFile = layout.projectDirectory.file("config/ktlint/baseline.xml")
+    doFirst {
+        if (baselineFile.asFile.exists()) {
+            baselineFile.asFile.delete()
+        }
+    }
     args = listOf(
         "--baseline", baselineFile.asFile.absolutePath,
         "src/**/*.kt"

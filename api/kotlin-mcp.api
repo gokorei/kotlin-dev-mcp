@@ -382,8 +382,8 @@ public final class com/gokorei/kotlinmcp/execution/DefaultJavaResolver : com/gok
 
 public final class com/gokorei/kotlinmcp/execution/DefaultRunSnippetService : com/gokorei/kotlinmcp/execution/RunSnippetService {
 	public fun <init> ()V
-	public fun <init> (Lcom/gokorei/kotlinmcp/execution/JavaResolver;Lcom/gokorei/kotlinmcp/execution/FastSnippetRunner;)V
-	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/execution/JavaResolver;Lcom/gokorei/kotlinmcp/execution/FastSnippetRunner;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/gokorei/kotlinmcp/execution/JavaResolver;Lcom/gokorei/kotlinmcp/execution/FastSnippetRunner;Ljava/lang/Boolean;)V
+	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/execution/JavaResolver;Lcom/gokorei/kotlinmcp/execution/FastSnippetRunner;Ljava/lang/Boolean;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun execute (Ljava/lang/String;JLjava/util/List;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun parseTestReport (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
@@ -673,7 +673,7 @@ public final class com/gokorei/kotlinmcp/lsp/K2ResolutionUtils$SymbolOccurrence 
 	public fun toString ()Ljava/lang/String;
 }
 
-public abstract interface class com/gokorei/kotlinmcp/lsp/K2SemanticEngine {
+public abstract interface class com/gokorei/kotlinmcp/lsp/K2SemanticEngine : java/lang/AutoCloseable {
 	public abstract fun callHierarchy (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/KtCallHierarchyResult;
 	public abstract fun close ()V
 	public abstract fun completionCandidates (Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/lsp/KotlinCompletionCandidates;
@@ -891,7 +891,7 @@ public final class com/gokorei/kotlinmcp/lsp/LspAction : java/lang/Enum {
 	public static fun values ()[Lcom/gokorei/kotlinmcp/lsp/LspAction;
 }
 
-public abstract interface class com/gokorei/kotlinmcp/lsp/LspService {
+public abstract interface class com/gokorei/kotlinmcp/lsp/LspService : java/lang/AutoCloseable {
 	public fun close ()V
 	public abstract fun execute (Lcom/gokorei/kotlinmcp/lsp/LspAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun execute$default (Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LspAction;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -1699,8 +1699,8 @@ public final class com/gokorei/kotlinmcp/project/CoverageReporter {
 
 public final class com/gokorei/kotlinmcp/project/DefaultProjectService : com/gokorei/kotlinmcp/project/ProjectService {
 	public fun <init> ()V
-	public fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/project/SchemaScanner;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor;Lcom/gokorei/kotlinmcp/project/AndroidManifestInspector;Lcom/gokorei/kotlinmcp/project/AndroidAppAuditor;Lcom/gokorei/kotlinmcp/maven/MavenMetadataClient;Lcom/gokorei/kotlinmcp/project/VersionCatalogService;)V
-	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/project/SchemaScanner;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor;Lcom/gokorei/kotlinmcp/project/AndroidManifestInspector;Lcom/gokorei/kotlinmcp/project/AndroidAppAuditor;Lcom/gokorei/kotlinmcp/maven/MavenMetadataClient;Lcom/gokorei/kotlinmcp/project/VersionCatalogService;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/project/SchemaScanner;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor;Lcom/gokorei/kotlinmcp/project/AndroidManifestInspector;Lcom/gokorei/kotlinmcp/project/AndroidAppAuditor;Lcom/gokorei/kotlinmcp/maven/MavenMetadataClient;Lcom/gokorei/kotlinmcp/project/VersionCatalogService;Lcom/gokorei/kotlinmcp/project/CoverageReporter;Lcom/gokorei/kotlinmcp/project/PackageApiExporter;Lcom/gokorei/kotlinmcp/project/EnvironmentProfileDetector;)V
+	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/lsp/WorkspaceSemanticIndexer;Lcom/gokorei/kotlinmcp/project/SchemaScanner;Lcom/gokorei/kotlinmcp/project/VulnerabilityAuditor;Lcom/gokorei/kotlinmcp/project/AndroidManifestInspector;Lcom/gokorei/kotlinmcp/project/AndroidAppAuditor;Lcom/gokorei/kotlinmcp/maven/MavenMetadataClient;Lcom/gokorei/kotlinmcp/project/VersionCatalogService;Lcom/gokorei/kotlinmcp/project/CoverageReporter;Lcom/gokorei/kotlinmcp/project/PackageApiExporter;Lcom/gokorei/kotlinmcp/project/EnvironmentProfileDetector;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun auditAndroidApp (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun auditAndroidConfig (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun checkCatalogUpdates (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -1734,6 +1734,51 @@ public final class com/gokorei/kotlinmcp/project/EnvironmentProfileDetector {
 	public final fun detectEnvironmentProfile (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun detectProfile (Ljava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/project/GradleProjectInspector;)Lcom/gokorei/kotlinmcp/models/ProjectEnvironmentProfile;
 	public static synthetic fun detectProfile$default (Lcom/gokorei/kotlinmcp/project/EnvironmentProfileDetector;Ljava/lang/String;Ljava/lang/String;Lcom/gokorei/kotlinmcp/project/GradleProjectInspector;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/ProjectEnvironmentProfile;
+}
+
+public final class com/gokorei/kotlinmcp/project/GradleKtsPsiInspector {
+	public static final field INSTANCE Lcom/gokorei/kotlinmcp/project/GradleKtsPsiInspector;
+	public final fun extractDependencies (Ljava/lang/String;Ljava/util/Set;)Ljava/util/List;
+	public final fun extractKmpTargets (Ljava/lang/String;)Ljava/util/List;
+	public final fun extractLiteralString (Lorg/jetbrains/kotlin/psi/KtExpression;)Ljava/lang/String;
+	public final fun extractPlugins (Ljava/lang/String;)Ljava/util/List;
+	public final fun extractSubprojects (Ljava/lang/String;)Ljava/util/List;
+	public final fun hasRepositories (Ljava/lang/String;)Z
+	public final fun parse (Ljava/lang/String;)Lorg/jetbrains/kotlin/psi/KtFile;
+}
+
+public final class com/gokorei/kotlinmcp/project/GradleKtsPsiInspector$ParsedDependency {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ZZZ)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;ZZZ)Lcom/gokorei/kotlinmcp/project/GradleKtsPsiInspector$ParsedDependency;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/project/GradleKtsPsiInspector$ParsedDependency;Ljava/lang/String;Ljava/lang/String;ZZZILjava/lang/Object;)Lcom/gokorei/kotlinmcp/project/GradleKtsPsiInspector$ParsedDependency;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConfiguration ()Ljava/lang/String;
+	public final fun getCoordinate ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isCatalog ()Z
+	public final fun isPlatform ()Z
+	public final fun isProject ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/gokorei/kotlinmcp/project/GradleKtsPsiInspector$ParsedPlugin {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/project/GradleKtsPsiInspector$ParsedPlugin;
+	public static synthetic fun copy$default (Lcom/gokorei/kotlinmcp/project/GradleKtsPsiInspector$ParsedPlugin;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/project/GradleKtsPsiInspector$ParsedPlugin;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public final fun getVersion ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class com/gokorei/kotlinmcp/project/GradleProjectInspector {
@@ -1990,7 +2035,7 @@ public final class com/gokorei/kotlinmcp/semantic/KtSessionProvider$Companion {
 	public final fun isSemanticEnabledByDefault ()Z
 }
 
-public abstract interface class com/gokorei/kotlinmcp/semantic/SemanticService {
+public abstract interface class com/gokorei/kotlinmcp/semantic/SemanticService : java/lang/AutoCloseable {
 	public abstract fun acquireSession (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;
 	public static synthetic fun acquireSession$default (Lcom/gokorei/kotlinmcp/semantic/SemanticService;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/lsp/K2AnalysisSession;
 	public abstract fun checkContracts (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -2078,7 +2123,7 @@ public abstract interface class com/gokorei/kotlinmcp/server/FrameworkDetector {
 	public abstract fun detectFromProjectDir (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/ProjectEnvironmentProfile;
 }
 
-public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
+public final class com/gokorei/kotlinmcp/server/KotlinMcpServer : java/lang/AutoCloseable {
 	public fun <init> ()V
 	public fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;Lcom/gokorei/kotlinmcp/mutation/MutationService;)V
 	public synthetic fun <init> (Lcom/gokorei/kotlinmcp/doc/DocService;Lcom/gokorei/kotlinmcp/lsp/K2SemanticEngine;Lcom/gokorei/kotlinmcp/analysis/CodeAnalysisService;Lcom/gokorei/kotlinmcp/execution/DiagnosticService;Lcom/gokorei/kotlinmcp/project/ProjectService;Lcom/gokorei/kotlinmcp/refactoring/RefactoringService;Lcom/gokorei/kotlinmcp/execution/RunSnippetService;Lcom/gokorei/kotlinmcp/execution/GradleRunService;Lcom/gokorei/kotlinmcp/lsp/LspService;Lcom/gokorei/kotlinmcp/lsp/LibraryAnalysisService;Lcom/gokorei/kotlinmcp/linting/LintService;Lcom/gokorei/kotlinmcp/mutation/MutationService;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -2108,7 +2153,7 @@ public final class com/gokorei/kotlinmcp/server/KotlinMcpServer {
 	public static synthetic fun checkValueClass$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun checkWhenExhaustiveness (Ljava/lang/String;Ljava/util/List;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public static synthetic fun checkWhenExhaustiveness$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
-	public final fun close ()V
+	public fun close ()V
 	public final fun codeAnalyzeCompose (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun codeAnalyzeNullability (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun codeAnalyzeWorkManager (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
@@ -2301,6 +2346,25 @@ public final class com/gokorei/kotlinmcp/server/ToolRegistrar$ToolBuilder {
 }
 
 public abstract interface annotation class com/gokorei/kotlinmcp/server/ToolRegistrar$ToolDslMarker : java/lang/annotation/Annotation {
+}
+
+public final class com/gokorei/kotlinmcp/shared/BoundedDrainHandle {
+	public fun <init> (Ljava/lang/Thread;[BLkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;)V
+	public final fun isTruncated ()Z
+	public final fun join (Ljava/lang/Long;)V
+	public static synthetic fun join$default (Lcom/gokorei/kotlinmcp/shared/BoundedDrainHandle;Ljava/lang/Long;ILjava/lang/Object;)V
+	public final fun readString (Ljava/nio/charset/Charset;)Ljava/lang/String;
+	public static synthetic fun readString$default (Lcom/gokorei/kotlinmcp/shared/BoundedDrainHandle;Ljava/nio/charset/Charset;ILjava/lang/Object;)Ljava/lang/String;
+	public final fun readUtf8 ()Ljava/lang/String;
+	public final fun toByteArray ()[B
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/gokorei/kotlinmcp/shared/BoundedStreamDrainer {
+	public static final field DEFAULT_MAX_BYTES I
+	public static final field INSTANCE Lcom/gokorei/kotlinmcp/shared/BoundedStreamDrainer;
+	public final fun drain (Ljava/io/InputStream;I)Lcom/gokorei/kotlinmcp/shared/BoundedDrainHandle;
+	public static synthetic fun drain$default (Lcom/gokorei/kotlinmcp/shared/BoundedStreamDrainer;Ljava/io/InputStream;IILjava/lang/Object;)Lcom/gokorei/kotlinmcp/shared/BoundedDrainHandle;
 }
 
 public abstract interface class com/gokorei/kotlinmcp/shared/CommandService {

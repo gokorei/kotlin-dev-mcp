@@ -19,6 +19,7 @@
     <ID>ComplexCondition:LoopToFunctionalRefactorer.kt$LoopToFunctionalRefactorer$element.isVar &amp;&amp; (initText == "0" || initText == "0L" || initText == "0.0")</ID>
     <ID>ComplexCondition:LoopToFunctionalRefactorer.kt$LoopToFunctionalRefactorer$itVar != "it" &amp;&amp; (k == "$itVar.name" || k.startsWith("$itVar.")) &amp;&amp; v == "$itVar.id"</ID>
     <ID>ComplexCondition:LoopToFunctionalRefactorer.kt$LoopToFunctionalRefactorer$localStatements.isNotEmpty() || (targetExpr.contains('\n') &amp;&amp; targetExpr.contains('{') &amp;&amp; targetExpr.contains('}'))</ID>
+    <ID>ComplexCondition:MavenMetadataClient.kt$DefaultMavenMetadataClient$ipStr == "169.254.169.254" || ipStr.startsWith("169.254.") || ipStr.startsWith("10.") || ipStr.startsWith("192.168.")</ID>
     <ID>ComplexCondition:MavenMetadataClient.kt$DefaultMavenMetadataClient.Companion$lower.contains("alpha") || lower.contains("beta") || lower.contains("rc") || lower.contains("dev") || lower.contains("snapshot") || lower.contains("preview") || lower.contains("eap")</ID>
     <ID>ComplexCondition:NullabilityAnalyzer.kt$NullabilityAnalyzer.&lt;no name provided&gt;$(isNullableCall || isNullableId) &amp;&amp; !argText.contains("!!") &amp;&amp; !argText.contains("?:")</ID>
     <ID>ComplexCondition:NullabilityAnalyzer.kt$NullabilityAnalyzer.&lt;no name provided&gt;$callee == "requireNotNull" || callee == "checkNotNull" || callee == "check" || callee == "assert"</ID>
@@ -61,13 +62,13 @@
     <ID>CyclomaticComplexMethod:LspService.kt$DefaultLspService$private fun hover(code: String, symbol: String?, workspacePath: String?): KotlinMcpResult</ID>
     <ID>CyclomaticComplexMethod:LspService.kt$DefaultLspService$private fun renameSymbol(code: String, oldName: String?, newName: String?, workspacePath: String?): KotlinMcpResult</ID>
     <ID>CyclomaticComplexMethod:MavenMetadataClient.kt$DefaultMavenMetadataClient$private fun fetchOrReadMetadata( coordinate: MavenCoordinate, customRepoUrl: String? ): FetchResult?</ID>
+    <ID>CyclomaticComplexMethod:MavenMetadataClient.kt$DefaultMavenMetadataClient$private fun validateCustomRepoUrl(rawUrl: String): FetchResult.Error?</ID>
     <ID>CyclomaticComplexMethod:MavenMetadataClient.kt$DefaultMavenMetadataClient.Companion$fun mavenVersionCompare(a: String, b: String): Int</ID>
     <ID>CyclomaticComplexMethod:MutationExecutionPipeline.kt$DefaultMutationExecutionPipeline$override fun run( code: String, testCode: String?, timeoutPerMutantMs: Long, includeExtremeOperators: Boolean, maxOrder: Int ): MutationReport</ID>
     <ID>CyclomaticComplexMethod:MutationService.kt$DefaultMutationService$override fun mutateAndTest( code: String, testCode: String?, projection: ResponseProjection ): KotlinMcpResult</ID>
     <ID>CyclomaticComplexMethod:NullabilityAnalyzer.kt$NullabilityAnalyzer$fun analyzeNullability(code: String): KotlinMcpResult</ID>
     <ID>CyclomaticComplexMethod:OptInAndDeprecationAnalyzer.kt$OptInAndDeprecationAnalyzer$fun analyzeOptIn(session: K2AnalysisSession): KotlinMcpResult</ID>
     <ID>CyclomaticComplexMethod:ProjectLayeringAnalyzer.kt$ProjectLayeringAnalyzer$fun analyzeProjectLayering(buildScriptContent: String, projectPath: String?): KotlinMcpResult</ID>
-    <ID>CyclomaticComplexMethod:ProjectService.kt$DefaultProjectService$override fun detectProfile(buildScriptContent: String, projectPath: String?): com.gokorei.kotlinmcp.models.ProjectEnvironmentProfile</ID>
     <ID>CyclomaticComplexMethod:ProjectService.kt$DefaultProjectService$override fun diagnoseBuild(buildScriptContent: String, settingsContent: String, gradlePropertiesContent: String): KotlinMcpResult</ID>
     <ID>CyclomaticComplexMethod:ProjectService.kt$DefaultProjectService$override fun execute(action: ProjectAction, buildScriptContent: String, projectPath: String?, packageName: String?): KotlinMcpResult</ID>
     <ID>CyclomaticComplexMethod:ProjectService.kt$DefaultProjectService$private fun detectSourceSets(content: String, projectPath: String?): List&lt;String&gt;</ID>
@@ -89,6 +90,7 @@
     <ID>CyclomaticComplexMethod:VersionCatalogService.kt$DefaultVersionCatalogService$override fun updateLibraryVersion(projectPath: String, alias: String, newVersion: String): KotlinMcpResult</ID>
     <ID>CyclomaticComplexMethod:VfsPsiCache.kt$DefaultVfsPsiCache$override fun getOrParse(file: File): KtFile?</ID>
     <ID>CyclomaticComplexMethod:VulnerabilityAuditor.kt$VulnerabilityAuditor$fun checkVulnerabilities(buildScriptContent: String, projectPath: String?): KotlinMcpResult</ID>
+    <ID>CyclomaticComplexMethod:VulnerabilityAuditor.kt$VulnerabilityAuditor$internal fun extractDependencyCoordinates(content: String, libsToml: String = ""): List&lt;DependencyCoordinate&gt;</ID>
     <ID>CyclomaticComplexMethod:VulnerabilityAuditor.kt$VulnerabilityAuditor.Companion$internal fun mavenVersionCompare(a: String, b: String): Int</ID>
     <ID>CyclomaticComplexMethod:WorkspaceSemanticIndexer.kt$WorkspaceSemanticIndexer$private fun collectPublicApi(file: KtFile, rel: String): List&lt;KtPublicApiElement&gt;</ID>
     <ID>EmptyFunctionBlock:KotlinMcpIntegrationTest.kt$InProcessTransport${}</ID>
@@ -115,8 +117,10 @@
     <ID>LongMethod:LlmGuidance.kt$LlmGuidance$fun buildLlmUsageGuide(goal: String? = null, includeExamples: Boolean = true): String</ID>
     <ID>LongMethod:LspService.kt$DefaultLspService$private fun renameSymbol(code: String, oldName: String?, newName: String?, workspacePath: String?): KotlinMcpResult</ID>
     <ID>LongMethod:MavenMetadataClient.kt$DefaultMavenMetadataClient$private fun fetchOrReadMetadata( coordinate: MavenCoordinate, customRepoUrl: String? ): FetchResult?</ID>
+    <ID>LongMethod:MavenMetadataClient.kt$DefaultMavenMetadataClient$private fun validateCustomRepoUrl(rawUrl: String): FetchResult.Error?</ID>
     <ID>LongMethod:MutationExecutionPipeline.kt$DefaultMutationExecutionPipeline$override fun run( code: String, testCode: String?, timeoutPerMutantMs: Long, includeExtremeOperators: Boolean, maxOrder: Int ): MutationReport</ID>
     <ID>LongMethod:MutationService.kt$DefaultMutationService$override fun mutateAndTest( code: String, testCode: String?, projection: ResponseProjection ): KotlinMcpResult</ID>
+    <ID>LongMethod:ProjectService.kt$DefaultProjectService$override fun diagnoseBuild(buildScriptContent: String, settingsContent: String, gradlePropertiesContent: String): KotlinMcpResult</ID>
     <ID>LongMethod:ProjectService.kt$DefaultProjectService$private fun inspectLayering(content: String, projectPath: String?): String</ID>
     <ID>LongMethod:QuickFixGenerator.kt$QuickFixGenerator$fun generateQuickFix(code: String, diagnostic: String): KotlinMcpResult</ID>
     <ID>LongMethod:ResourceRegistrar.kt$ResourceRegistrar$fun registerAll(server: Server, docService: DocService)</ID>
@@ -141,7 +145,7 @@
     <ID>LongParameterList:KotlinMcpServer.kt$KotlinMcpServer$( val docService: DocService = DefaultDocService(), val semanticEngine: K2SemanticEngine = DefaultK2SemanticEngine(), val semanticService: SemanticService = DefaultSemanticService(), private val codeAnalysisService: CodeAnalysisService = DefaultCodeAnalysisService(), private val diagnosticService: DiagnosticService = DefaultDiagnosticService(), private val projectService: ProjectService = DefaultProjectService(), private val refactoringService: RefactoringService = DefaultRefactoringService(), private val runSnippetService: RunSnippetService = DefaultRunSnippetService(), private val gradleRunService: GradleRunService = DefaultGradleRunService(), private val lspService: LspService? = null, private val libraryAnalysisService: LibraryAnalysisService = DefaultLibraryAnalysisService(), private val lintService: LintService = DefaultLintService(), private val mutationService: MutationService = DefaultMutationService() )</ID>
     <ID>LongParameterList:LoopToFunctionalRefactorer.kt$LoopToFunctionalRefactorer$(resultVar: String, item: String, collection: String, guard: String?, expr: String, isBlock: Boolean = false)</ID>
     <ID>LongParameterList:NullabilityAnalyzer.kt$NullabilityAnalyzer$( code: String, element: KtElement, guards: Set&lt;String&gt;, nullableIdentifiers: Set&lt;String&gt;, nullableFunctions: Set&lt;String&gt;, nonNullFnParams: Map&lt;String, Set&lt;Int&gt;&gt;, reassignedNonNull: Set&lt;String&gt;, findings: MutableList&lt;String&gt; )</ID>
-    <ID>LongParameterList:ProjectService.kt$DefaultProjectService$( private val indexer: WorkspaceSemanticIndexer = WorkspaceSemanticIndexer(), private val schemaScanner: SchemaScanner = SchemaScanner(), private val vulnerabilityAuditor: VulnerabilityAuditor = VulnerabilityAuditor(), private val androidManifestInspector: AndroidManifestInspector = AndroidManifestInspector(), private val androidAppAuditor: AndroidAppAuditor = AndroidAppAuditor(), private val mavenMetadataClient: com.gokorei.kotlinmcp.maven.MavenMetadataClient = com.gokorei.kotlinmcp.maven.DefaultMavenMetadataClient(), private val versionCatalogService: VersionCatalogService = DefaultVersionCatalogService(mavenMetadataClient) )</ID>
+    <ID>LongParameterList:ProjectService.kt$DefaultProjectService$( private val indexer: WorkspaceSemanticIndexer = WorkspaceSemanticIndexer(), private val schemaScanner: SchemaScanner = SchemaScanner(), private val vulnerabilityAuditor: VulnerabilityAuditor = VulnerabilityAuditor(), private val androidManifestInspector: AndroidManifestInspector = AndroidManifestInspector(), private val androidAppAuditor: AndroidAppAuditor = AndroidAppAuditor(), private val mavenMetadataClient: com.gokorei.kotlinmcp.maven.MavenMetadataClient = com.gokorei.kotlinmcp.maven.DefaultMavenMetadataClient(), private val versionCatalogService: VersionCatalogService = DefaultVersionCatalogService(mavenMetadataClient), private val coverageReporter: CoverageReporter = CoverageReporter(), private val packageApiExporter: PackageApiExporter = PackageApiExporter(), private val environmentProfileDetector: EnvironmentProfileDetector = EnvironmentProfileDetector() )</ID>
     <ID>LongParameterList:RefactoringService.kt$DefaultRefactoringService$( private val javaToKotlinRefactorer: JavaToKotlinRefactorer = JavaToKotlinRefactorer(), private val loopToFunctionalRefactorer: LoopToFunctionalRefactorer = LoopToFunctionalRefactorer(), private val rxJavaToCoroutinesRefactorer: RxJavaToCoroutinesRefactorer = RxJavaToCoroutinesRefactorer(), private val arrowRefactorer: ArrowRefactorer = ArrowRefactorer(), private val quickFixGenerator: QuickFixGenerator = QuickFixGenerator(), private val idiomaticKotlinSuggestor: IdiomaticKotlinSuggestor = IdiomaticKotlinSuggestor(), private val datetimeMigrationSuggestor: DatetimeMigrationSuggestor = DatetimeMigrationSuggestor() )</ID>
     <ID>LongParameterList:RunSnippetService.kt$DefaultRunSnippetService$( compiled: CompileResult.Compiled, trimmed: String, timeoutMillis: Long, extraClasspath: List&lt;String&gt;, runner: String, jvmArgs: List&lt;String&gt;, javaPath: String?, projectPath: String? )</ID>
     <ID>LongParameterList:RunSnippetService.kt$DefaultRunSnippetService$( outDir: Path, timeoutMillis: Long, extraClasspath: List&lt;String&gt;, jvmArgs: List&lt;String&gt;, javaPath: String?, mainClass: String = SnippetCompiler.MAIN_CLASS )</ID>
@@ -158,6 +162,7 @@
     <ID>MagicNumber:AstMutantGenerator.kt$AstMutantGenerator$20</ID>
     <ID>MagicNumber:AstMutantGenerator.kt$AstMutantGenerator$6</ID>
     <ID>MagicNumber:AstMutators.kt$VoidMethodCallMutator$30</ID>
+    <ID>MagicNumber:BoundedStreamDrainer.kt$BoundedStreamDrainer$8192</ID>
     <ID>MagicNumber:CoverageReporter.kt$CoverageReporter$100</ID>
     <ID>MagicNumber:DiagnosticService.kt$DefaultDiagnosticService$4</ID>
     <ID>MagicNumber:DiagnosticService.kt$DefaultDiagnosticService$5</ID>
@@ -203,7 +208,6 @@
     <ID>MagicNumber:NullabilityAnalyzer.kt$NullabilityAnalyzer.&lt;no name provided&gt;$80</ID>
     <ID>MagicNumber:ProjectService.kt$3</ID>
     <ID>MagicNumber:ProjectService.kt$4</ID>
-    <ID>MagicNumber:ProjectService.kt$DefaultProjectService$100</ID>
     <ID>MagicNumber:ProjectService.kt$DefaultProjectService$3</ID>
     <ID>MagicNumber:ProjectService.kt$DefaultProjectService$5</ID>
     <ID>MagicNumber:ProjectService.kt$DefaultProjectService$6</ID>
@@ -211,6 +215,7 @@
     <ID>MagicNumber:RunSnippetService.kt$DefaultRunSnippetService$1000</ID>
     <ID>MagicNumber:RunSnippetService.kt$DefaultRunSnippetService$1_000_000</ID>
     <ID>MagicNumber:RunSnippetService.kt$DefaultRunSnippetService$200</ID>
+    <ID>MagicNumber:RunSnippetService.kt$DefaultRunSnippetService$2000</ID>
     <ID>MagicNumber:RunSnippetService.kt$DefaultRunSnippetService$6</ID>
     <ID>MagicNumber:SchemaScanner.kt$SchemaScanner$2000</ID>
     <ID>MagicNumber:SnippetCompiler.kt$SnippetCompiler$21</ID>
@@ -447,17 +452,18 @@
     <ID>MaxLineLength:GoldenPsiSemanticTestSuite.kt$GoldenPsiSemanticTestSuite$assertTrue(success.content.contains("is NetworkResult.Error.Network -&gt; TODO()") || success.content.contains("Network -&gt; TODO()"))</ID>
     <ID>MaxLineLength:GoldenPsiSemanticTestSuite.kt$GoldenPsiSemanticTestSuite$assertTrue(success.content.contains("parse") &amp;&amp; success.content.contains("mismatch"), "should flag return type mismatch in parse: ${success.content}")</ID>
     <ID>MaxLineLength:GoldenPsiSemanticTestSuite.kt$GoldenPsiSemanticTestSuite$assertTrue(success.content.contains("✅") || success.content.contains("valid"), "should accept valid contract: ${success.content}")</ID>
+    <ID>MaxLineLength:GradleKtsPsiInspector.kt$GradleKtsPsiInspector.&lt;no name provided&gt;$val coord = if (!version.isNullOrBlank()) "$group:$name:$version" else "$group:$name"</ID>
     <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector$((lower.startsWith("id ") || lower.startsWith("id(")) &amp;&amp; (lower.contains("com.android.") || lower.contains("org.jetbrains.kotlin.android") || lower.contains("'android'") || lower.contains("\"android\"")))</ID>
     <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector$(lower.startsWith("apply plugin:") &amp;&amp; (lower.contains("com.android.") || lower.contains("kotlin-android")))</ID>
     <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector$(scriptPath == null &amp;&amp; (buildScriptContent.contains("plugins {") || buildScriptContent.contains("val ") || buildScriptContent.contains("var ")))</ID>
     <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector$Regex("""include\s*\(\s*["']([^"']+)["']\s*\)""").findAll(settingsContent).forEach { projects.add(it.groupValues[1]) }</ID>
-    <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector$Regex("""kotlin\s*\(\s*["']([^"']+)["']\s*\)""").findAll(content).forEach { plugins.add("kotlin-${it.groupValues[1]}") }</ID>
     <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector$appendLine("✅ Android build script configuration is modern and aligned with Kotlin 2.x / AGP guidelines.")</ID>
     <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector$fun</ID>
     <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector$if</ID>
     <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector$issues.add("`android { ... }` block does not specify `compileSdk`. Explicitly declare `compileSdk = 35` (or target API level).")</ID>
     <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector$issues.add("`composeOptions { kotlinCompilerExtensionVersion = ... }` is deprecated with Kotlin 2.0+. In Kotlin 2.x, Compose compiler is configured via the Compose compiler plugin (`kotlin(\"plugin.compose\")` / `id(\"org.jetbrains.kotlin.plugin.compose\")`). Remove `kotlinCompilerExtensionVersion`.")</ID>
     <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector$issues.add("`minSdk` is not explicitly declared in `defaultConfig { ... }`. Specify `minSdk = 26` (or minimum supported API level).")</ID>
+    <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector$val knownConfigs = setOf("implementation", "api", "testImplementation", "compileOnly", "runtimeOnly", "testRuntimeOnly", "androidTestImplementation")</ID>
     <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector$val knownTargets = listOf("jvm", "androidTarget", "iosX64", "iosArm64", "iosSimulatorArm64", "js", "wasmJs", "linuxX64", "macosX64", "macosArm64")</ID>
     <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector.&lt;no name provided&gt;$if</ID>
     <ID>MaxLineLength:GradleProjectInspector.kt$GradleProjectInspector.&lt;no name provided&gt;$if (leftText == "minSdk" &amp;&amp; ("android" in scopeStack || "defaultConfig" in scopeStack)) hasMinSdk = true</ID>
@@ -705,9 +711,13 @@
     <ID>MaxLineLength:LspServiceTest.kt$LspServiceTest$assertTrue(updatedProduct.contains("val id: Long"), "Product in another package must retain its own 'id' property: $updatedProduct")</ID>
     <ID>MaxLineLength:LspServiceTest.kt$LspServiceTest$fun</ID>
     <ID>MaxLineLength:LspServiceTest.kt$LspServiceTest.&lt;no name provided&gt;$override</ID>
+    <ID>MaxLineLength:MavenMetadataClient.kt$DefaultMavenMetadataClient$if</ID>
     <ID>MaxLineLength:MavenMetadataClient.kt$DefaultMavenMetadataClient$latestRelease = latestRelease ?: sortedVersions.firstOrNull { !isPreRelease(it) } ?: sortedVersions.firstOrNull()</ID>
     <ID>MaxLineLength:MavenMetadataClient.kt$DefaultMavenMetadataClient$message = "No Maven metadata found for '${coordinate.toIdentifier()}' across checked repositories."</ID>
     <ID>MaxLineLength:MavenMetadataClient.kt$DefaultMavenMetadataClient$message = "Offline mode active and no cached metadata available for '${coordinate.toIdentifier()}'."</ID>
+    <ID>MaxLineLength:MavenMetadataClient.kt$DefaultMavenMetadataClient$message = "Rejected repository URL host '$host': internal/private address '${addr.hostAddress}' is forbidden."</ID>
+    <ID>MaxLineLength:MavenMetadataClient.kt$DefaultMavenMetadataClient$message = "Rejected repository URL host '$host': loopback address '${addr.hostAddress}' is forbidden."</ID>
+    <ID>MaxLineLength:MavenMetadataClient.kt$DefaultMavenMetadataClient$message = "Rejected repository URL host '$host': private or cloud-metadata address '$ipStr' is forbidden."</ID>
     <ID>MaxLineLength:MavenMetadataClient.kt$DefaultMavenMetadataClient.Companion$lower.contains("dev")</ID>
     <ID>MaxLineLength:MavenMetadataClient.kt$DefaultMavenMetadataClient.Companion$out.add(if (sb[0].isDigit()) sb.toString().toIntOrNull() ?: sb.toString() else sb.toString())</ID>
     <ID>MaxLineLength:MavenMetadataModels.kt$MavenCoordinate.Companion$if (isValid(g) &amp;&amp; isValid(a) &amp;&amp; isValid(v)) MavenCoordinate(group = g, artifact = a, version = v) else null</ID>
@@ -766,11 +776,11 @@
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$"# Gradle Pre-Build Diagnostics\nNo obvious pre-build issues detected. Versions, repositories, and plugin declarations look consistent."</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$"\n\n## Recommended Guidelines\n- [Multiplatform Web Storage (Room 3.0 &amp; DataStore)](kotlin://guidelines/kmp-storage.md)"</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$"\n\nRun `./gradlew help --no-daemon` or the build to confirm; these are heuristics, not a substitute for the build's own error reporting."</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$// Groovy DSL fallback on caller-supplied content: configuration 'group:artifact:version' or "group:artifact:version"</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$ProjectAction.CHECK_VULNERABILITIES, ProjectAction.AUDIT_VULNERABILITIES -&gt; checkVulnerabilities(buildScriptContent, projectPath)</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$ProjectAction.DETECT_ENVIRONMENT_PROFILE -&gt; KotlinMcpResult.Success(detectProfile(buildScriptContent, projectPath).toString())</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$ProjectAction.INSPECT_ANDROID_MANIFEST -&gt; androidManifestInspector.inspectManifest(buildScriptContent, projectPath)</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$ProjectAction.INSPECT_STRUCTURE, ProjectAction.INSPECT_GRADLE_PROJECT, ProjectAction.ANALYZE_PROJECT_LAYERING -&gt; inspectStructure(buildScriptContent, projectPath)</ID>
+    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$Regex("""(?:\w+|libs\.\w+)?["(]([a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+):(\d+[a-zA-Z0-9_.-]*)[")]""").findAll(all).map { "${it.groupValues[1]}:${it.groupValues[2]}" }.toList()</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$advisories.add("Consider defining repository interfaces in the domain layer and keeping concrete implementations in the data/infrastructure layer.")</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$advisories.add("Domain and data layers detected. Prefer injecting repository/use-case interfaces into the domain/presentation layers rather than depending on concrete data implementations.")</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$advisories.add("UI and data packages are both present but no `domain` layer was found. Consider an explicit domain model so the UI does not depend on data shapes.")</ID>
@@ -783,29 +793,18 @@
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$findings.add("🟡 Missing repository declaration: no `repositories { }`, `dependencyResolutionManagement`, or `pluginManagement` found. Add `mavenCentral()` (and `google()` for Android) or resolution will fail.")</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$group != null &amp;&amp; name != null -&gt; if (version.isNotBlank()) "$group:$name:$version" else "$group:$name"</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$if (kts.exists()) kts.absolutePath else File(file, "build.gradle").takeIf { it.exists() }?.absolutePath</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$if (text.contains("arrow-core") || text.contains("io.arrow-kt")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.ARROW)</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$if (text.contains("compose") || text.contains("androidx.compose")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.COMPOSE)</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$if (text.contains("coroutines") || text.contains("kotlinx-coroutines")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.COROUTINES)</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$if (text.contains("datetime") || text.contains("kotlinx-datetime")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.DATETIME)</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$if (text.contains("exposed") || text.contains("org.jetbrains.exposed")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.EXPOSED)</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$if (text.contains("ktor") || text.contains("io.ktor")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.KTOR)</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$if (text.contains("mockk") || text.contains("io.mockk")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.MOCKK)</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$if (text.contains("room") || text.contains("androidx.room")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.ROOM)</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$if (text.contains("serialization") || text.contains("kotlinx-serialization")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.SERIALIZATION)</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$if (text.contains("spring") || text.contains("org.springframework")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.SPRING)</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$if (text.contains("turbine") || text.contains("app.cash.turbine")) active.add(com.gokorei.kotlinmcp.models.FrameworkFeature.TURBINE)</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$message = "Invalid Maven coordinate '$coordinate'. Expected format: 'group:artifact' (e.g. 'io.ktor:ktor-client-core')."</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$message = "No JaCoCo coverage directory found at ${jacocoDir.path}. Run `./gradlew jacocoTestReport` first."</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$override</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$private val mavenMetadataClient: com.gokorei.kotlinmcp.maven.MavenMetadataClient = com.gokorei.kotlinmcp.maven.DefaultMavenMetadataClient()</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$val agp = Regex("""id\("com\.android\.(?:application|library)"\)\s*version\s*"([^"]+)""" ).find(all)?.groupValues?.get(1)</ID>
+    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$val agp = agpPlugin?.version ?: Regex("""id\("com\.android\.(?:application|library)"\)\s*version\s*"([^"]+)""" ).find(all)?.groupValues?.get(1)</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$val configs = "implementation|api|testImplementation|runtimeOnly|compileOnly|testRuntimeOnly|androidTestImplementation"</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$val hardcoded = Regex("""(?:\w+|libs\.\w+)?["(]([a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+):(\d+[a-zA-Z0-9_.-]*)[")]""").findAll(all).map { "${it.groupValues[1]}:${it.groupValues[2]}" }.toList()</ID>
+    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$val knownConfigs = setOf("implementation", "api", "testImplementation", "compileOnly", "runtimeOnly", "testRuntimeOnly", "androidTestImplementation")</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$val knownConfigs = setOf("implementation", "api", "testImplementation", "runtimeOnly", "compileOnly", "testRuntimeOnly", "androidTestImplementation")</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$val kotlin = Regex("""kotlin\("(?:jvm|android|multiplatform)"\)\s*version\s*"([^"]+)""" ).find(all)?.groupValues?.get(1)</ID>
+    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$val kotlin = kotlinPlugin?.version ?: Regex("""kotlin\("(?:jvm|android|multiplatform)"\)\s*version\s*"([^"]+)""" ).find(all)?.groupValues?.get(1)</ID>
+    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$val kotlinPlugin = ktsPlugins.firstOrNull { it.id == "kotlin-jvm" || it.id == "kotlin-android" || it.id == "kotlin-multiplatform" || it.id == "org.jetbrains.kotlin.jvm" || it.id == "org.jetbrains.kotlin.android" || it.id == "org.jetbrains.kotlin.multiplatform" }</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$val stdlibVersions = Regex("""kotlin-stdlib[":]*(\d[0-9a-zA-Z._-]*)""").findAll(all).map { it.groupValues[1] }.distinct().toList()</ID>
+    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService$val usesBom = parsedDeps.any { it.isPlatform } || Regex("""platform\s*\(|bom""", RegexOption.IGNORE_CASE).containsMatchIn(all)</ID>
     <ID>MaxLineLength:ProjectService.kt$DefaultProjectService.&lt;no name provided&gt;$val arg = expression.valueArguments.firstOrNull()?.getArgumentExpression()?.text.orEmpty().removeSurrounding("\"")</ID>
-    <ID>MaxLineLength:ProjectService.kt$DefaultProjectService.&lt;no name provided&gt;$val inner = argText.removePrefix("project(").removeSuffix(")").trim().removeSurrounding("\"").removePrefix(":")</ID>
     <ID>MaxLineLength:ProjectService.kt$ProjectService$fun</ID>
     <ID>MaxLineLength:ProjectService.kt$ProjectService$fun execute(action: ProjectAction, buildScriptContent: String, projectPath: String? = null, packageName: String? = null): KotlinMcpResult</ID>
     <ID>MaxLineLength:ProjectService.kt$ProjectService$override fun execute(action: ProjectAction, code: String): KotlinMcpResult</ID>
@@ -834,6 +833,7 @@
     <ID>MaxLineLength:ProjectServiceTest.kt$ProjectServiceTest$assertTrue(success.content.contains("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0"), "expected projectPath-resolved catalog coordinate: ${success.content}")</ID>
     <ID>MaxLineLength:ProjectServiceTest.kt$ProjectServiceTest$assertTrue(success.content.contains("spring-core") || success.content.contains("log4j-core"), "expected lockfile coordinates: ${success.content}")</ID>
     <ID>MaxLineLength:ProjectServiceTest.kt$ProjectServiceTest$buildScriptContent = """dependencies { implementation("org.apache.commons:commons-compress:1.26.0.Final") }"""</ID>
+    <ID>MaxLineLength:ProjectServiceTest.kt$ProjectServiceTest$fun</ID>
     <ID>MaxLineLength:ProjectServiceTest.kt$ProjectServiceTest$val listResult = projectService.execute(ProjectAction.LIST_KMP_TARGETS, androidScript) as KotlinMcpResult.Success</ID>
     <ID>MaxLineLength:ProjectServiceTest.kt$ProjectServiceTest$val structResult = projectService.execute(ProjectAction.INSPECT_STRUCTURE, androidScript) as KotlinMcpResult.Success</ID>
     <ID>MaxLineLength:PromptRegistrar.kt$PromptRegistrar$description = "Architectural and testability guidelines for Kotlin code: UI vs business-logic boundary isolation, explicit DTO-to-domain mapping, and boundary testability. Apply these before producing or reviewing architecture-level code."</ID>
@@ -1004,19 +1004,22 @@
     <ID>MaxLineLength:VersionTest.kt$VersionTest$Version.CURRENT.matches(Regex("""^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"""))</ID>
     <ID>MaxLineLength:VfsAtomicAndConcurrencyStressTest.kt$VfsAtomicAndConcurrencyStressTest$Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)</ID>
     <ID>MaxLineLength:VfsAtomicAndConcurrencyStressTest.kt$VfsAtomicAndConcurrencyStressTest$Files.move(tmpFile.toPath(), targetFile.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)</ID>
+    <ID>MaxLineLength:VfsAtomicAndConcurrencyStressTest.kt$VfsAtomicAndConcurrencyStressTest$assertTrue(errors.isEmpty(), "Expected zero concurrency exceptions during directory invalidations, got: ${errors.map { it.message }}")</ID>
+    <ID>MaxLineLength:VfsAtomicAndConcurrencyStressTest.kt$VfsAtomicAndConcurrencyStressTest$assertTrue(errors.isEmpty(), "Expected zero read exceptions under high concurrency, got: ${errors.map { it.message }}")</ID>
     <ID>MaxLineLength:VfsAtomicAndConcurrencyStressTest.kt$VfsAtomicAndConcurrencyStressTest$assertTrue(readOperations.get() &gt; 500, "Expected &gt;500 successful concurrent reads, got: ${readOperations.get()}")</ID>
     <ID>MaxLineLength:VfsAtomicAndConcurrencyStressTest.kt$VfsAtomicAndConcurrencyStressTest$fun</ID>
     <ID>MaxLineLength:VfsMemoryLeakAndGcTest.kt$VfsMemoryLeakAndGcTest$assertEquals("TempModel_$fileCount", visitedClassName, "Parsed AST node must resolve matching class name via PSI")</ID>
     <ID>MaxLineLength:VfsPsiCache.kt$DefaultVfsPsiCache$file.walkTopDown().onEnter { !K2ResolutionUtils.isExcludedWorkspaceDir(it) }.filter { it.isDirectory }</ID>
+    <ID>MaxLineLength:VfsPsiCache.kt$DefaultVfsPsiCache$private</ID>
     <ID>MaxLineLength:VfsPsiCacheTest.kt$VfsPsiCacheTest$assertEquals("data class DynamicModel(val v: Int = 2)", updatedText, "WatchService must register new subdirs and invalidate modified files")</ID>
     <ID>MaxLineLength:VfsPsiCacheTest.kt$VfsPsiCacheTest$fun</ID>
     <ID>MaxLineLength:VulnerabilityAuditor.kt$VulnerabilityAuditor$"{\"package\":{\"ecosystem\":\"Maven\",\"name\":\"${dep.group}:${dep.name}\"},\"version\":\"${dep.version}\"}"</ID>
-    <ID>MaxLineLength:VulnerabilityAuditor.kt$VulnerabilityAuditor$Regex("""$configs\s*\(\s*platform\s*\(\s*["']([^"']+):([^"']+):([^"']+)["']\s*\)\s*\)""").findAll(content)</ID>
+    <ID>MaxLineLength:VulnerabilityAuditor.kt$VulnerabilityAuditor$Regex("""\bid\s*\(?\s*["']([^"']+)["']\s*\)?\s*version\s+["']([^"']+)["']""").findAll(content)</ID>
     <ID>MaxLineLength:VulnerabilityAuditor.kt$VulnerabilityAuditor$Regex("""^([a-zA-Z0-9._-]+):([a-zA-Z0-9._-]+):([a-zA-Z0-9._-]+(?:-[a-zA-Z0-9._-]+)?)=(.*)""", RegexOption.MULTILINE)</ID>
     <ID>MaxLineLength:VulnerabilityAuditor.kt$VulnerabilityAuditor$if</ID>
     <ID>MaxLineLength:VulnerabilityAuditor.kt$VulnerabilityAuditor$message = "No dependency coordinates could be parsed from the provided build script. The vulnerability scan requires resolvable Maven coordinates (e.g. implementation(\"g:a:v\") or a version catalog). If this is a real project, pass projectPath so gradle/libs.versions.toml and transitive resolution can be consulted."</ID>
-    <ID>MaxLineLength:VulnerabilityAuditor.kt$VulnerabilityAuditor$result.add(DependencyCoordinate("org.jetbrains.kotlin", "kotlin-gradle-plugin-${m.groupValues[1]}", m.groupValues[2]))</ID>
-    <ID>MaxLineLength:VulnerabilityAuditor.kt$VulnerabilityAuditor$val configs = "(?:implementation|api|compileOnly|runtimeOnly|testImplementation|testApi|testRuntimeOnly|annotationProcessor|kapt|ksp|kover|detekt|detektTooling|ktlintTooling)"</ID>
+    <ID>MaxLineLength:VulnerabilityAuditor.kt$VulnerabilityAuditor$result.add(DependencyCoordinate("org.jetbrains.kotlin", "kotlin-gradle-plugin-${id.removePrefix("kotlin-")}", v))</ID>
+    <ID>MaxLineLength:VulnerabilityAuditor.kt$VulnerabilityAuditor$val configPattern = "(?:implementation|api|compileOnly|runtimeOnly|testImplementation|testApi|testRuntimeOnly|annotationProcessor|kapt|ksp|kover|detekt|detektTooling|ktlintTooling)"</ID>
     <ID>MaxLineLength:VulnerabilityAuditor.kt$VulnerabilityAuditor.Companion$if (sb.isNotEmpty()) out.add(if (sb[0].isDigit()) sb.toString().toIntOrNull() ?: sb.toString() else sb.toString())</ID>
     <ID>MaxLineLength:VulnerabilityAuditor.kt$VulnerabilityAuditor.Companion$if (sb.isNotEmpty()) { out.add(if (sb[0].isDigit()) sb.toString().toIntOrNull() ?: sb.toString() else sb.toString()); sb.setLength(0) }</ID>
     <ID>MaxLineLength:VulnerabilityAuditor.kt$VulnerabilityAuditor.Companion$out.add(if (sb[0].isDigit()) sb.toString().toIntOrNull() ?: sb.toString() else sb.toString())</ID>
@@ -1103,6 +1106,7 @@
     <ID>NestedBlockDepth:SnippetCompiler.kt$SnippetCompiler.BtaDiagnosticCollector$private fun parseDiagnosticMessage(severity: String, rawMsg: String): CompilerDiagnostic</ID>
     <ID>NestedBlockDepth:VersionCatalogService.kt$DefaultVersionCatalogService$override fun parseCatalog(projectPath: String): VersionCatalogModel</ID>
     <ID>NestedBlockDepth:VersionCatalogService.kt$DefaultVersionCatalogService$override fun updateLibraryVersion(projectPath: String, alias: String, newVersion: String): KotlinMcpResult</ID>
+    <ID>NestedBlockDepth:VulnerabilityAuditor.kt$VulnerabilityAuditor$internal fun extractDependencyCoordinates(content: String, libsToml: String = ""): List&lt;DependencyCoordinate&gt;</ID>
     <ID>NestedBlockDepth:VulnerabilityAuditor.kt$VulnerabilityAuditor$internal fun extractFixedVersion(vulnObj: JsonObject): String</ID>
     <ID>NestedBlockDepth:WorkManagerAnalyzer.kt$WorkManagerAnalyzer$private fun isInsideWithContext(element: KtElement): Boolean</ID>
     <ID>NestedBlockDepth:WorkspaceSemanticIndexer.kt$WorkspaceSemanticIndexer$fun callHierarchyOf(code: String, targetSymbol: String, workspacePath: String? = null): KtCallHierarchyResult</ID>
@@ -1136,6 +1140,7 @@
     <ID>ReturnCount:FastSnippetRunner.kt$DefaultFastSnippetRunner.&lt;no name provided&gt;$override fun loadClass(name: String, resolve: Boolean): Class&lt;*&gt;</ID>
     <ID>ReturnCount:FileContextAnalyzer.kt$FileContextAnalyzer$fun fileContext(code: String, workspacePath: String?, indexer: WorkspaceSemanticIndexer): KotlinMcpResult</ID>
     <ID>ReturnCount:FrameworkDetector.kt$DefaultFrameworkDetector$override fun detectFromProjectDir(projectPath: String): ProjectEnvironmentProfile</ID>
+    <ID>ReturnCount:GradleKtsPsiInspector.kt$GradleKtsPsiInspector$fun extractLiteralString(expression: KtExpression?): String?</ID>
     <ID>ReturnCount:GradleRunService.kt$DefaultGradleRunService$override fun execute(projectPath: String, task: String, timeoutMillis: Long): KotlinMcpResult</ID>
     <ID>ReturnCount:GradleRunService.kt$DefaultGradleRunService$private fun isAllowedToken(token: String, prev: String?): Boolean</ID>
     <ID>ReturnCount:GradleRunService.kt$DefaultGradleRunService$private fun resolveLauncher(root: File): String?</ID>
@@ -1169,6 +1174,7 @@
     <ID>ReturnCount:MavenMetadataClient.kt$DefaultMavenMetadataClient$override fun getLatestVersion(coordinate: MavenCoordinate, customRepoUrl: String?): KotlinMcpResult</ID>
     <ID>ReturnCount:MavenMetadataClient.kt$DefaultMavenMetadataClient$override fun resolveVersions(coordinate: MavenCoordinate, customRepoUrl: String?): KotlinMcpResult</ID>
     <ID>ReturnCount:MavenMetadataClient.kt$DefaultMavenMetadataClient$private fun fetchOrReadMetadata( coordinate: MavenCoordinate, customRepoUrl: String? ): FetchResult?</ID>
+    <ID>ReturnCount:MavenMetadataClient.kt$DefaultMavenMetadataClient$private fun validateCustomRepoUrl(rawUrl: String): FetchResult.Error?</ID>
     <ID>ReturnCount:MutationExecutionPipeline.kt$DefaultMutationExecutionPipeline$override fun run( code: String, testCode: String?, timeoutPerMutantMs: Long, includeExtremeOperators: Boolean, maxOrder: Int ): MutationReport</ID>
     <ID>ReturnCount:MutationExecutionPipeline.kt$DefaultMutationExecutionPipeline$private fun mergeSourceWithParsedTest(code: String, test: ParsedTestCode): String</ID>
     <ID>ReturnCount:MutationExecutionPipeline.kt$DefaultMutationExecutionPipeline$private fun parseTestCode(testCode: String): ParsedTestCode</ID>
@@ -1177,7 +1183,6 @@
     <ID>ReturnCount:OptInAndDeprecationAnalyzer.kt$OptInAndDeprecationAnalyzer$fun matchesOptInMarker(entry: KtAnnotationEntry, marker: String): Boolean</ID>
     <ID>ReturnCount:PackageApiExporter.kt$PackageApiExporter$fun packageApi(projectPath: String?, packageName: String?, indexer: WorkspaceSemanticIndexer): KotlinMcpResult</ID>
     <ID>ReturnCount:ProgressNotifier.kt$DefaultProgressNotifier$override fun reportProgress( progressToken: Any?, progress: Double, total: Double?, message: String? ): KotlinMcpResult</ID>
-    <ID>ReturnCount:ProjectService.kt$DefaultProjectService$override fun packageApi(projectPath: String?, packageName: String?): KotlinMcpResult</ID>
     <ID>ReturnCount:ProjectService.kt$DefaultProjectService$private fun detectSubprojects(projectPath: String?): List&lt;String&gt;</ID>
     <ID>ReturnCount:ProjectService.kt$DefaultProjectService$private fun isKotlinGradleScript(text: String): Boolean</ID>
     <ID>ReturnCount:ProjectService.kt$DefaultProjectService$private fun parseVersionCatalog(projectPath: String?): Map&lt;String, String&gt;</ID>
@@ -1240,8 +1245,8 @@
     <ID>TooManyFunctions:DocService.kt$DefaultDocService : DocService</ID>
     <ID>TooManyFunctions:DocService.kt$DocService : CommandService</ID>
     <ID>TooManyFunctions:K2SemanticEngine.kt$DefaultK2SemanticEngine : K2SemanticEngine</ID>
-    <ID>TooManyFunctions:K2SemanticEngine.kt$K2SemanticEngine</ID>
-    <ID>TooManyFunctions:KotlinMcpServer.kt$KotlinMcpServer</ID>
+    <ID>TooManyFunctions:K2SemanticEngine.kt$K2SemanticEngine : AutoCloseable</ID>
+    <ID>TooManyFunctions:KotlinMcpServer.kt$KotlinMcpServer : AutoCloseable</ID>
     <ID>TooManyFunctions:LintService.kt$DefaultLintService : LintService</ID>
     <ID>TooManyFunctions:LoopToFunctionalRefactorer.kt$LoopToFunctionalRefactorer</ID>
     <ID>TooManyFunctions:LspService.kt$DefaultLspService : LspService</ID>
@@ -1264,6 +1269,7 @@
     <ID>UnusedPrivateMember:ProjectService.kt$private fun mavenVersionCompare(a: String, b: String): Int</ID>
     <ID>UnusedPrivateMember:RunSnippetService.kt$DefaultRunSnippetService$private fun runCompiled(outDir: Path, timeoutMillis: Long, extraClasspath: List&lt;String&gt;): KotlinMcpResult</ID>
     <ID>UnusedPrivateMember:ToolRegistrar.kt$ToolRegistrar$private fun registerTool( server: Server, kotlinServer: KotlinMcpServer, name: String, builder: ToolBuilder.() -&gt; Unit )</ID>
+    <ID>UnusedPrivateProperty:BoundedStreamDrainerTest.kt$BoundedStreamDrainerTest$val largeChunk = "A".repeat(10_000)</ID>
     <ID>UnusedPrivateProperty:ComposeAnalyzer.kt$ComposeAnalyzer$private val commonStandardExtensions = setOf( "forEach", "map", "filter", "flatMap", "let", "run", "also", "apply", "repeat", "with", "use", "takeIf", "takeUnless", "firstOrNull", "find", "associate", "associateBy", "fold", "reduce", "List", "Map", "Set", "Intent", "File", "Thread", "String", "Pair", "Triple", "Array", "Sequence", "Result", "UUID" )</ID>
     <ID>UnusedPrivateProperty:CoroutinesSafetyAnalyzer.kt$CoroutinesSafetyAnalyzer$private val blockingCalls = setOf("Thread.sleep")</ID>
     <ID>UnusedPrivateProperty:LoopToFunctionalRefactorer.kt$LoopToFunctionalRefactorer$val lambdaBlock = if (cleanBody.contains("\n")) "{\n${cleanBody.prependIndent(" ")}\n}" else "{ $cleanBody }"</ID>
@@ -1281,6 +1287,7 @@
     <ID>WildcardImport:AstMutantGeneratorTest.kt$import org.junit.jupiter.api.Assertions.*</ID>
     <ID>WildcardImport:AstMutators.kt$import org.jetbrains.kotlin.psi.*</ID>
     <ID>WildcardImport:AstMutatorsTest.kt$import org.junit.jupiter.api.Assertions.*</ID>
+    <ID>WildcardImport:BoundedStreamDrainerTest.kt$import org.junit.jupiter.api.Assertions.*</ID>
     <ID>WildcardImport:BuildToolsToolchainManagerTest.kt$import org.junit.jupiter.api.Assertions.*</ID>
     <ID>WildcardImport:CodeAnalysisServiceTest.kt$import org.junit.jupiter.api.Assertions.*</ID>
     <ID>WildcardImport:CommandServiceTest.kt$import com.gokorei.kotlinmcp.analysis.*</ID>
@@ -1321,6 +1328,7 @@
     <ID>WildcardImport:KotlinMcpServerTest.kt$import com.gokorei.kotlinmcp.lsp.*</ID>
     <ID>WildcardImport:KotlinMcpServerTest.kt$import com.gokorei.kotlinmcp.project.*</ID>
     <ID>WildcardImport:KotlinMcpServerTest.kt$import com.gokorei.kotlinmcp.refactoring.*</ID>
+    <ID>WildcardImport:KotlinMcpServerTest.kt$import com.gokorei.kotlinmcp.semantic.*</ID>
     <ID>WildcardImport:KotlinMcpServerTest.kt$import org.junit.jupiter.api.Assertions.*</ID>
     <ID>WildcardImport:KtSessionProviderTest.kt$import org.junit.jupiter.api.Assertions.*</ID>
     <ID>WildcardImport:LibraryAnalysisServiceTest.kt$import org.junit.jupiter.api.Assertions.*</ID>
