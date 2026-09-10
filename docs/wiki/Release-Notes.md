@@ -21,6 +21,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 - **Consolidate duplicated symbol catalogs and strategy reporters** — eliminated redundant symbol documentation in `DocService` by sourcing entries directly from `StdlibSymbolCatalog`, and delegated `ProjectService` coverage, package API, and environment profile detection to dedicated `CoverageReporter`, `PackageApiExporter`, and `EnvironmentProfileDetector` strategy components (5PNQDER7).
 - **AutoCloseable resource lifecycle management** — implemented `AutoCloseable` across `KotlinMcpServer`, `K2SemanticEngine`, `LspService`, and `SemanticService` with idempotent atomic state guards and graceful disposal of embedded compilers, analyzers, and PSI caches (839ZH49J).
 - **Kotlin Analysis API architectural roadmap & prototype blueprint** — documented comprehensive catalog of deprecated K1 compiler usages, architecture blueprint, prototype standalone KaSession resolution patterns, and a phased 4-stage migration plan to the official Kotlin Analysis API (FIR) (G76PJ006).
+- **Unsuppressed compiler warnings & code hygiene remediation** — removed blanket `suppressWarnings.set(true)` from `build.gradle.kts`, resolved unnecessary assertions, redundant instance checks, and deprecation warnings across snippet safety checkers, progress notifiers, and refactorers, and enabled configurable project property `-PwarningsAsErrors=true` (TDSDYRTV).
 
 ---
 

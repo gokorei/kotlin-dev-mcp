@@ -1,4 +1,5 @@
 @file:OptIn(org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi::class)
+@file:Suppress("DEPRECATION")
 package com.gokorei.kotlinmcp.execution
 
 import io.github.oshai.kotlinlogging.KotlinLogging

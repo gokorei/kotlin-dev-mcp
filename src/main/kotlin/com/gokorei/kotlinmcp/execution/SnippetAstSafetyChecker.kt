@@ -145,7 +145,7 @@ object SnippetAstSafetyChecker {
                     }
                 }
 
-                if (isQualifiedSelector && parent is KtDotQualifiedExpression) {
+                if (parent is KtDotQualifiedExpression && parent.selectorExpression == expression) {
                     val receiverExpr = parent.receiverExpression
                     val receiver = receiverExpr.text.trim()
                     val selector = calleeName
