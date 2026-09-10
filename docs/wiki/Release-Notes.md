@@ -20,6 +20,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 - **Standard TOML parser for version catalogs** — adopted `org.tomlj:tomlj` in `VersionCatalogService` to parse Gradle `libs.versions.toml` files robustly according to the TOML specification, replacing brittle line-based custom parsing (08CFNKGM).
 - **Consolidate duplicated symbol catalogs and strategy reporters** — eliminated redundant symbol documentation in `DocService` by sourcing entries directly from `StdlibSymbolCatalog`, and delegated `ProjectService` coverage, package API, and environment profile detection to dedicated `CoverageReporter`, `PackageApiExporter`, and `EnvironmentProfileDetector` strategy components (5PNQDER7).
 - **AutoCloseable resource lifecycle management** — implemented `AutoCloseable` across `KotlinMcpServer`, `K2SemanticEngine`, `LspService`, and `SemanticService` with idempotent atomic state guards and graceful disposal of embedded compilers, analyzers, and PSI caches (839ZH49J).
+- **Kotlin Analysis API architectural roadmap & prototype blueprint** — documented comprehensive catalog of deprecated K1 compiler usages, architecture blueprint, prototype standalone KaSession resolution patterns, and a phased 4-stage migration plan to the official Kotlin Analysis API (FIR) (G76PJ006).
 
 ---
 
