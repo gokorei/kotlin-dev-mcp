@@ -132,7 +132,6 @@ sourceSets {
         resources {
             srcDir(layout.buildDirectory.dir("generated/version"))
             srcDir(layout.buildDirectory.dir("generated/tooling"))
-            srcDir(layout.buildDirectory.dir("generated/kotlin-docs"))
         }
     }
 }
@@ -141,7 +140,6 @@ tasks.processResources {
     dependsOn(generateVersionResource)
     dependsOn(dumpToolingClasspaths)
     dependsOn(dumpSnippetClasspath)
-    dependsOn(processStdlibIndex)
 }
 
 repositories {
