@@ -138,4 +138,114 @@ class VfsAtomicAndConcurrencyStressTest {
         assertEquals(0, cache.size)
         cache.close()
     }
+
+    @Test
+    fun `high-concurrency concurrent pure reads do not corrupt internal data structures or throw exceptions`(@TempDir tempDir: Path) {
+        val cache = DefaultVfsPsiCache(maxCapacity = 20)
+        val files = (1..10).map { i ->
+            val f = tempDir.resolve("PureRead$i.kt").toFile()
+            f.writeText("data class PureRead$i(val value: Int = $i)")
+            cache.getOrParse(f)
+            f
+        }
+
+        val threadCount = 32
+        val pool = Executors.newFixedThreadPool(threadCount)
+        val startLatch = CountDownLatch(1)
+        val running = AtomicBoolean(true)
+        val errors = ConcurrentLinkedQueue<Throwable>()
+        val readCount = java.util.concurrent.atomic.AtomicLong(0)
+
+        repeat(threadCount) { tIndex ->
+            pool.submit {
+                startLatch.await()
+                while (running.get()) {
+                    try {
+                        val target = files[tIndex % files.size]
+                        val psi = cache.getOrParse(target)
+                        if (psi != null) {
+                            assertTrue(psi.text.contains("PureRead"), "AST must be structurally intact")
+                            readCount.incrementAndGet()
+                        }
+                    } catch (t: Throwable) {
+                        errors.add(t)
+                    }
+                }
+            }
+        }
+
+        startLatch.countDown()
+        Thread.sleep(1500)
+        running.set(false)
+        pool.shutdown()
+        assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS), "Thread pool must terminate cleanly")
+        cache.close()
+
+        assertTrue(errors.isEmpty(), "Expected zero read exceptions under high concurrency, got: ${errors.map { it.message }}")
+        assertTrue(readCount.get() > 1000, "Expected >1000 concurrent reads, got: ${readCount.get()}")
+    }
+
+    @Test
+    fun `high-concurrency readers with simultaneous directory-level invalidations do not throw ConcurrentModificationException`(@TempDir tempDir: Path) {
+        val cache = DefaultVfsPsiCache(maxCapacity = 100)
+        val subDirs = (1..5).map { d ->
+            val dir = tempDir.resolve("pkg$d").toFile().apply { mkdirs() }
+            (1..5).map { f ->
+                val file = File(dir, "File$f.kt")
+                file.writeText("package pkg$d\nclass File$f")
+                cache.getOrParse(file)
+                file
+            }
+        }
+
+        val readerCount = 16
+        val invalidatorCount = 4
+        val pool = Executors.newFixedThreadPool(readerCount + invalidatorCount)
+        val startLatch = CountDownLatch(1)
+        val running = AtomicBoolean(true)
+        val errors = ConcurrentLinkedQueue<Throwable>()
+
+        // Readers
+        repeat(readerCount) { rIndex ->
+            pool.submit {
+                startLatch.await()
+                while (running.get()) {
+                    try {
+                        val dirIdx = rIndex % subDirs.size
+                        val fileIdx = rIndex % subDirs[dirIdx].size
+                        val target = subDirs[dirIdx][fileIdx]
+                        cache.getOrParse(target)
+                    } catch (t: Throwable) {
+                        errors.add(t)
+                    }
+                }
+            }
+        }
+
+        // Directory Invalidators
+        repeat(invalidatorCount) { invIndex ->
+            pool.submit {
+                startLatch.await()
+                while (running.get()) {
+                    try {
+                        val dirIdx = invIndex % subDirs.size
+                        val dirPath = tempDir.resolve("pkg${dirIdx + 1}").toFile().absolutePath
+                        cache.invalidate(dirPath)
+                        Thread.sleep(5)
+                    } catch (t: Throwable) {
+                        errors.add(t)
+                    }
+                }
+            }
+        }
+
+        startLatch.countDown()
+        Thread.sleep(1500)
+        running.set(false)
+        pool.shutdown()
+        assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS), "Pool must terminate")
+        cache.close()
+
+        assertTrue(errors.isEmpty(), "Expected zero concurrency exceptions during directory invalidations, got: ${errors.map { it.message }}")
+    }
 }
