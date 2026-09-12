@@ -61,6 +61,43 @@ class SnippetCompilerTest {
     }
 
     @Test
+    fun `detectProjectClasspath finds AGP intermediate and kotlin-classes directories`() {
+        val tempDir = java.nio.file.Files.createTempDirectory("kmcp-agp-test")
+        val agpKotlinClasses = tempDir.resolve("build/tmp/kotlin-classes/debug")
+        val agpIntermediates = tempDir.resolve("build/intermediates/runtime_library_classes_jar/debug")
+        java.nio.file.Files.createDirectories(agpKotlinClasses)
+        java.nio.file.Files.createDirectories(agpIntermediates)
+
+        val detected = SnippetCompiler.detectProjectClasspath(tempDir.toString())
+        assertTrue(
+            detected.contains(agpKotlinClasses.toString()),
+            "expected AGP kotlin-classes directory in classpath"
+        )
+        assertTrue(
+            detected.contains(agpIntermediates.toString()),
+            "expected AGP runtime_library_classes_jar directory in classpath"
+        )
+
+        tempDir.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `compile does not report spurious stdlib infrastructure warnings on clean snippet`() {
+        val result = SnippetCompiler.compile("fun answer(): Int = 42")
+        assertTrue(result is CompileResult.Compiled)
+        val compiled = result as CompileResult.Compiled
+        val warnings = compiled.diagnostics.filter { it.severity == "warning" }
+        assertFalse(
+            warnings.any {
+                it.message.contains("kotlin-stdlib", ignoreCase = true) ||
+                    it.message.contains("in-process compiler", ignoreCase = true)
+            },
+            "expected stdlib infrastructure warnings to be filtered out, got: ${warnings.map { it.message }}"
+        )
+        SnippetCompiler.cleanup(result)
+    }
+
+    @Test
     fun `compile resolves workspace project types when projectPath is supplied`() {
         val workspace = java.nio.file.Files.createTempDirectory("kmcp-workspace-cp")
         try {

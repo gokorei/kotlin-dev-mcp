@@ -112,4 +112,111 @@ class ComposeAnalyzerTest {
         val success = result as KotlinMcpResult.Success
         assertTrue(success.content.contains("does not declare a default value `= Modifier`"), "non-plain modifier default should be warned: ${success.content}")
     }
+
+    @Test
+    fun `analyzeCompose detects duplicate keys in LazyColumn item calls`() {
+        val snippet = """
+            @Composable
+            fun WordScreen(modifier: Modifier = Modifier) {
+                LazyColumn(modifier = modifier) {
+                    item(key = "header") {
+                        Text("Header 1")
+                    }
+                    item(key = "header") {
+                        Text("Header 2")
+                    }
+                }
+            }
+        """.trimIndent()
+
+        val result = analyzer.analyzeCompose(snippet)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertTrue(
+            success.content.contains("Duplicate key `\"header\"`") || success.content.contains("Duplicate key"),
+            "expected duplicate key warning in: ${success.content}"
+        )
+    }
+
+    @Test
+    fun `analyzeCompose detects constant literal key in items lambda`() {
+        val snippet = """
+            @Composable
+            fun WordList(words: List<String>, modifier: Modifier = Modifier) {
+                LazyColumn(modifier = modifier) {
+                    items(words, key = { "constant_key" }) { word ->
+                        Text(word)
+                    }
+                }
+            }
+        """.trimIndent()
+
+        val result = analyzer.analyzeCompose(snippet)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertTrue(
+            success.content.contains("returns a constant literal") || success.content.contains("constant key"),
+            "expected constant key warning in: ${success.content}"
+        )
+    }
+
+    @Test
+    fun `analyzeCompose warns when items call omits key parameter`() {
+        val snippet = """
+            @Composable
+            fun WordList(words: List<String>, modifier: Modifier = Modifier) {
+                LazyColumn(modifier = modifier) {
+                    items(words) { word ->
+                        Text(word)
+                    }
+                }
+            }
+        """.trimIndent()
+
+        val result = analyzer.analyzeCompose(snippet)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertTrue(
+            success.content.contains("does not specify a `key` parameter") || success.content.contains("missing `key`"),
+            "expected missing key warning in: ${success.content}"
+        )
+    }
+
+    @Test
+    fun `analyzeCompose accepts valid distinct keys in LazyColumn`() {
+        val snippet = """
+            data class WordItem(val id: String, val text: String)
+
+            @Composable
+            fun WordList(words: List<WordItem>, modifier: Modifier = Modifier) {
+                LazyColumn(modifier = modifier) {
+                    item(key = "header") {
+                        Text("Header")
+                    }
+                    items(words, key = { it.id }) { word ->
+                        Text(word.text)
+                    }
+                    item(key = "footer") {
+                        Text("Footer")
+                    }
+                }
+            }
+        """.trimIndent()
+
+        val result = analyzer.analyzeCompose(snippet)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertFalse(
+            success.content.contains("Duplicate key"),
+            "valid distinct keys should not report duplicate: ${success.content}",
+        )
+        assertFalse(
+            success.content.contains("constant literal"),
+            "dynamic key lambda should not report constant: ${success.content}",
+        )
+        assertFalse(
+            success.content.contains("does not specify a `key` parameter"),
+            "explicit key should not report missing: ${success.content}",
+        )
+    }
 }

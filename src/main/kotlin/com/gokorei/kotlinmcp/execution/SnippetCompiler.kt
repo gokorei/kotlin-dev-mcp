@@ -84,15 +84,7 @@ object SnippetCompiler {
         }.forEach { file ->
             if (file.isDirectory) {
                 val name = file.invariantSeparatorsPath
-                if (name.endsWith("build/classes/kotlin/main") ||
-                    name.endsWith("build/classes/java/main") ||
-                    name.endsWith("build/classes/kotlin/commonMain") ||
-                    name.endsWith("build/classes/kotlin/jvm/main") ||
-                    name.contains("build/generated/ksp/") ||
-                    name.contains("build/generated/source/kapt/") ||
-                    name.contains("build/generated/sqldelight/") ||
-                    name.contains("build/intermediates/javac/") ||
-                    name.contains("build/intermediates/compile_app_classes_jar/")) {
+                if (isCompiledClassesDirectory(name)) {
                     found.add(file.absolutePath)
                 } else if (file.name == "libs" && file.parentFile?.name == "build") {
                     file.listFiles { _, fileName -> fileName.endsWith(".jar") }
@@ -102,6 +94,27 @@ object SnippetCompiler {
         }
 
         return found.distinct()
+    }
+
+    private fun isCompiledClassesDirectory(path: String): Boolean {
+        val exactSuffixes = listOf(
+            "build/classes/kotlin/main",
+            "build/classes/java/main",
+            "build/classes/kotlin/commonMain",
+            "build/classes/kotlin/jvm/main"
+        )
+        if (exactSuffixes.any { path.endsWith(it) }) return true
+
+        val patternInfixes = listOf(
+            "build/generated/ksp/",
+            "build/generated/source/kapt/",
+            "build/generated/sqldelight/",
+            "build/intermediates/javac/",
+            "build/intermediates/compile_app_classes_jar/",
+            "build/tmp/kotlin-classes/",
+            "build/intermediates/runtime_library_classes_jar/"
+        )
+        return patternInfixes.any { path.contains(it) }
     }
 
     private val defaultImportsClasspath: List<String> by lazy {
@@ -324,8 +337,20 @@ object SnippetCompiler {
         }
 
         override fun warn(msg: String, throwable: Throwable?) {
+            if (isIgnoredCompilerInfrastructureWarning(msg)) {
+                return
+            }
             val parsed = parseDiagnosticMessage("warning", msg)
             diagnostics.add(parsed)
+        }
+
+        private fun isIgnoredCompilerInfrastructureWarning(rawMsg: String): Boolean {
+            val lower = rawMsg.lowercase()
+            return (lower.contains("kotlin-stdlib") ||
+                lower.contains("kotlin runtime") ||
+                lower.contains("kotlin home") ||
+                lower.contains("in-process compiler")) &&
+                !rawMsg.contains(SOURCE_FILE_NAME)
         }
 
         override fun info(msg: String) {}

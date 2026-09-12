@@ -4,19 +4,23 @@ import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import com.gokorei.kotlinmcp.lsp.K2SnippetFrontend
 import com.gokorei.kotlinmcp.shared.SourceUtils
 import org.jetbrains.kotlin.com.intellij.psi.PsiElement
+import org.jetbrains.kotlin.psi.KtBlockExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
+import org.jetbrains.kotlin.psi.KtConstantExpression
+import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtFunctionType
 import org.jetbrains.kotlin.psi.KtLambdaArgument
 import org.jetbrains.kotlin.psi.KtLambdaExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtProperty
+import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.psi.KtUserType
 
 /**
  * Strategy component for Jetpack Compose AST inspection, recomposition stability advisories, and state key checks.
  */
-class ComposeAnalyzer {
+public class ComposeAnalyzer {
 
     private val stablePrimitiveTypes = setOf(
         "String", "Int", "Long", "Double", "Float", "Boolean", "Char", "Short", "Byte",
@@ -31,7 +35,7 @@ class ComposeAnalyzer {
 
     private val containerTypeNames = setOf("List", "Set", "Map", "Flow", "State", "StateFlow", "MutableStateFlow")
 
-    fun analyzeCompose(code: String): KotlinMcpResult {
+    public fun analyzeCompose(code: String): KotlinMcpResult {
         val findings = mutableListOf<String>()
         val psi = K2SnippetFrontend.parsePsi(code)
         if (psi == null) {
@@ -51,6 +55,7 @@ class ComposeAnalyzer {
 
             override fun visitCallExpression(expression: KtCallExpression) {
                 inspectComposableCall(expression, lineOf, findings)
+                inspectLazyLayout(expression, lineOf, findings)
                 super.visitCallExpression(expression)
             }
 
@@ -190,6 +195,87 @@ class ComposeAnalyzer {
             if (!inRemember) {
                 findings.add("Line $line: `derivedStateOf { }` is not wrapped in `remember { }`. It should be `val x by remember { derivedStateOf { ... } }`.")
             }
+        }
+    }
+
+    private val lazyLayoutNames = setOf(
+        "LazyColumn", "LazyRow",
+        "LazyVerticalGrid", "LazyHorizontalGrid",
+        "LazyVerticalStaggeredGrid", "LazyHorizontalStaggeredGrid"
+    )
+
+    private fun inspectLazyLayout(expression: KtCallExpression, lineOf: (Int) -> Int, findings: MutableList<String>) {
+        val callee = expression.calleeExpression?.text.orEmpty()
+        if (callee !in lazyLayoutNames) return
+
+        val lambda = expression.lambdaArguments.firstOrNull()?.getLambdaExpression()
+            ?: expression.valueArguments.firstOrNull()?.getArgumentExpression() as? KtLambdaExpression
+            ?: return
+
+        val declaredStaticKeys = mutableMapOf<String, Int>()
+
+        lambda.bodyExpression?.accept(object : KtTreeVisitorVoid() {
+            override fun visitCallExpression(call: KtCallExpression) {
+                val innerCallee = call.calleeExpression?.text.orEmpty()
+                if (innerCallee in lazyLayoutNames) {
+                    return
+                }
+
+                val callLine = lineOf(call.textRange.startOffset)
+                if (innerCallee == "item") {
+                    val keyArg = call.valueArguments
+                        .firstOrNull { it.getArgumentName()?.asName?.asString() == "key" }
+                        ?.getArgumentExpression()
+                    if (keyArg != null && isConstantLiteral(keyArg)) {
+                        val keyText = keyArg.text.trim()
+                        val prevLine = declaredStaticKeys[keyText]
+                        if (prevLine != null) {
+                            val msg = "⚠️ Duplicate key `$keyText` detected across `item` calls in " +
+                                "`$callee` at line $callLine (previously declared at line $prevLine). " +
+                                "In Jetpack Compose Lazy layouts, item keys must be unique or a runtime " +
+                                "`IllegalArgumentException` will be thrown."
+                            findings.add(msg)
+                        } else {
+                            declaredStaticKeys[keyText] = callLine
+                        }
+                    }
+                } else if (innerCallee == "items" || innerCallee == "itemsIndexed") {
+                    val keyArg = call.valueArguments
+                        .firstOrNull { it.getArgumentName()?.asName?.asString() == "key" }
+                        ?.getArgumentExpression()
+                    if (keyArg == null) {
+                        val msg = "⚠️ Call to `$innerCallee` at line $callLine in `$callee` does not " +
+                            "specify a `key` parameter. Without an explicit key, item position is used as " +
+                            "the key, which can cause state loss, recomposition churn, and UI glitches " +
+                            "when items are reordered or removed."
+                        findings.add(msg)
+                    } else {
+                        val lambdaExpr = keyArg as? KtLambdaExpression
+                        val returnExpr = lambdaExpr?.bodyExpression?.statements?.lastOrNull()
+                            ?: lambdaExpr?.bodyExpression
+                        if (returnExpr != null && isConstantLiteral(returnExpr)) {
+                            val literalText = returnExpr.text.trim()
+                            val msg = "⚠️ Key lambda for `$innerCallee` at line $callLine in `$callee` " +
+                                "returns a constant literal (`$literalText`). Every item in the collection " +
+                                "will receive the same key, causing a runtime " +
+                                "`IllegalArgumentException: Key was already used` when the list contains " +
+                                "more than one item."
+                            findings.add(msg)
+                        }
+                    }
+                }
+
+                super.visitCallExpression(call)
+            }
+        })
+    }
+
+    private fun isConstantLiteral(expr: KtExpression?): Boolean {
+        val unwrapped = (expr as? KtBlockExpression)?.statements?.lastOrNull() ?: expr
+        return when (unwrapped) {
+            is KtConstantExpression -> true
+            is KtStringTemplateExpression -> !unwrapped.hasInterpolation()
+            else -> false
         }
     }
 }

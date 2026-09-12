@@ -73,7 +73,9 @@ Always follow this 4-step state machine when modifying existing Kotlin code:
 
 ### B. Fast Diagnostic Pipeline
 - Avoid launching heavy `./gradlew build` tasks for minor syntax edits.
-- Use `kotlin_check_snippet` first. Only run `kotlin_run(target="gradle_task", task="test")` for full multi-module integration verification.
+- Use `kotlin_check_snippet` first (<50ms in-process check).
+- Only run `kotlin_run(action="gradle_task", taskName=":module:test", timeoutSeconds=180)` for multi-module integration verification.
+- For Compose code, run `kotlin_code_analyze(action="compose", code=...)` before building to catch stability issues, missing modifiers, bad `remember` keys, and duplicate `LazyColumn` keys.
 
 ### C. Kotlin & Android Development Workflow Guidelines
 When developing Kotlin or Android applications, use the following MCP tool workflow:
@@ -119,4 +121,17 @@ kotlin_refactor(action = "functional", code = """
 
 // 4. Format workspace file with KtLint
 kotlin_lint(action = "format_ktlint", code = "class MyClass { fun foo() = 42 }")
+
+// 5. Run module integration tests with Gradle
+kotlin_run(action = "gradle_task", taskName = ":wordconnect-core:test", timeoutSeconds = 180, workspacePath = "/path/to/project")
+
+// 6. Pre-flight Jetpack Compose inspection (duplicate keys, collectAsState, modifier defaults)
+kotlin_code_analyze(action = "compose", code = """
+    @Composable
+    fun WordScreen(modifier: Modifier = Modifier) {
+        LazyColumn(modifier = modifier) {
+            item(key = "header") { Text("Header") }
+        }
+    }
+""")
 ```

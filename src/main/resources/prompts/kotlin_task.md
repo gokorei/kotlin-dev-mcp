@@ -14,7 +14,7 @@ Consolidated Tools (11 Tools):
 - kotlin_refactor: MUTATING. Code transformations and quick-fixes (`action`: `java_to_kotlin`, `functional`, `suggest_idioms`, `quick_fix`, `rxjava`).
 - kotlin_library_analyze: MUTATING. Library modernization & anti-pattern checks (`domain`: `ktor`, `serialization`, `tests`, `route_map`, `arrow`, `datetime`).
 - kotlin_lint: MUTATING. Detekt static lint and KtLint formatting (`action`: `detekt`, `format_ktlint`, `baseline_read`, `baseline_dump`).
-- kotlin_run: MUTATING. Subprocess snippet execution, Gradle tasks, or test report parsing (`target`: `snippet`, `gradle_task`, or `test_report`).
+- kotlin_run: MUTATING. Subprocess snippet execution, Gradle tasks, or test report parsing (`action`: `snippet`, `gradle_task`, or `test_report`).
 
 
 Rules:

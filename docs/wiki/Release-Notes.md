@@ -6,8 +6,12 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### New Features
 
+- **Jetpack Compose Lazy layout key auditing in `ComposeAnalyzer`** — added K2 PSI AST inspection for `LazyColumn`, `LazyRow`, `LazyVerticalGrid`, and lazy layout DSL calls. Detects duplicate static keys in `item(key = "...")`, flags constant literals returned by `items(..., key = { ... })` lambdas (which cause runtime `IllegalArgumentException: Key was already used` crashes), and advises on missing explicit `key` parameters for dynamic collections.
+
 ### Bug Fixes
 
+- **Default timeout & parameter normalization for Gradle task runner in `kotlin_run`** — raised default execution timeout for `action = "gradle_task"` from 10s to 120s to prevent immediate timeouts during `--no-daemon` cold starts, and normalized `action`/`target` and `taskName`/`task` aliases.
+- **Embedded compiler stdlib infrastructure warning suppression** — filtered benign non-source kotlinc bootstrap notices (`kotlin-stdlib` classpath bundling and in-process compiler warnings) in `SnippetCompiler`, preventing spurious warnings on clean snippets and avoiding compiler trust erosion.
 - **SSRF mitigation for custom repository URLs** — validated `customRepoUrl` in `DefaultMavenMetadataClient` to strictly enforce HTTPS schemes and block loopback (`localhost`, `127.0.0.1`, `::1`), link-local/site-local private subnets, and cloud metadata addresses (`169.254.169.254`) before issuing HTTP requests (8VSB2S25).
 - **Secure XML parsing in LintService** — configured `DocumentBuilderFactory` in `parseDetektXml` with `XMLConstants.FEATURE_SECURE_PROCESSING`, `disallow-doctype-decl`, and disabled external general/parameter entities to prevent XXE injection when ingesting Detekt reports (YSY5E9EW).
 - **Bounded subprocess stream consumption & process tree cleanup** — replaced unbounded `readBytes()` in `RunSnippetService` and `GradleRunService` with tail-preserving circular `BoundedStreamDrainer` (1 MB upper bound) to protect host JVM memory from runaway child processes, and added recursive process descendant termination on execution timeout (926759R9).
@@ -15,6 +19,10 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Improvements
 
+- **Modern AGP 8/9 Android classpath resolution** — expanded `detectProjectClasspath` in `SnippetCompiler` to discover compiled Android variant outputs in `build/tmp/kotlin-classes/` and `build/intermediates/runtime_library_classes_jar/`.
+- **Proactive LLM skill steering & two-tier verification model** — updated `SKILL.md` and `kotlin-mcp-guidance/SKILL.md` with explicit "Trigger-on-Sight" rules for Compose and Coroutines analysis, corrected `kotlin_run` action invocation syntax, and clarified the two-tier verification workflow (MCP for instantaneous pre-flight AST sanity, Gradle for end-to-end integration tests).
+
+- **Code of Conduct reporting channel & enforcement streamlining** — replaced the inactive contact email in `CODE_OF_CONDUCT.md` with GitHub-based repository reporting, combined formal warnings directly into the initial correction tier, and streamlined community impact guidelines to escalate sustained violations directly to temporary or permanent bans.
 - **Snippet runner security alignment & hardening configuration** — aligned `SECURITY.md` with the dual-runner model (`host_jvm` subprocess vs `in_process` classloader) and added `KMCP_DISABLE_IN_PROCESS_RUNNER` (`-Dkmcp.disable_in_process_runner`) to enforce strict isolated subprocess execution across all snippet invocations in security-restricted environments (D9BY9NVQ).
 - **K2 PSI AST parsing for `.gradle.kts` scripts** — introduced `GradleKtsPsiInspector` using the embedded compiler's K2 PSI AST visitors (`KtCallExpression`, `KtBinaryExpression`, `KtSimpleNameExpression`, and `KtStringTemplateExpression`) to replace fragile regex matching in `ProjectService`, `GradleProjectInspector`, and `VulnerabilityAuditor`, strictly adhering to AGENTS.md Rule #1 while preserving Groovy DSL compatibility fallbacks (DD90ZGEB).
 - **Standard TOML parser for version catalogs** — adopted `org.tomlj:tomlj` in `VersionCatalogService` to parse Gradle `libs.versions.toml` files robustly according to the TOML specification, replacing brittle line-based custom parsing (08CFNKGM).
