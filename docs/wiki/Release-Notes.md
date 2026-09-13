@@ -19,7 +19,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 
 ### Improvements
 
-- **Modern AGP 8/9 Android classpath resolution** — expanded `detectProjectClasspath` in `SnippetCompiler` to discover compiled Android variant outputs in `build/tmp/kotlin-classes/` and `build/intermediates/runtime_library_classes_jar/`.
+- **Modern AGP 8/9 Android classpath resolution** — expanded `detectProjectClasspath` in `SnippetCompiler` to discover compiled Android variant outputs in `build/tmp/kotlin-classes/` and packaged JARs in `build/intermediates/runtime_library_classes_jar/` and `build/intermediates/compile_app_classes_jar/`.
 - **Proactive LLM skill steering & two-tier verification model** — updated `SKILL.md` and `kotlin-mcp-guidance/SKILL.md` with explicit "Trigger-on-Sight" rules for Compose and Coroutines analysis, corrected `kotlin_run` action invocation syntax, and clarified the two-tier verification workflow (MCP for instantaneous pre-flight AST sanity, Gradle for end-to-end integration tests).
 
 - **Code of Conduct reporting channel & enforcement streamlining** — replaced the inactive contact email in `CODE_OF_CONDUCT.md` with GitHub-based repository reporting, combined formal warnings directly into the initial correction tier, and streamlined community impact guidelines to escalate sustained violations directly to temporary or permanent bans.

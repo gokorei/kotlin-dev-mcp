@@ -61,12 +61,14 @@ class SnippetCompilerTest {
     }
 
     @Test
-    fun `detectProjectClasspath finds AGP intermediate and kotlin-classes directories`() {
+    fun `detectProjectClasspath finds AGP intermediate JAR and kotlin-classes directories`() {
         val tempDir = java.nio.file.Files.createTempDirectory("kmcp-agp-test")
         val agpKotlinClasses = tempDir.resolve("build/tmp/kotlin-classes/debug")
-        val agpIntermediates = tempDir.resolve("build/intermediates/runtime_library_classes_jar/debug")
+        val agpJarDir = tempDir.resolve("build/intermediates/runtime_library_classes_jar/debug")
+        val agpClassesJar = agpJarDir.resolve("classes.jar")
         java.nio.file.Files.createDirectories(agpKotlinClasses)
-        java.nio.file.Files.createDirectories(agpIntermediates)
+        java.nio.file.Files.createDirectories(agpJarDir)
+        java.nio.file.Files.writeString(agpClassesJar, "")
 
         val detected = SnippetCompiler.detectProjectClasspath(tempDir.toString())
         assertTrue(
@@ -74,8 +76,12 @@ class SnippetCompilerTest {
             "expected AGP kotlin-classes directory in classpath"
         )
         assertTrue(
-            detected.contains(agpIntermediates.toString()),
-            "expected AGP runtime_library_classes_jar directory in classpath"
+            detected.contains(agpClassesJar.toString()),
+            "expected AGP runtime_library_classes_jar classes.jar in classpath"
+        )
+        assertFalse(
+            detected.contains(agpJarDir.toString()),
+            "did not expect AGP jar parent directory itself in classpath"
         )
 
         tempDir.toFile().deleteRecursively()
@@ -137,6 +143,62 @@ class SnippetCompilerTest {
             SnippetCompiler.cleanup(with)
         } finally {
             workspace.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `compile resolves classes packaged in AGP runtime library classes jar when projectPath is supplied`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-agp-jar-test")
+        try {
+            val lib = SnippetCompiler.compile(
+                """
+                package androidlib
+                class AndroidHelper { fun calculate(): Int = 99 }
+                """.trimIndent(),
+            )
+            assertTrue(lib is CompileResult.Compiled)
+            val libOut = (lib as CompileResult.Compiled).outDir
+
+            val jarDir = workspace.resolve("build/intermediates/runtime_library_classes_jar/debug")
+            java.nio.file.Files.createDirectories(jarDir)
+            val jarFile = jarDir.resolve("classes.jar").toFile()
+            packageClassesIntoJar(libOut, jarFile)
+
+            val consumer = """
+                import androidlib.AndroidHelper
+                fun main() { println(AndroidHelper().calculate()) }
+            """.trimIndent()
+
+            val without = SnippetCompiler.compile(consumer)
+            val withoutErrors = (without as? CompileResult.Compiled)
+                ?.diagnostics?.filter { it.severity == "error" }.orEmpty()
+            assertTrue(withoutErrors.isNotEmpty(), "expected unresolved reference without projectPath")
+
+            val with = SnippetCompiler.compile(consumer, projectPath = workspace.toString())
+            val withErrors = (with as? CompileResult.Compiled)
+                ?.diagnostics?.filter { it.severity == "error" }.orEmpty()
+            assertTrue(
+                withErrors.isEmpty(),
+                "expected no errors with AGP runtime_library_classes_jar, got: $withErrors",
+            )
+
+            SnippetCompiler.cleanup(lib)
+            SnippetCompiler.cleanup(without)
+            SnippetCompiler.cleanup(with)
+        } finally {
+            workspace.toFile().deleteRecursively()
+        }
+    }
+
+    private fun packageClassesIntoJar(classesDir: java.nio.file.Path, targetJar: java.io.File) {
+        java.util.jar.JarOutputStream(java.io.FileOutputStream(targetJar)).use { jos ->
+            classesDir.toFile().walkTopDown().filter { it.isFile }.forEach { file ->
+                val relativePath = classesDir.relativize(file.toPath()).toString()
+                val entryName = relativePath.replace(java.io.File.separatorChar, '/')
+                jos.putNextEntry(java.util.jar.JarEntry(entryName))
+                file.inputStream().use { it.copyTo(jos) }
+                jos.closeEntry()
+            }
         }
     }
 
@@ -398,4 +460,3 @@ class SnippetCompilerTest {
         SnippetCompiler.cleanup(result)
     }
 }
-

@@ -82,39 +82,46 @@ object SnippetCompiler {
             val name = dir.name
             name != ".gradle" && name != ".git" && name != "out" && name != "node_modules" && name != ".idea"
         }.forEach { file ->
-            if (file.isDirectory) {
-                val name = file.invariantSeparatorsPath
-                if (isCompiledClassesDirectory(name)) {
-                    found.add(file.absolutePath)
-                } else if (file.name == "libs" && file.parentFile?.name == "build") {
-                    file.listFiles { _, fileName -> fileName.endsWith(".jar") }
-                        ?.forEach { found.add(it.absolutePath) }
-                }
+            val name = file.invariantSeparatorsPath
+            if (isCompiledClassesClasspathEntry(file, name)) {
+                found.add(file.absolutePath)
             }
         }
 
         return found.distinct()
     }
 
-    private fun isCompiledClassesDirectory(path: String): Boolean {
-        val exactSuffixes = listOf(
-            "build/classes/kotlin/main",
-            "build/classes/java/main",
-            "build/classes/kotlin/commonMain",
-            "build/classes/kotlin/jvm/main"
-        )
-        if (exactSuffixes.any { path.endsWith(it) }) return true
-
-        val patternInfixes = listOf(
-            "build/generated/ksp/",
-            "build/generated/source/kapt/",
-            "build/generated/sqldelight/",
-            "build/intermediates/javac/",
-            "build/intermediates/compile_app_classes_jar/",
-            "build/tmp/kotlin-classes/",
-            "build/intermediates/runtime_library_classes_jar/"
-        )
-        return patternInfixes.any { path.contains(it) }
+    private fun isCompiledClassesClasspathEntry(
+        file: File,
+        path: String,
+    ): Boolean {
+        if (file.isDirectory) {
+            val exactSuffixes =
+                listOf(
+                    "build/classes/kotlin/main",
+                    "build/classes/java/main",
+                    "build/classes/kotlin/commonMain",
+                    "build/classes/kotlin/jvm/main",
+                )
+            val patternInfixes =
+                listOf(
+                    "build/generated/ksp/",
+                    "build/generated/source/kapt/",
+                    "build/generated/sqldelight/",
+                    "build/intermediates/javac/",
+                    "build/tmp/kotlin-classes/",
+                )
+            return exactSuffixes.any { path.endsWith(it) } || patternInfixes.any { path.contains(it) }
+        }
+        val isLibsJar = file.parentFile?.name == "libs" && file.parentFile?.parentFile?.name == "build"
+        val jarPatternInfixes =
+            listOf(
+                "build/intermediates/runtime_library_classes_jar/",
+                "build/intermediates/compile_app_classes_jar/",
+            )
+        return file.isFile &&
+            file.name.endsWith(".jar") &&
+            (isLibsJar || jarPatternInfixes.any { path.contains(it) })
     }
 
     private val defaultImportsClasspath: List<String> by lazy {
