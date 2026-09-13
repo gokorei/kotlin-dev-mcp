@@ -27,6 +27,9 @@ import kotlinx.coroutines.CancellationException
  */
 object ToolRegistrar {
 
+    private const val DEFAULT_GRADLE_TASK_TIMEOUT_SEC = 120L
+    private const val DEFAULT_SNIPPET_TIMEOUT_SEC = 10L
+
     private val logger = KotlinLogging.logger {}
 
     fun registerReadOnlyTools(server: Server, kotlinServer: KotlinMcpServer) {
@@ -96,7 +99,7 @@ object ToolRegistrar {
                         "inspect" to { k.codeInspectSymbol(code) },
                         "nullability" to { k.codeAnalyzeNullability(code) },
                         "coroutines" to { k.codeExplainCoroutines(code) },
-                        "compose" to { k.codeAnalyzeCompose(code) },
+                        "compose" to { k.codeAnalyzeCompose(code, a["workspacePath"]) },
                         "file_context" to { k.codeFileContext(code, a["workspacePath"]) },
                         "workmanager" to { k.codeAnalyzeWorkManager(code) }
                     )
@@ -384,21 +387,31 @@ object ToolRegistrar {
             actions("snippet", "gradle_task", "test_report")
             param("action", "Execution action: 'snippet' (default), 'gradle_task', 'test_report'")
             param("code", "Kotlin source code snippet containing a main() entry point or top-level expressions")
-            param("taskName", "Gradle task name to execute for action='gradle_task' (e.g. 'test', 'check')")
+            param(
+                "taskName",
+                "Gradle task name to execute for action='gradle_task' (e.g. 'test', ':module:test', 'check')"
+            )
+            param("task", "Alias for taskName")
             param("workspacePath", "Optional root directory path of project/workspace")
             param("jvmArgs", "Optional string array of JVM arguments (allow-listed: -D, -Xms, -Xmx, --add-opens)")
             param("classpath", "Optional array of jar/dir paths added to execution classpath", type = "array", itemsType = "string")
-            param("timeoutSeconds", "Execution timeout in seconds (default: 10)")
+            param("timeoutSeconds", "Execution timeout in seconds (default: 10 for snippet, 120 for gradle_task)")
             handleSimple { k, a ->
                 val code = a["code"].orEmpty()
                 val task = a["taskName"] ?: a["task"] ?: "test"
                 val ws = a["workspacePath"] ?: a["projectPath"] ?: "."
-                val timeoutSec = a["timeoutSeconds"]?.toLongOrNull() ?: 10L
+                val action = a["action"] ?: a["target"] ?: "snippet"
+                val defaultTimeout = if (action == "gradle_task") {
+                    DEFAULT_GRADLE_TASK_TIMEOUT_SEC
+                } else {
+                    DEFAULT_SNIPPET_TIMEOUT_SEC
+                }
+                val timeoutSec = a["timeoutSeconds"]?.toLongOrNull() ?: defaultTimeout
                 val cp = a["classpath"]?.split(",", ";")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
                 val jvmArgs = a["jvmArgs"]?.split(" ")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
 
                 dispatchAction(
-                    action = a["action"],
+                    action = action,
                     defaultAction = "snippet",
                     args = a,
                     handlers = mapOf(
@@ -584,6 +597,15 @@ object ToolRegistrar {
         if (projectAlias != null) {
             result["projectPath"] = projectAlias
             result["path"] = projectAlias
+        }
+        val actionAlias = args["action"] ?: args["target"]
+        if (actionAlias != null) {
+            result["action"] = actionAlias
+        }
+        val taskAlias = args["taskName"] ?: args["task"]
+        if (taskAlias != null) {
+            result["taskName"] = taskAlias
+            result["task"] = taskAlias
         }
         return result
     }

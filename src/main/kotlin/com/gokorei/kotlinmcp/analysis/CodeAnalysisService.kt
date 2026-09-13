@@ -52,7 +52,12 @@ class DefaultCodeAnalysisService(
             CodeAnalysisAction.INSPECT_SYMBOL -> symbolInspector.inspectSymbol(code)
             CodeAnalysisAction.ANALYZE_NULLABILITY -> nullabilityAnalyzer.analyzeNullability(code)
             CodeAnalysisAction.EXPLAIN_COROUTINES -> coroutinesSafetyAnalyzer.explainCoroutines(code)
-            CodeAnalysisAction.ANALYZE_COMPOSE -> composeAnalyzer.analyzeCompose(code)
+            CodeAnalysisAction.ANALYZE_COMPOSE ->
+                if (code.isBlank() && !workspacePath.isNullOrBlank()) {
+                    composeAnalyzer.analyzeWorkspace(workspacePath)
+                } else {
+                    composeAnalyzer.analyzeCompose(code)
+                }
             CodeAnalysisAction.FILE_CONTEXT -> fileContextAnalyzer.fileContext(code, workspacePath)
             CodeAnalysisAction.WORKMANAGER -> workManagerAnalyzer.analyze(code)
         }

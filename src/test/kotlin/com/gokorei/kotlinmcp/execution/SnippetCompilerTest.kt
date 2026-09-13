@@ -61,6 +61,71 @@ class SnippetCompilerTest {
     }
 
     @Test
+    fun `detectProjectClasspath finds AGP intermediate JAR and kotlin-classes directories`() {
+        val tempDir = java.nio.file.Files.createTempDirectory("kmcp-agp-test")
+        val agpKotlinClasses = tempDir.resolve("build/tmp/kotlin-classes/debug")
+        val agpJarDir = tempDir.resolve("build/intermediates/runtime_library_classes_jar/debug")
+        val agpClassesJar = agpJarDir.resolve("classes.jar")
+        java.nio.file.Files.createDirectories(agpKotlinClasses)
+        java.nio.file.Files.createDirectories(agpJarDir)
+        java.nio.file.Files.writeString(agpClassesJar, "")
+
+        val detected = SnippetCompiler.detectProjectClasspath(tempDir.toString())
+        assertTrue(
+            detected.contains(agpKotlinClasses.toString()),
+            "expected AGP kotlin-classes directory in classpath"
+        )
+        assertTrue(
+            detected.contains(agpClassesJar.toString()),
+            "expected AGP runtime_library_classes_jar classes.jar in classpath"
+        )
+        assertFalse(
+            detected.contains(agpJarDir.toString()),
+            "did not expect AGP jar parent directory itself in classpath"
+        )
+
+        tempDir.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `detectProjectClasspath finds AGP 9 built-in kotlinc classes directory`() {
+        val tempDir = java.nio.file.Files.createTempDirectory("kmcp-agp9-test")
+        val builtInClasses = tempDir.resolve(
+            "build/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes",
+        )
+        val parentDir = tempDir.resolve("build/intermediates/built_in_kotlinc/debug/compileDebugKotlin")
+        java.nio.file.Files.createDirectories(builtInClasses)
+
+        val detected = SnippetCompiler.detectProjectClasspath(tempDir.toString())
+        assertTrue(
+            detected.contains(builtInClasses.toString()),
+            "expected AGP 9 built_in_kotlinc classes directory in classpath",
+        )
+        assertFalse(
+            detected.contains(parentDir.toString()),
+            "parent directory should not be in classpath",
+        )
+
+        tempDir.toFile().deleteRecursively()
+    }
+
+    @Test
+    fun `compile does not report spurious stdlib infrastructure warnings on clean snippet`() {
+        val result = SnippetCompiler.compile("fun answer(): Int = 42")
+        assertTrue(result is CompileResult.Compiled)
+        val compiled = result as CompileResult.Compiled
+        val warnings = compiled.diagnostics.filter { it.severity == "warning" }
+        assertFalse(
+            warnings.any {
+                it.message.contains("kotlin-stdlib", ignoreCase = true) ||
+                    it.message.contains("in-process compiler", ignoreCase = true)
+            },
+            "expected stdlib infrastructure warnings to be filtered out, got: ${warnings.map { it.message }}"
+        )
+        SnippetCompiler.cleanup(result)
+    }
+
+    @Test
     fun `compile resolves workspace project types when projectPath is supplied`() {
         val workspace = java.nio.file.Files.createTempDirectory("kmcp-workspace-cp")
         try {
@@ -100,6 +165,66 @@ class SnippetCompilerTest {
             SnippetCompiler.cleanup(with)
         } finally {
             workspace.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `compile resolves classes packaged in AGP runtime library classes jar when projectPath is supplied`() {
+        val workspace = java.nio.file.Files.createTempDirectory("kmcp-agp-jar-test")
+        try {
+            val lib = SnippetCompiler.compile(
+                """
+                package androidlib
+                class AndroidHelper { fun calculate(): Int = 99 }
+                """.trimIndent(),
+            )
+            assertTrue(lib is CompileResult.Compiled)
+            val libOut = (lib as CompileResult.Compiled).outDir
+
+            val jarDir = workspace.resolve("build/intermediates/runtime_library_classes_jar/debug")
+            java.nio.file.Files.createDirectories(jarDir)
+            val jarFile = jarDir.resolve("classes.jar").toFile()
+            packageClassesIntoJar(libOut, jarFile)
+
+            val consumer = """
+                import androidlib.AndroidHelper
+                fun main() { println(AndroidHelper().calculate()) }
+            """.trimIndent()
+
+            val without = SnippetCompiler.compile(consumer)
+            val withoutErrors = (without as? CompileResult.Compiled)
+                ?.diagnostics?.filter { it.severity == "error" }.orEmpty()
+            assertTrue(withoutErrors.isNotEmpty(), "expected unresolved reference without projectPath")
+
+            val with = SnippetCompiler.compile(consumer, projectPath = workspace.toString())
+            assertTrue(
+                with is CompileResult.Compiled,
+                "expected consumer to compile with AGP runtime_library_classes_jar, got: $with",
+            )
+            val withErrors = (with as CompileResult.Compiled)
+                .diagnostics.filter { it.severity == "error" }
+            assertTrue(
+                withErrors.isEmpty(),
+                "expected no errors with AGP runtime_library_classes_jar, got: $withErrors",
+            )
+
+            SnippetCompiler.cleanup(lib)
+            SnippetCompiler.cleanup(without)
+            SnippetCompiler.cleanup(with)
+        } finally {
+            workspace.toFile().deleteRecursively()
+        }
+    }
+
+    private fun packageClassesIntoJar(classesDir: java.nio.file.Path, targetJar: java.io.File) {
+        java.util.jar.JarOutputStream(java.io.FileOutputStream(targetJar)).use { jos ->
+            classesDir.toFile().walkTopDown().filter { it.isFile }.forEach { file ->
+                val relativePath = classesDir.relativize(file.toPath()).toString()
+                val entryName = relativePath.replace(java.io.File.separatorChar, '/')
+                jos.putNextEntry(java.util.jar.JarEntry(entryName))
+                file.inputStream().use { it.copyTo(jos) }
+                jos.closeEntry()
+            }
         }
     }
 
@@ -361,4 +486,3 @@ class SnippetCompilerTest {
         SnippetCompiler.cleanup(result)
     }
 }
-

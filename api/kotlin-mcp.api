@@ -37,6 +37,7 @@ public final class com/gokorei/kotlinmcp/analysis/CodeAnalysisService$DefaultImp
 public final class com/gokorei/kotlinmcp/analysis/ComposeAnalyzer {
 	public fun <init> ()V
 	public final fun analyzeCompose (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun analyzeWorkspace (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 }
 
 public final class com/gokorei/kotlinmcp/analysis/CoroutinesSafetyAnalyzer {
@@ -2152,6 +2153,8 @@ public final class com/gokorei/kotlinmcp/server/KotlinMcpServer : java/lang/Auto
 	public static synthetic fun checkWhenExhaustiveness$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public fun close ()V
 	public final fun codeAnalyzeCompose (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public final fun codeAnalyzeCompose (Ljava/lang/String;Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
+	public static synthetic fun codeAnalyzeCompose$default (Lcom/gokorei/kotlinmcp/server/KotlinMcpServer;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun codeAnalyzeNullability (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun codeAnalyzeWorkManager (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;
 	public final fun codeExplainCoroutines (Ljava/lang/String;)Lcom/gokorei/kotlinmcp/models/KotlinMcpResult;

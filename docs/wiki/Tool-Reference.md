@@ -164,11 +164,12 @@ Mutating tools generate code diffs, format files, rename symbols across workspac
 | :--- | :--- | :--- | :--- |
 | `action` | `string` | No | Execution action: 'snippet' (default), 'gradle_task', 'test_report' |
 | `code` | `string` | No | Kotlin source code snippet containing a main() entry point or top-level expressions |
-| `taskName` | `string` | No | Gradle task name to execute for action='gradle_task' (e.g. 'test', 'check') |
+| `taskName` | `string` | No | Gradle task name to execute for action='gradle_task' (e.g. 'test', ':module:test', 'check') |
+| `task` | `string` | No | Alias for taskName |
 | `workspacePath` | `string` | No | Optional root directory path of project/workspace |
 | `jvmArgs` | `string` | No | Optional string array of JVM arguments (allow-listed: -D, -Xms, -Xmx, --add-opens) |
 | `classpath` | `Array<string>` | No | Optional array of jar/dir paths added to execution classpath |
-| `timeoutSeconds` | `string` | No | Execution timeout in seconds (default: 10) |
+| `timeoutSeconds` | `string` | No | Execution timeout in seconds (default: 10 for snippet, 120 for gradle_task) |
 
 ---
 

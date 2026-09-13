@@ -102,6 +102,15 @@ class ToolRegistrarTest {
     }
 
     @Test
+    fun `normalizeArgs maps target to action and task to taskName`() {
+        val raw = mapOf("target" to "gradle_task", "task" to ":module:test")
+        val normalized = ToolRegistrar.normalizeArgs(raw)
+        assertEquals("gradle_task", normalized["action"])
+        assertEquals(":module:test", normalized["taskName"])
+        assertEquals(":module:test", normalized["task"])
+    }
+
+    @Test
     fun `dispatchAction uses default action when action parameter is missing`() {
         val handlers = mapOf<String, (Map<String, String>) -> com.gokorei.kotlinmcp.models.KotlinMcpResult>(
             "structure" to { com.gokorei.kotlinmcp.models.KotlinMcpResult.Success("default_structure_ok") }

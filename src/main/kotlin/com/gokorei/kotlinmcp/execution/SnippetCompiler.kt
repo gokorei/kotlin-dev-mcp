@@ -82,26 +82,50 @@ object SnippetCompiler {
             val name = dir.name
             name != ".gradle" && name != ".git" && name != "out" && name != "node_modules" && name != ".idea"
         }.forEach { file ->
-            if (file.isDirectory) {
-                val name = file.invariantSeparatorsPath
-                if (name.endsWith("build/classes/kotlin/main") ||
-                    name.endsWith("build/classes/java/main") ||
-                    name.endsWith("build/classes/kotlin/commonMain") ||
-                    name.endsWith("build/classes/kotlin/jvm/main") ||
-                    name.contains("build/generated/ksp/") ||
-                    name.contains("build/generated/source/kapt/") ||
-                    name.contains("build/generated/sqldelight/") ||
-                    name.contains("build/intermediates/javac/") ||
-                    name.contains("build/intermediates/compile_app_classes_jar/")) {
-                    found.add(file.absolutePath)
-                } else if (file.name == "libs" && file.parentFile?.name == "build") {
-                    file.listFiles { _, fileName -> fileName.endsWith(".jar") }
-                        ?.forEach { found.add(it.absolutePath) }
-                }
+            val name = file.invariantSeparatorsPath
+            if (isCompiledClassesClasspathEntry(file, name)) {
+                found.add(file.absolutePath)
             }
         }
 
         return found.distinct()
+    }
+
+    private fun isCompiledClassesClasspathEntry(
+        file: File,
+        path: String,
+    ): Boolean {
+        if (file.isDirectory) {
+            val exactSuffixes =
+                listOf(
+                    "build/classes/kotlin/main",
+                    "build/classes/java/main",
+                    "build/classes/kotlin/commonMain",
+                    "build/classes/kotlin/jvm/main",
+                )
+            val patternInfixes =
+                listOf(
+                    "build/generated/ksp/",
+                    "build/generated/source/kapt/",
+                    "build/generated/sqldelight/",
+                    "build/intermediates/javac/",
+                    "build/tmp/kotlin-classes/",
+                )
+            val isAgpBuiltInKotlinc =
+                file.name == "classes" && path.contains("build/intermediates/built_in_kotlinc/")
+            return exactSuffixes.any { path.endsWith(it) } ||
+                patternInfixes.any { path.contains(it) } ||
+                isAgpBuiltInKotlinc
+        }
+        val isLibsJar = file.parentFile?.name == "libs" && file.parentFile?.parentFile?.name == "build"
+        val jarPatternInfixes =
+            listOf(
+                "build/intermediates/runtime_library_classes_jar/",
+                "build/intermediates/compile_app_classes_jar/",
+            )
+        return file.isFile &&
+            file.name.endsWith(".jar") &&
+            (isLibsJar || jarPatternInfixes.any { path.contains(it) })
     }
 
     private val defaultImportsClasspath: List<String> by lazy {
@@ -324,8 +348,20 @@ object SnippetCompiler {
         }
 
         override fun warn(msg: String, throwable: Throwable?) {
+            if (isIgnoredCompilerInfrastructureWarning(msg)) {
+                return
+            }
             val parsed = parseDiagnosticMessage("warning", msg)
             diagnostics.add(parsed)
+        }
+
+        private fun isIgnoredCompilerInfrastructureWarning(rawMsg: String): Boolean {
+            val lower = rawMsg.lowercase()
+            return (lower.contains("kotlin-stdlib") ||
+                lower.contains("kotlin runtime") ||
+                lower.contains("kotlin home") ||
+                lower.contains("in-process compiler")) &&
+                !rawMsg.contains(SOURCE_FILE_NAME)
         }
 
         override fun info(msg: String) {}
