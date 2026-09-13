@@ -197,8 +197,12 @@ class SnippetCompilerTest {
             assertTrue(withoutErrors.isNotEmpty(), "expected unresolved reference without projectPath")
 
             val with = SnippetCompiler.compile(consumer, projectPath = workspace.toString())
-            val withErrors = (with as? CompileResult.Compiled)
-                ?.diagnostics?.filter { it.severity == "error" }.orEmpty()
+            assertTrue(
+                with is CompileResult.Compiled,
+                "expected consumer to compile with AGP runtime_library_classes_jar, got: $with",
+            )
+            val withErrors = (with as CompileResult.Compiled)
+                .diagnostics.filter { it.severity == "error" }
             assertTrue(
                 withErrors.isEmpty(),
                 "expected no errors with AGP runtime_library_classes_jar, got: $withErrors",

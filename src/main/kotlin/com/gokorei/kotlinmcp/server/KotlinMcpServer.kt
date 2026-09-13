@@ -128,6 +128,7 @@ class KotlinMcpServer(
     fun codeExplainCoroutines(code: String): KotlinMcpResult =
         codeAnalysisService.execute(CodeAnalysisAction.EXPLAIN_COROUTINES, code)
 
+    @JvmOverloads
     fun codeAnalyzeCompose(code: String, workspacePath: String? = null): KotlinMcpResult =
         codeAnalysisService.execute(CodeAnalysisAction.ANALYZE_COMPOSE, code, workspacePath)
 
