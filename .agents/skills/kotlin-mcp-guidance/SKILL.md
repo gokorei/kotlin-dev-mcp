@@ -20,9 +20,9 @@ When developing Kotlin or Android applications, use the following MCP tool workf
 ## 3. Proactive "Trigger-on-Sight" Rules
 - **MANDATORY Compose Trigger**:
   Whenever modifying, generating, or reviewing `@Composable` UI code, `LazyColumn`, `LazyRow`, or `remember`:
-  **ALWAYS run `kotlin_code_analyze(action = "compose", code = ...)` before writing or building.**
+  **ALWAYS run `kotlin_code_analyze(action = "compose", code = ...)` (or `workspacePath = "."`) before writing or building.**
   This statically catches:
-  - Duplicate keys in `item(key = "...")` and constant keys in `items(..., key = { "id" })` (preventing runtime `IllegalArgumentException: Key was already used` crashes).
+  - Keys referencing mutated variables (`globalIndex++`), duplicate keys in `item(key = "...")`, and constant keys in `items(..., key = { "id" })` (preventing runtime `IllegalArgumentException: Key was already used` crashes).
   - Missing `key` parameters on dynamic `items(...)` collections.
   - Missing `modifier: Modifier = Modifier` default parameters.
   - Missing lifecycle handling (`collectAsState` -> `collectAsStateWithLifecycle`).

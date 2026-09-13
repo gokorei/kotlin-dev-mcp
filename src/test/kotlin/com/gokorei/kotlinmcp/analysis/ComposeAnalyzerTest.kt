@@ -219,4 +219,116 @@ class ComposeAnalyzerTest {
             "explicit key should not report missing: ${success.content}",
         )
     }
+
+    @Test
+    fun `analyzeCompose detects mutated identifier used in Lazy layout item key`() {
+        val snippet = """
+            @Composable
+            fun PackScreen(packs: List<Pack>, modifier: Modifier = Modifier) {
+                LazyColumn(modifier = modifier) {
+                    packs.forEach { pack ->
+                        item(key = "pack_${'$'}{pack.id}") { Text(pack.name) }
+                        var globalIndex = 0
+                        pack.levelIds.chunked(5).forEach { row ->
+                            item(key = "pack_${'$'}{pack.id}_row_${'$'}globalIndex") {
+                                globalIndex++
+                                Text("row")
+                            }
+                        }
+                    }
+                }
+            }
+        """.trimIndent()
+
+        val result = analyzer.analyzeCompose(snippet)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertTrue(
+            success.content.contains("globalIndex") &&
+                (success.content.contains("mutated inside the layout") || success.content.contains("mutated")),
+            "expected finding for key depending on mutated identifier in: ${success.content}",
+        )
+        assertTrue(
+            success.content.contains("IllegalArgumentException"),
+            "expected warning to mention runtime IllegalArgumentException: ${success.content}",
+        )
+    }
+
+    @Test
+    fun `analyzeCompose emits missing-key advisory at most once per lazy container`() {
+        val snippet = """
+            @Composable
+            fun MultiList(listA: List<String>, listB: List<String>, modifier: Modifier = Modifier) {
+                LazyColumn(modifier = modifier) {
+                    items(listA) { Text(it) }
+                    items(listB) { Text(it) }
+                }
+            }
+        """.trimIndent()
+
+        val result = analyzer.analyzeCompose(snippet)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        val occurrences = success.content.split("does not specify a `key` parameter").size - 1
+        assertEquals(
+            1,
+            occurrences,
+            "missing-key advisory should only fire once per lazy container: ${success.content}",
+        )
+    }
+
+    @Test
+    fun `analyzeCompose does not report missing key on item singleton calls`() {
+        val snippet = """
+            @Composable
+            fun SingleItemScreen(modifier: Modifier = Modifier) {
+                LazyColumn(modifier = modifier) {
+                    item {
+                        Text("Header")
+                    }
+                }
+            }
+        """.trimIndent()
+
+        val result = analyzer.analyzeCompose(snippet)
+        assertTrue(result.isSuccess)
+        val success = result as KotlinMcpResult.Success
+        assertFalse(
+            success.content.contains("does not specify a `key` parameter"),
+            "item singleton without key should not be reported: ${success.content}",
+        )
+    }
+
+    @Test
+    fun `analyzeWorkspace scans kt files and reports Compose findings`() {
+        val tempDir = java.nio.file.Files.createTempDirectory("kmcp-compose-ws-test")
+        try {
+            val srcDir = tempDir.resolve("src/main/kotlin/ui")
+            java.nio.file.Files.createDirectories(srcDir)
+            val composeFile = srcDir.resolve("MyList.kt")
+            java.nio.file.Files.writeString(
+                composeFile,
+                """
+                @Composable
+                fun MyList(modifier: Modifier = Modifier) {
+                    LazyColumn(modifier = modifier) {
+                        item(key = "fixed") { Text("1") }
+                        item(key = "fixed") { Text("2") }
+                    }
+                }
+                """.trimIndent(),
+            )
+
+            val result = analyzer.analyzeWorkspace(tempDir.toString())
+            assertTrue(result.isSuccess)
+            val success = result as KotlinMcpResult.Success
+            assertTrue(
+                success.content.contains("Duplicate key `\"fixed\"`") &&
+                    success.content.contains("MyList.kt"),
+                "expected findings with file path in: ${success.content}",
+            )
+        } finally {
+            tempDir.toFile().deleteRecursively()
+        }
+    }
 }

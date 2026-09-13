@@ -99,7 +99,7 @@ object ToolRegistrar {
                         "inspect" to { k.codeInspectSymbol(code) },
                         "nullability" to { k.codeAnalyzeNullability(code) },
                         "coroutines" to { k.codeExplainCoroutines(code) },
-                        "compose" to { k.codeAnalyzeCompose(code) },
+                        "compose" to { k.codeAnalyzeCompose(code, a["workspacePath"]) },
                         "file_context" to { k.codeFileContext(code, a["workspacePath"]) },
                         "workmanager" to { k.codeAnalyzeWorkManager(code) }
                     )

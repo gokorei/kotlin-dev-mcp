@@ -88,6 +88,28 @@ class SnippetCompilerTest {
     }
 
     @Test
+    fun `detectProjectClasspath finds AGP 9 built-in kotlinc classes directory`() {
+        val tempDir = java.nio.file.Files.createTempDirectory("kmcp-agp9-test")
+        val builtInClasses = tempDir.resolve(
+            "build/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes",
+        )
+        val parentDir = tempDir.resolve("build/intermediates/built_in_kotlinc/debug/compileDebugKotlin")
+        java.nio.file.Files.createDirectories(builtInClasses)
+
+        val detected = SnippetCompiler.detectProjectClasspath(tempDir.toString())
+        assertTrue(
+            detected.contains(builtInClasses.toString()),
+            "expected AGP 9 built_in_kotlinc classes directory in classpath",
+        )
+        assertFalse(
+            detected.contains(parentDir.toString()),
+            "parent directory should not be in classpath",
+        )
+
+        tempDir.toFile().deleteRecursively()
+    }
+
+    @Test
     fun `compile does not report spurious stdlib infrastructure warnings on clean snippet`() {
         val result = SnippetCompiler.compile("fun answer(): Int = 42")
         assertTrue(result is CompileResult.Compiled)

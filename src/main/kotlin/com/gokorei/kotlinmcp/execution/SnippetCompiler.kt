@@ -111,7 +111,11 @@ object SnippetCompiler {
                     "build/intermediates/javac/",
                     "build/tmp/kotlin-classes/",
                 )
-            return exactSuffixes.any { path.endsWith(it) } || patternInfixes.any { path.contains(it) }
+            val isAgpBuiltInKotlinc =
+                file.name == "classes" && path.contains("build/intermediates/built_in_kotlinc/")
+            return exactSuffixes.any { path.endsWith(it) } ||
+                patternInfixes.any { path.contains(it) } ||
+                isAgpBuiltInKotlinc
         }
         val isLibsJar = file.parentFile?.name == "libs" && file.parentFile?.parentFile?.name == "build"
         val jarPatternInfixes =

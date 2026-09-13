@@ -75,7 +75,7 @@ Always follow this 4-step state machine when modifying existing Kotlin code:
 - Avoid launching heavy `./gradlew build` tasks for minor syntax edits.
 - Use `kotlin_check_snippet` first (<50ms in-process check).
 - Only run `kotlin_run(action="gradle_task", taskName=":module:test", timeoutSeconds=180)` for multi-module integration verification.
-- For Compose code, run `kotlin_code_analyze(action="compose", code=...)` before building to catch stability issues, missing modifiers, bad `remember` keys, and duplicate `LazyColumn` keys.
+- For Compose code, run `kotlin_code_analyze(action="compose", code=...)` (or `workspacePath="."`) before building to catch stability issues, missing modifiers, bad `remember` keys, mutated variables in item keys, and duplicate `LazyColumn` keys.
 
 ### C. Kotlin & Android Development Workflow Guidelines
 When developing Kotlin or Android applications, use the following MCP tool workflow:

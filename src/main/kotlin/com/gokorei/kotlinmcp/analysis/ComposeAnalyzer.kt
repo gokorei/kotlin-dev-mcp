@@ -16,6 +16,7 @@ import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.psi.KtUserType
+import java.io.File
 
 /**
  * Strategy component for Jetpack Compose AST inspection, recomposition stability advisories, and state key checks.
@@ -34,6 +35,55 @@ public class ComposeAnalyzer {
     )
 
     private val containerTypeNames = setOf("List", "Set", "Map", "Flow", "State", "StateFlow", "MutableStateFlow")
+
+    public fun analyzeWorkspace(workspacePath: String): KotlinMcpResult {
+        val root = File(workspacePath)
+        if (!root.exists() || !root.isDirectory) {
+            return KotlinMcpResult.Success(
+                content = "# Jetpack Compose Analysis Findings\nNo obvious Compose anti-patterns detected.",
+                metadata = mapOf("findingsCount" to "0"),
+            )
+        }
+
+        val allFindings = root.walkTopDown()
+            .maxDepth(MAX_WORKSPACE_SEARCH_DEPTH)
+            .onEnter { it.name !in ignoredDirectoryNames }
+            .filter { isAnalyzableFile(it) }
+            .mapNotNull { analyzeComposeFile(it, root) }
+            .toList()
+
+        val content = if (allFindings.isNotEmpty()) {
+            "# Jetpack Compose Workspace Analysis Findings\n\n" + allFindings.joinToString("\n\n")
+        } else {
+            "# Jetpack Compose Analysis Findings\nNo obvious Compose anti-patterns detected across workspace."
+        }
+
+        return KotlinMcpResult.Success(
+            content = content,
+            metadata = mapOf("findingsCount" to allFindings.size.toString()),
+        )
+    }
+
+    private fun isAnalyzableFile(file: File): Boolean =
+        file.isFile && file.extension == "kt" &&
+            !file.invariantSeparatorsPath.contains("/build/") &&
+            !file.invariantSeparatorsPath.contains("/generated/")
+
+    private fun analyzeComposeFile(file: File, root: File): String? {
+        val text = runCatching { file.readText() }.getOrNull().orEmpty()
+        val isComposeSource = text.contains("@Composable") || text.contains("LazyColumn") || text.contains("LazyRow")
+        if (!isComposeSource) {
+            return null
+        }
+        val fileResult = analyzeCompose(text)
+        return if (fileResult is KotlinMcpResult.Success && fileResult.metadata["findingsCount"] != "0") {
+            val relPath = file.relativeTo(root).invariantSeparatorsPath
+            val body = fileResult.content.removePrefix("# Jetpack Compose Analysis Findings\n")
+            "### `$relPath`\n$body"
+        } else {
+            null
+        }
+    }
 
     public fun analyzeCompose(code: String): KotlinMcpResult {
         val findings = mutableListOf<String>()
@@ -198,84 +248,213 @@ public class ComposeAnalyzer {
         }
     }
 
-    private val lazyLayoutNames = setOf(
-        "LazyColumn", "LazyRow",
-        "LazyVerticalGrid", "LazyHorizontalGrid",
-        "LazyVerticalStaggeredGrid", "LazyHorizontalStaggeredGrid"
-    )
-
     private fun inspectLazyLayout(expression: KtCallExpression, lineOf: (Int) -> Int, findings: MutableList<String>) {
         val callee = expression.calleeExpression?.text.orEmpty()
         if (callee !in lazyLayoutNames) return
+        LazyLayoutInspector(callee, lineOf, findings).inspect(expression)
+    }
 
+    internal companion object {
+        internal val lazyLayoutNames =
+            setOf(
+                "LazyColumn",
+                "LazyRow",
+                "LazyVerticalGrid",
+                "LazyHorizontalGrid",
+                "LazyVerticalStaggeredGrid",
+                "LazyHorizontalStaggeredGrid",
+            )
+
+        private const val MAX_WORKSPACE_SEARCH_DEPTH = 25
+
+        private val ignoredDirectoryNames =
+            setOf(
+                ".gradle",
+                ".git",
+                "out",
+                "node_modules",
+                ".idea",
+                "build",
+            )
+
+        internal val assignmentTokens =
+            setOf(
+                org.jetbrains.kotlin.lexer.KtTokens.EQ,
+                org.jetbrains.kotlin.lexer.KtTokens.PLUSEQ,
+                org.jetbrains.kotlin.lexer.KtTokens.MINUSEQ,
+                org.jetbrains.kotlin.lexer.KtTokens.MULTEQ,
+                org.jetbrains.kotlin.lexer.KtTokens.DIVEQ,
+                org.jetbrains.kotlin.lexer.KtTokens.PERCEQ,
+            )
+
+        internal fun isConstantLiteral(expr: KtExpression?): Boolean {
+            val unwrapped = (expr as? KtBlockExpression)?.statements?.lastOrNull() ?: expr
+            return when (unwrapped) {
+                is KtConstantExpression -> true
+                is KtStringTemplateExpression -> !unwrapped.hasInterpolation()
+                else -> false
+            }
+        }
+    }
+}
+
+private class LazyLayoutInspector(
+    private val callee: String,
+    private val lineOf: (Int) -> Int,
+    private val findings: MutableList<String>,
+) : KtTreeVisitorVoid() {
+
+    private val declaredStaticKeys = mutableMapOf<String, Int>()
+    private var mutatedIdentifiers: Set<String> = emptySet()
+    private var reportedMissingKeyInContainer = false
+
+    fun inspect(expression: KtCallExpression) {
         val lambda = expression.lambdaArguments.firstOrNull()?.getLambdaExpression()
             ?: expression.valueArguments.firstOrNull()?.getArgumentExpression() as? KtLambdaExpression
             ?: return
 
-        val declaredStaticKeys = mutableMapOf<String, Int>()
-
-        lambda.bodyExpression?.accept(object : KtTreeVisitorVoid() {
-            override fun visitCallExpression(call: KtCallExpression) {
-                val innerCallee = call.calleeExpression?.text.orEmpty()
-                if (innerCallee in lazyLayoutNames) {
-                    return
-                }
-
-                val callLine = lineOf(call.textRange.startOffset)
-                if (innerCallee == "item") {
-                    val keyArg = call.valueArguments
-                        .firstOrNull { it.getArgumentName()?.asName?.asString() == "key" }
-                        ?.getArgumentExpression()
-                    if (keyArg != null && isConstantLiteral(keyArg)) {
-                        val keyText = keyArg.text.trim()
-                        val prevLine = declaredStaticKeys[keyText]
-                        if (prevLine != null) {
-                            val msg = "⚠️ Duplicate key `$keyText` detected across `item` calls in " +
-                                "`$callee` at line $callLine (previously declared at line $prevLine). " +
-                                "In Jetpack Compose Lazy layouts, item keys must be unique or a runtime " +
-                                "`IllegalArgumentException` will be thrown."
-                            findings.add(msg)
-                        } else {
-                            declaredStaticKeys[keyText] = callLine
-                        }
-                    }
-                } else if (innerCallee == "items" || innerCallee == "itemsIndexed") {
-                    val keyArg = call.valueArguments
-                        .firstOrNull { it.getArgumentName()?.asName?.asString() == "key" }
-                        ?.getArgumentExpression()
-                    if (keyArg == null) {
-                        val msg = "⚠️ Call to `$innerCallee` at line $callLine in `$callee` does not " +
-                            "specify a `key` parameter. Without an explicit key, item position is used as " +
-                            "the key, which can cause state loss, recomposition churn, and UI glitches " +
-                            "when items are reordered or removed."
-                        findings.add(msg)
-                    } else {
-                        val lambdaExpr = keyArg as? KtLambdaExpression
-                        val returnExpr = lambdaExpr?.bodyExpression?.statements?.lastOrNull()
-                            ?: lambdaExpr?.bodyExpression
-                        if (returnExpr != null && isConstantLiteral(returnExpr)) {
-                            val literalText = returnExpr.text.trim()
-                            val msg = "⚠️ Key lambda for `$innerCallee` at line $callLine in `$callee` " +
-                                "returns a constant literal (`$literalText`). Every item in the collection " +
-                                "will receive the same key, causing a runtime " +
-                                "`IllegalArgumentException: Key was already used` when the list contains " +
-                                "more than one item."
-                            findings.add(msg)
-                        }
-                    }
-                }
-
-                super.visitCallExpression(call)
-            }
-        })
+        mutatedIdentifiers = extractMutatedIdentifiers(lambda.bodyExpression)
+        lambda.bodyExpression?.accept(this)
     }
 
-    private fun isConstantLiteral(expr: KtExpression?): Boolean {
-        val unwrapped = (expr as? KtBlockExpression)?.statements?.lastOrNull() ?: expr
-        return when (unwrapped) {
-            is KtConstantExpression -> true
-            is KtStringTemplateExpression -> !unwrapped.hasInterpolation()
-            else -> false
+    override fun visitCallExpression(call: KtCallExpression) {
+        val innerCallee = call.calleeExpression?.text.orEmpty()
+        if (innerCallee in ComposeAnalyzer.lazyLayoutNames) {
+            return
         }
+
+        val callLine = lineOf(call.textRange.startOffset)
+        if (innerCallee == "item") {
+            inspectItem(call, callLine)
+        } else if (innerCallee == "items" || innerCallee == "itemsIndexed") {
+            inspectItems(call, innerCallee, callLine)
+        }
+
+        super.visitCallExpression(call)
+    }
+
+    private fun inspectItem(call: KtCallExpression, callLine: Int) {
+        val keyArg = call.valueArguments
+            .firstOrNull { it.getArgumentName()?.asName?.asString() == "key" }
+            ?.getArgumentExpression() ?: return
+
+        val mutatedInKey = findReferencedIdentifiers(keyArg).intersect(mutatedIdentifiers)
+        if (mutatedInKey.isNotEmpty()) {
+            val mutatedId = mutatedInKey.first()
+            val msg = "⚠️ Key for `item` at line $callLine in `$callee` depends on `$mutatedId`, " +
+                "which is mutated inside the layout. A computed key derived from mutable state will " +
+                "collide across items and throw `IllegalArgumentException: Key was already used`."
+            findings.add(msg)
+        } else if (ComposeAnalyzer.isConstantLiteral(keyArg)) {
+            val keyText = keyArg.text.trim()
+            val prevLine = declaredStaticKeys[keyText]
+            if (prevLine != null) {
+                val msg = "⚠️ Duplicate key `$keyText` detected across `item` calls in " +
+                    "`$callee` at line $callLine (previously declared at line $prevLine). " +
+                    "In Jetpack Compose Lazy layouts, item keys must be unique or a runtime " +
+                    "`IllegalArgumentException` will be thrown."
+                findings.add(msg)
+            } else {
+                declaredStaticKeys[keyText] = callLine
+            }
+        }
+    }
+
+    private fun inspectItems(call: KtCallExpression, innerCallee: String, callLine: Int) {
+        val keyArg = call.valueArguments
+            .firstOrNull { it.getArgumentName()?.asName?.asString() == "key" }
+            ?.getArgumentExpression()
+        if (keyArg == null) {
+            if (!reportedMissingKeyInContainer) {
+                reportedMissingKeyInContainer = true
+                val msg = "ℹ️ Call to `$innerCallee` at line $callLine in `$callee` does not " +
+                    "specify a `key` parameter. Without an explicit key, item position is used as " +
+                    "the key, which can cause state loss, recomposition churn, and UI glitches " +
+                    "when items are reordered or removed."
+                findings.add(msg)
+            }
+            return
+        }
+
+        val mutatedInKey = findReferencedIdentifiers(keyArg).intersect(mutatedIdentifiers)
+        if (mutatedInKey.isNotEmpty()) {
+            val mutatedId = mutatedInKey.first()
+            val msg = "⚠️ Key for `$innerCallee` at line $callLine in `$callee` depends on " +
+                "`$mutatedId`, which is mutated inside the layout. A computed key derived from " +
+                "mutable state will collide across items and throw " +
+                "`IllegalArgumentException: Key was already used`."
+            findings.add(msg)
+        } else {
+            val lambdaExpr = keyArg as? KtLambdaExpression
+            val returnExpr = lambdaExpr?.bodyExpression?.statements?.lastOrNull()
+                ?: lambdaExpr?.bodyExpression
+            if (returnExpr != null && ComposeAnalyzer.isConstantLiteral(returnExpr)) {
+                val literalText = returnExpr.text.trim()
+                val msg = "⚠️ Key lambda for `$innerCallee` at line $callLine in `$callee` " +
+                    "returns a constant literal (`$literalText`). Every item in the collection " +
+                    "will receive the same key, causing a runtime " +
+                    "`IllegalArgumentException: Key was already used` when the list contains " +
+                    "more than one item."
+                findings.add(msg)
+            }
+        }
+    }
+
+    private fun extractMutatedIdentifiers(lambdaBody: KtExpression?): Set<String> {
+        val mutated = mutableSetOf<String>()
+        lambdaBody?.accept(object : KtTreeVisitorVoid() {
+            override fun visitCallExpression(call: KtCallExpression) {
+                val innerCallee = call.calleeExpression?.text.orEmpty()
+                if (innerCallee in ComposeAnalyzer.lazyLayoutNames) {
+                    return
+                }
+                super.visitCallExpression(call)
+            }
+
+            override fun visitUnaryExpression(expression: org.jetbrains.kotlin.psi.KtUnaryExpression) {
+                val op = expression.operationToken
+                if (op == org.jetbrains.kotlin.lexer.KtTokens.PLUSPLUS ||
+                    op == org.jetbrains.kotlin.lexer.KtTokens.MINUSMINUS
+                ) {
+                    extractIdentifier(expression.baseExpression)?.let { mutated.add(it) }
+                }
+                super.visitUnaryExpression(expression)
+            }
+
+            override fun visitBinaryExpression(expression: org.jetbrains.kotlin.psi.KtBinaryExpression) {
+                val op = expression.operationToken
+                if (op in ComposeAnalyzer.assignmentTokens) {
+                    extractIdentifier(expression.left)?.let { mutated.add(it) }
+                }
+                super.visitBinaryExpression(expression)
+            }
+
+            override fun visitProperty(property: KtProperty) {
+                if (property.isVar) {
+                    property.name?.let { mutated.add(it) }
+                }
+                super.visitProperty(property)
+            }
+        })
+        return mutated
+    }
+
+    private fun extractIdentifier(expr: KtExpression?): String? =
+        when (expr) {
+            is org.jetbrains.kotlin.psi.KtSimpleNameExpression -> expr.getReferencedName()
+            is org.jetbrains.kotlin.psi.KtDotQualifiedExpression ->
+                (expr.selectorExpression as? org.jetbrains.kotlin.psi.KtSimpleNameExpression)?.getReferencedName()
+            else -> null
+        }
+
+    private fun findReferencedIdentifiers(expr: KtExpression): Set<String> {
+        val names = mutableSetOf<String>()
+        expr.accept(object : KtTreeVisitorVoid() {
+            override fun visitSimpleNameExpression(expression: org.jetbrains.kotlin.psi.KtSimpleNameExpression) {
+                names.add(expression.getReferencedName())
+                super.visitSimpleNameExpression(expression)
+            }
+        })
+        return names
     }
 }
