@@ -233,7 +233,7 @@ private fun executeCompiledSnippet(
     return runCompiledProcess(command, timeoutMillis)
 }
 
-private fun buildCompiledCommand(
+internal fun buildCompiledCommand(
     outDir: Path,
     extraClasspath: List<String>,
     javaExecutable: File,
@@ -243,19 +243,25 @@ private fun buildCompiledCommand(
             .filter { it.isNotBlank() }
             .distinct()
             .joinToString(File.pathSeparator)
+    val defaultMainFile = outDir.resolve(SnippetCompiler.MAIN_CLASS.replace('.', '/') + ".class").toFile()
     val mainClass =
-        outDir
-            .toFile()
-            .walkTopDown()
-            .firstOrNull { it.isFile && it.extension == "class" && !it.name.contains("$") }
-            ?.relativeTo(outDir.toFile())
-            ?.invariantSeparatorsPath
-            ?.removeSuffix(".class")
-            ?.replace('/', '.')
-            ?: SnippetCompiler.MAIN_CLASS
+        if (defaultMainFile.isFile) {
+            SnippetCompiler.MAIN_CLASS
+        } else {
+            outDir
+                .toFile()
+                .walkTopDown()
+                .firstOrNull { it.isFile && it.extension == "class" && !it.name.contains("$") }
+                ?.relativeTo(outDir.toFile())
+                ?.invariantSeparatorsPath
+                ?.removeSuffix(".class")
+                ?.replace('/', '.')
+                ?: SnippetCompiler.MAIN_CLASS
+        }
     return listOf(javaExecutable.absolutePath, "-cp", fullCp, mainClass)
 }
 
+private const val PROCESS_STARTUP_ALLOWANCE_MS = 2_000L
 private const val PROCESS_DRAIN_JOIN_TIMEOUT_MS = 1_000L
 private const val PROCESS_OUTPUT_JOIN_TIMEOUT_MS = 2_000L
 private const val NANOS_PER_MILLISECOND = 1_000_000L
@@ -283,9 +289,10 @@ private fun runCompiledProcess(
         com.gokorei.kotlinmcp.shared.BoundedStreamDrainer
             .drain(process.inputStream)
     val startNanos = System.nanoTime()
+    val waitTimeoutMillis = timeoutMillis + PROCESS_STARTUP_ALLOWANCE_MS
     val completed =
         try {
-            process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)
+            process.waitFor(waitTimeoutMillis, TimeUnit.MILLISECONDS)
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
             process.destroyForcibly()
