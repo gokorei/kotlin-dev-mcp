@@ -163,6 +163,29 @@ class MutationExecutionPipelineTest {
     }
 
     @Test
+    fun `isolated mutant execution enforces timeout after child JVM startup`() {
+        val code = "fun calculate(): Int = 1 + 1"
+        val testCode =
+            """
+            fun main() {
+                calculate()
+                Thread.sleep(750)
+            }
+            """.trimIndent()
+
+        val report =
+            pipeline.run(
+                code = code,
+                testCode = testCode,
+                timeoutPerMutantMs = 200L,
+            )
+
+        assertTrue(report.results.isNotEmpty())
+        assertEquals(1, report.timeoutCount)
+        assertTrue(report.results.all { it.status == MutantStatus.TIMEOUT })
+    }
+
+    @Test
     fun `default pipeline executes mutation code without server classpath`() {
         val code =
             """
