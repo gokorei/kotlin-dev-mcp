@@ -1,8 +1,8 @@
 package com.gokorei.kotlinmcp.mutation
 
 import com.gokorei.kotlinmcp.execution.CompileResult
-import com.gokorei.kotlinmcp.execution.DefaultFastSnippetRunner
 import com.gokorei.kotlinmcp.execution.FastSnippetRunner
+import com.gokorei.kotlinmcp.execution.HostJvmCompiledSnippetRunner
 import com.gokorei.kotlinmcp.execution.SnippetCompiler
 import com.gokorei.kotlinmcp.lsp.K2SnippetFrontend
 import com.gokorei.kotlinmcp.models.KotlinMcpResult
@@ -24,7 +24,7 @@ interface MutationExecutionPipeline : AutoCloseable {
 
 class DefaultMutationExecutionPipeline(
     private val generator: AstMutantGenerator = AstMutantGenerator(),
-    private val runner: FastSnippetRunner = DefaultFastSnippetRunner()
+    private val runner: FastSnippetRunner = HostJvmCompiledSnippetRunner(),
 ) : MutationExecutionPipeline {
 
     override fun run(

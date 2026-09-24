@@ -203,3 +203,270 @@ class DefaultFastSnippetRunner(
         executor.shutdownNow()
     }
 }
+
+internal class HostJvmCompiledSnippetRunner(
+    private val javaResolver: JavaResolver = DefaultJavaResolver(),
+) : FastSnippetRunner {
+    override fun run(
+        outDir: Path,
+        timeoutMillis: Long,
+        extraClasspath: List<String>,
+    ): KotlinMcpResult = executeCompiledSnippet(outDir, timeoutMillis, extraClasspath, javaResolver)
+
+    override fun close() = Unit
+}
+
+@Suppress("ReturnCount")
+private fun executeCompiledSnippet(
+    outDir: Path,
+    timeoutMillis: Long,
+    extraClasspath: List<String>,
+    javaResolver: JavaResolver,
+): KotlinMcpResult {
+    val javaExecutable =
+        javaResolver.resolve(null)
+            ?: return KotlinMcpResult.Error(
+                message = "No Java installation detected for isolated mutation execution.",
+                code = "MISSING_JAVA_HOME",
+                requireAnotherCall = true,
+            )
+    val readinessToken =
+        java.util.UUID
+            .randomUUID()
+            .toString()
+    val bootstrapResource =
+        HostJvmCompiledSnippetRunner::class.java.classLoader.getResourceAsStream(HOST_EXECUTION_BOOTSTRAP_RESOURCE)
+            ?: return KotlinMcpResult.Error(
+                message = "Isolated mutation bootstrap resource is unavailable.",
+                code = "LAUNCH_ERROR",
+            )
+    try {
+        bootstrapResource.use { input ->
+            val bootstrapFile = outDir.resolve(classFilePath(HOST_EXECUTION_BOOTSTRAP_CLASS))
+            java.nio.file.Files
+                .createDirectories(bootstrapFile.parent)
+            java.nio.file.Files
+                .copy(
+                    input,
+                    bootstrapFile,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                )
+        }
+    } catch (e: java.io.IOException) {
+        return KotlinMcpResult.Error(
+            message = "Failed to prepare isolated mutation bootstrap: ${e.message}",
+            code = "LAUNCH_ERROR",
+        )
+    }
+    val command = buildCompiledCommand(outDir, extraClasspath, javaExecutable, readinessToken)
+    return runCompiledProcess(command, timeoutMillis, readinessToken)
+}
+
+internal fun buildCompiledCommand(
+    outDir: Path,
+    extraClasspath: List<String>,
+    javaExecutable: File,
+    readinessToken: String =
+        java.util.UUID
+            .randomUUID()
+            .toString(),
+): List<String> {
+    val fullCp =
+        (listOf(outDir.toString()) + extraClasspath + SnippetCompiler.runtimeExecutionClasspath)
+            .filter { it.isNotBlank() }
+            .distinct()
+            .joinToString(File.pathSeparator)
+    val targetMainClass = selectCompiledMainClass(outDir)
+    return listOf(
+        javaExecutable.absolutePath,
+        "-cp",
+        fullCp,
+        HOST_EXECUTION_BOOTSTRAP_CLASS,
+        targetMainClass,
+        readinessToken,
+    )
+}
+
+private fun selectCompiledMainClass(outDir: Path): String {
+    val defaultMainFile = outDir.resolve(classFilePath(SnippetCompiler.MAIN_CLASS)).toFile()
+    return if (defaultMainFile.isFile) {
+        SnippetCompiler.MAIN_CLASS
+    } else {
+        outDir
+            .toFile()
+            .walkTopDown()
+            .firstOrNull { it.isFile && it.extension == "class" && !it.name.contains("$") }
+            ?.relativeTo(outDir.toFile())
+            ?.invariantSeparatorsPath
+            ?.removeSuffix(".class")
+            ?.replace('/', '.')
+            ?: SnippetCompiler.MAIN_CLASS
+    }
+}
+
+private fun classFilePath(className: String): String = className.replace('.', '/') + ".class"
+
+internal const val HOST_EXECUTION_BOOTSTRAP_CLASS = "com.gokorei.kotlinmcp.execution.bootstrap.HostExecutionBootstrap"
+private const val HOST_EXECUTION_BOOTSTRAP_RESOURCE =
+    "com/gokorei/kotlinmcp/execution/bootstrap/" +
+        "HostExecutionBootstrap.class"
+private const val PROCESS_STARTUP_ALLOWANCE_MS = 2_000L
+private const val PROCESS_READY_POLL_INTERVAL_MS = 5L
+private const val PROCESS_START_SIGNAL: Byte = 1
+private const val PROCESS_DRAIN_JOIN_TIMEOUT_MS = 1_000L
+private const val PROCESS_OUTPUT_JOIN_TIMEOUT_MS = 2_000L
+private const val NANOS_PER_MILLISECOND = 1_000_000L
+
+@Suppress("ReturnCount")
+private fun runCompiledProcess(
+    command: List<String>,
+    timeoutMillis: Long,
+    readinessToken: String,
+): KotlinMcpResult {
+    val process =
+        try {
+            ProcessBuilder(command).redirectErrorStream(true).start()
+        } catch (e: java.io.IOException) {
+            return KotlinMcpResult.Error(
+                message = "Failed to launch isolated mutation JVM: ${e.message}",
+                code = "LAUNCH_ERROR",
+            )
+        } catch (e: SecurityException) {
+            return KotlinMcpResult.Error(
+                message = "Failed to launch isolated mutation JVM: ${e.message}",
+                code = "LAUNCH_ERROR",
+            )
+        }
+    val drainHandle =
+        com.gokorei.kotlinmcp.shared.BoundedStreamDrainer
+            .drain(process.inputStream)
+    val startNanos = System.nanoTime()
+    beginCompiledExecution(process, drainHandle, readinessToken)?.let { return it }
+    waitForCompiledExecution(process, drainHandle, timeoutMillis)?.let { return it }
+    drainHandle.join(PROCESS_OUTPUT_JOIN_TIMEOUT_MS)
+    val durationMs = (System.nanoTime() - startNanos) / NANOS_PER_MILLISECOND
+    val text = LogTruncator.truncate(drainHandle.readUtf8().replace(readinessToken, ""))
+    val exit = process.exitValue()
+    return if (exit == 0) {
+        KotlinMcpResult.Success(
+            content = if (text.isBlank()) "Ran successfully in isolated mutation JVM." else text,
+            metadata = mapOf("mode" to "host_jvm", "exitCode" to "0", "durationMs" to durationMs.toString()),
+        )
+    } else {
+        KotlinMcpResult.Error(
+            message = "Isolated mutation JVM exited with code $exit:\n$text",
+            code = "RUNTIME_ERROR",
+            details = mapOf("mode" to "host_jvm", "exitCode" to exit.toString(), "durationMs" to durationMs.toString()),
+            requireAnotherCall = true,
+        )
+    }
+}
+
+@Suppress("ReturnCount")
+private fun beginCompiledExecution(
+    process: Process,
+    drainHandle: com.gokorei.kotlinmcp.shared.BoundedDrainHandle,
+    readinessToken: String,
+): KotlinMcpResult? {
+    val ready = awaitProcessReadiness(process, drainHandle, readinessToken)
+    return when {
+        Thread.currentThread().isInterrupted -> {
+            terminateAndDrain(process, drainHandle)
+            KotlinMcpResult.Error(
+                message = "Waiting for isolated mutation JVM readiness was interrupted.",
+                code = "EXECUTION_ERROR",
+            )
+        }
+        !ready && process.isAlive -> {
+            terminateAndDrain(process, drainHandle)
+            KotlinMcpResult.Error(
+                message = "Isolated mutation JVM startup timed out after ${PROCESS_STARTUP_ALLOWANCE_MS}ms.",
+                code = "EXECUTION_TIMEOUT",
+                details = mapOf("phase" to "startup", "timeoutMillis" to PROCESS_STARTUP_ALLOWANCE_MS.toString()),
+            )
+        }
+        !ready -> {
+            drainHandle.join(PROCESS_OUTPUT_JOIN_TIMEOUT_MS)
+            val exit = process.exitValue()
+            val text = LogTruncator.truncate(drainHandle.readUtf8().replace(readinessToken, ""))
+            KotlinMcpResult.Error(
+                message = "Isolated mutation JVM exited before readiness with code $exit:\n$text",
+                code = "LAUNCH_ERROR",
+                details = mapOf("exitCode" to exit.toString()),
+            )
+        }
+        else ->
+            try {
+                process.outputStream.use { stream ->
+                    stream.write(PROCESS_START_SIGNAL.toInt())
+                    stream.flush()
+                }
+                null
+            } catch (e: java.io.IOException) {
+                terminateAndDrain(process, drainHandle)
+                KotlinMcpResult.Error(
+                    message = "Failed to start isolated mutation execution: ${e.message}",
+                    code = "LAUNCH_ERROR",
+                )
+            }
+    }
+}
+
+@Suppress("ReturnCount")
+private fun waitForCompiledExecution(
+    process: Process,
+    drainHandle: com.gokorei.kotlinmcp.shared.BoundedDrainHandle,
+    timeoutMillis: Long,
+): KotlinMcpResult? {
+    val completed =
+        try {
+            process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            destroyProcessTree(process)
+            return KotlinMcpResult.Error(
+                message = "Waiting for isolated mutation JVM was interrupted: ${e.message}",
+                code = "EXECUTION_ERROR",
+            )
+        }
+    if (!completed) {
+        terminateAndDrain(process, drainHandle)
+        return KotlinMcpResult.Error(
+            message = "Execution timed out after ${timeoutMillis}ms; isolated process destroyed.",
+            code = "EXECUTION_TIMEOUT",
+            details = mapOf("phase" to "execution", "timeoutMillis" to timeoutMillis.toString()),
+        )
+    }
+    return null
+}
+
+private fun terminateAndDrain(
+    process: Process,
+    drainHandle: com.gokorei.kotlinmcp.shared.BoundedDrainHandle,
+) {
+    destroyProcessTree(process)
+    drainHandle.join(PROCESS_DRAIN_JOIN_TIMEOUT_MS)
+}
+
+private fun awaitProcessReadiness(
+    process: Process,
+    drainHandle: com.gokorei.kotlinmcp.shared.BoundedDrainHandle,
+    readinessToken: String,
+): Boolean {
+    val deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(PROCESS_STARTUP_ALLOWANCE_MS)
+    val pollIntervalNanos = TimeUnit.MILLISECONDS.toNanos(PROCESS_READY_POLL_INTERVAL_MS)
+    var ready = drainHandle.readUtf8().contains(readinessToken)
+    while (!ready && !Thread.currentThread().isInterrupted && process.isAlive) {
+        val remainingNanos = deadlineNanos - System.nanoTime()
+        if (remainingNanos <= 0) break
+        java.util.concurrent.locks.LockSupport
+            .parkNanos(minOf(remainingNanos, pollIntervalNanos))
+        ready = drainHandle.readUtf8().contains(readinessToken)
+    }
+    return ready
+}
+
+private fun destroyProcessTree(process: Process) {
+    runCatching { process.descendants().forEach { it.destroyForcibly() } }
+    process.destroyForcibly()
+}
