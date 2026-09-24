@@ -161,4 +161,28 @@ class MutationExecutionPipelineTest {
         assertTrue(report.totalMutants >= 3)
         assertTrue(report.results.isNotEmpty())
     }
+
+    @Test
+    fun `default pipeline executes mutation code without server classpath`() {
+        val code =
+            """
+            fun canLoadServerClass(): Boolean = try {
+                Class.forName("com.gokorei.kotlinmcp.server.KotlinMcpServer")
+                true
+            } catch (_: ClassNotFoundException) {
+                false
+            }
+            """.trimIndent()
+
+        val testCode =
+            """
+            fun main() {
+                check(!canLoadServerClass())
+            }
+            """.trimIndent()
+
+        val report = pipeline.run(code, testCode)
+
+        assertFalse(report.results.any { it.status == MutantStatus.BASELINE_ERROR })
+    }
 }

@@ -637,5 +637,40 @@ class KotlinMcpIntegrationTest {
         }
         com.gokorei.kotlinmcp.execution.SnippetCompiler.cleanup(lib)
     }
-}
 
+    @Test
+    fun `mutate action executes mutation code outside the server classloader`() =
+        runBlocking {
+            val kotlinServer = KotlinMcpServer()
+            val server = serverWithTools(kotlinServer)
+            val (client, sessionJob, clientTransport) = connectedClient(server)
+            try {
+                val result =
+                    client.callTool(
+                        "kotlin_check_snippet",
+                        mapOf(
+                            "action" to "mutate",
+                            "code" to
+                                """
+                                fun canLoadServerClass(): Boolean = try {
+                                    Class.forName("com.gokorei.kotlinmcp.server.KotlinMcpServer")
+                                    true
+                                } catch (_: ClassNotFoundException) {
+                                    false
+                                }
+                                """.trimIndent(),
+                            "testCode" to "fun main() { check(!canLoadServerClass()) }",
+                        ),
+                    )
+                val text = result.content.joinToString { it.toString() }
+                assertFalse(result.isError == true, "expected success, got: $text")
+                assertFalse(
+                    text.contains("BASELINE_FAILURE"),
+                    "mutation execution must not expose server classes: $text",
+                )
+            } finally {
+                cleanup(client, sessionJob, clientTransport)
+                kotlinServer.close()
+            }
+        }
+}

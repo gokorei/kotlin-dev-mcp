@@ -203,3 +203,122 @@ class DefaultFastSnippetRunner(
         executor.shutdownNow()
     }
 }
+
+internal class HostJvmCompiledSnippetRunner(
+    private val javaResolver: JavaResolver = DefaultJavaResolver(),
+) : FastSnippetRunner {
+    override fun run(
+        outDir: Path,
+        timeoutMillis: Long,
+        extraClasspath: List<String>,
+    ): KotlinMcpResult = executeCompiledSnippet(outDir, timeoutMillis, extraClasspath, javaResolver)
+
+    override fun close() = Unit
+}
+
+private fun executeCompiledSnippet(
+    outDir: Path,
+    timeoutMillis: Long,
+    extraClasspath: List<String>,
+    javaResolver: JavaResolver,
+): KotlinMcpResult {
+    val javaExecutable =
+        javaResolver.resolve(null)
+            ?: return KotlinMcpResult.Error(
+                message = "No Java installation detected for isolated mutation execution.",
+                code = "MISSING_JAVA_HOME",
+                requireAnotherCall = true,
+            )
+    val command = buildCompiledCommand(outDir, extraClasspath, javaExecutable)
+    return runCompiledProcess(command, timeoutMillis)
+}
+
+private fun buildCompiledCommand(
+    outDir: Path,
+    extraClasspath: List<String>,
+    javaExecutable: File,
+): List<String> {
+    val fullCp =
+        (listOf(outDir.toString()) + extraClasspath + SnippetCompiler.runtimeExecutionClasspath)
+            .filter { it.isNotBlank() }
+            .distinct()
+            .joinToString(File.pathSeparator)
+    val mainClass =
+        outDir
+            .toFile()
+            .walkTopDown()
+            .firstOrNull { it.isFile && it.extension == "class" && !it.name.contains("$") }
+            ?.relativeTo(outDir.toFile())
+            ?.invariantSeparatorsPath
+            ?.removeSuffix(".class")
+            ?.replace('/', '.')
+            ?: SnippetCompiler.MAIN_CLASS
+    return listOf(javaExecutable.absolutePath, "-cp", fullCp, mainClass)
+}
+
+private const val PROCESS_DRAIN_JOIN_TIMEOUT_MS = 1_000L
+private const val PROCESS_OUTPUT_JOIN_TIMEOUT_MS = 2_000L
+private const val NANOS_PER_MILLISECOND = 1_000_000L
+
+@Suppress("ReturnCount")
+private fun runCompiledProcess(
+    command: List<String>,
+    timeoutMillis: Long,
+): KotlinMcpResult {
+    val process =
+        try {
+            ProcessBuilder(command).redirectErrorStream(true).start()
+        } catch (e: java.io.IOException) {
+            return KotlinMcpResult.Error(
+                message = "Failed to launch isolated mutation JVM: ${e.message}",
+                code = "LAUNCH_ERROR",
+            )
+        } catch (e: SecurityException) {
+            return KotlinMcpResult.Error(
+                message = "Failed to launch isolated mutation JVM: ${e.message}",
+                code = "LAUNCH_ERROR",
+            )
+        }
+    val drainHandle =
+        com.gokorei.kotlinmcp.shared.BoundedStreamDrainer
+            .drain(process.inputStream)
+    val startNanos = System.nanoTime()
+    val completed =
+        try {
+            process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            process.destroyForcibly()
+            return KotlinMcpResult.Error(
+                message = "Waiting for isolated mutation JVM was interrupted: ${e.message}",
+                code = "EXECUTION_ERROR",
+            )
+        }
+    if (!completed) {
+        runCatching { process.descendants().forEach { it.destroyForcibly() } }
+        process.destroyForcibly()
+        drainHandle.join(PROCESS_DRAIN_JOIN_TIMEOUT_MS)
+        return KotlinMcpResult.Error(
+            message = "Execution timed out after ${timeoutMillis}ms; isolated process destroyed.",
+            code = "EXECUTION_TIMEOUT",
+            details = mapOf("timeoutMillis" to timeoutMillis.toString()),
+        )
+    }
+    drainHandle.join(PROCESS_OUTPUT_JOIN_TIMEOUT_MS)
+    val durationMs = (System.nanoTime() - startNanos) / NANOS_PER_MILLISECOND
+    val text = LogTruncator.truncate(drainHandle.readUtf8())
+    val exit = process.exitValue()
+    return if (exit == 0) {
+        KotlinMcpResult.Success(
+            content = if (text.isBlank()) "Ran successfully in isolated mutation JVM." else text,
+            metadata = mapOf("mode" to "host_jvm", "exitCode" to "0", "durationMs" to durationMs.toString()),
+        )
+    } else {
+        KotlinMcpResult.Error(
+            message = "Isolated mutation JVM exited with code $exit:\n$text",
+            code = "RUNTIME_ERROR",
+            details = mapOf("mode" to "host_jvm", "exitCode" to exit.toString(), "durationMs" to durationMs.toString()),
+            requireAnotherCall = true,
+        )
+    }
+}

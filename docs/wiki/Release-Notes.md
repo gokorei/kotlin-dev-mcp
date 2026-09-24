@@ -16,6 +16,7 @@ Overview of new features, bug fixes, and improvements shipped in each `kotlin-mc
 - **Secure XML parsing in LintService** — configured `DocumentBuilderFactory` in `parseDetektXml` with `XMLConstants.FEATURE_SECURE_PROCESSING`, `disallow-doctype-decl`, and disabled external general/parameter entities to prevent XXE injection when ingesting Detekt reports (YSY5E9EW).
 - **Bounded subprocess stream consumption & process tree cleanup** — replaced unbounded `readBytes()` in `RunSnippetService` and `GradleRunService` with tail-preserving circular `BoundedStreamDrainer` (1 MB upper bound) to protect host JVM memory from runaway child processes, and added recursive process descendant termination on execution timeout (926759R9).
 - **Eliminate read-lock mutation in DefaultVfsPsiCache** — switched the internal bounded cache to insertion-ordered LinkedHashMap under reentrant read-write lock, eliminating concurrent structural pointer mutations and race conditions during read operations (YWHCGCXG).
+- **Isolated mutation execution from the MCP server** — changed the default mutation pipeline to execute compiled baseline and mutant code in a child JVM without the server classloader, preventing mutation payloads from loading server internals while preserving normal mutation reporting.
 
 ### Improvements
 
