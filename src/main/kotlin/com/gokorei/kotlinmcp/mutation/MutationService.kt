@@ -4,9 +4,6 @@ import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import com.gokorei.kotlinmcp.models.ProjectionFilter
 import com.gokorei.kotlinmcp.models.ResponseProjection
 
-/**
- * Service providing in-memory mutation testing analysis for Kotlin code and test suites.
- */
 interface MutationService : AutoCloseable {
     fun mutateAndTest(
         code: String,
@@ -47,22 +44,22 @@ class DefaultMutationService(
             return KotlinMcpResult.Error(
                 message = first.details ?: "Baseline test failed before mutation testing.",
                 code = "BASELINE_FAILURE",
-                details = mapOf("stage" to "baseline_verification")
+                details = mapOf("stage" to "baseline_verification"),
             )
         }
 
         val content = buildString {
-            appendLine("# 🧬 In-Memory Mutation Testing Report")
+            appendLine("# 🧬 Mutation Testing Report (Isolated Child JVM)")
             appendLine()
             val badge = when {
                 report.totalMutants == 0 -> "⚪ **NO MUTANTS GENERATED**"
-                report.effectiveMutants == 0 -> "⚠️ **NO EFFECTIVE MUTANTS (All Discarded / Compilation Errors)**"
+                report.effectiveMutants == 0 -> "⚠️ **NO EFFECTIVE MUTANTS (Compilation or Infrastructure Errors)**"
                 report.isStrong -> "🟢 **STRONG (${report.score}%)**"
                 else -> "🔴 **NEEDS IMPROVEMENT (${report.score}%)**"
             }
             appendLine("- **Mutation Score:** $badge")
             appendLine("- **Total Mutants Generated:** ${report.totalMutants}")
-            appendLine("- **Mutants Killed:** ${report.killedCount} / ${report.effectiveMutants}")
+            appendLine("- **Mutants Killed:** ${report.killedIncludingTimeoutCount} / ${report.effectiveMutants}")
             appendLine("- **Mutants Survived (Weak Tests):** ${report.survivedCount}")
             if (report.compilationErrorCount > 0) {
                 appendLine("- **Compilation Errors (Discarded):** ${report.compilationErrorCount}")
@@ -70,12 +67,18 @@ class DefaultMutationService(
             if (report.timeoutCount > 0) {
                 appendLine("- **Timeouts (Counted as Killed):** ${report.timeoutCount}")
             }
+            if (report.infrastructureErrorCount > 0) {
+                appendLine("- **Infrastructure Errors (Excluded from Score):** ${report.infrastructureErrorCount}")
+            }
             appendLine()
 
             val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
             if (survived.isNotEmpty()) {
                 appendLine("## ⚠️ Survived Mutants (${survived.size})")
-                appendLine("The following mutated code variations passed all test assertions without triggering a failure. Add assertions to guard these behaviors:")
+                appendLine(
+                    "The following mutated code variations passed all test assertions without triggering a failure. " +
+                        "Add assertions to guard these behaviors:",
+                )
                 appendLine()
                 survived.forEachIndexed { idx, res ->
                     val m = res.mutant
@@ -89,22 +92,40 @@ class DefaultMutationService(
                     appendLine()
                 }
             } else if (report.effectiveMutants == 0) {
-                appendLine("⚠️ **No executable mutants could be compiled.** Generated mutations failed type checking or compilation against this snippet signature.")
+                appendLine(
+                    "⚠️ **No executable mutants could be compiled or run.** " +
+                        "Generated mutations failed compilation or the isolated execution environment failed.",
+                )
+            } else if (report.infrastructureErrorCount > 0) {
+                appendLine(
+                    "⚠️ **Some mutants could not be executed because of infrastructure errors.** " +
+                        "The score covers only mutants with valid execution results.",
+                )
             } else {
-                appendLine("✅ **All mutants killed!** Your unit test assertions effectively catch all synthesized boundary, relational, and conditional alterations.")
+                appendLine(
+                    "✅ **All mutants killed!** " +
+                        "Your unit test assertions effectively catch all synthesized boundary, relational, " +
+                        "and conditional alterations.",
+                )
             }
         }.trim()
 
-        val rawResult = KotlinMcpResult.Success(
-            content = content,
-            metadata = mapOf(
-                "score" to report.score.toString(),
-                "totalMutants" to report.totalMutants.toString(),
-                "killedCount" to report.killedCount.toString(),
-                "survivedCount" to report.survivedCount.toString(),
-                "isStrong" to report.isStrong.toString()
+        val rawResult =
+            KotlinMcpResult.Success(
+                content = content,
+                metadata =
+                    mapOf(
+                        "score" to report.score.toString(),
+                        "totalMutants" to report.totalMutants.toString(),
+                        "killedCount" to report.killedCount.toString(),
+                        "survivedCount" to report.survivedCount.toString(),
+                        "effectiveMutants" to report.effectiveMutants.toString(),
+                        "compilationErrorCount" to report.compilationErrorCount.toString(),
+                        "timeoutCount" to report.timeoutCount.toString(),
+                        "infrastructureErrorCount" to report.infrastructureErrorCount.toString(),
+                        "isStrong" to report.isStrong.toString(),
+                    ),
             )
-        )
 
         return ProjectionFilter.apply(rawResult, projection)
     }

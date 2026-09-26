@@ -20,14 +20,13 @@ A Model Context Protocol (MCP) server providing high-performance Kotlin developm
 
 ## Available Tools
 
-The server consolidates its surface into **11 tools** (5 read-only, 6 mutating) using action-multiplexed parameters to minimize token usage while maximizing context:
+The server consolidates its surface into **11 tools** (4 read-only, 7 mutating) using action-multiplexed parameters to minimize token usage while maximizing context:
 
 ### Read-Only Tools (`readOnly = true`)
 
 | Tool Name | Actions / Targets | Description |
 | :--- | :--- | :--- |
 | `kotlin_docs_read` | `search`, `lookup`, `explain` | **Documentation**: Query stdlib symbols and language features; search index or lookup signatures. |
-| `kotlin_check_snippet` | *(Direct)* | **Diagnostics**: Compile Kotlin snippets in-process using embedded K2 compiler and report line:col errors. |
 | `kotlin_code_analyze` | `inspect`, `nullability`, `coroutines`, `compose`, `file_context` | **Code Analysis**: AST inspection, unsafe null handling, coroutines scope safety, Compose anti-patterns, and cross-file dependencies. |
 | `kotlin_text_lsp_read` | `definition`, `references`, `completion`, `workspace_search`, `workspace_references`, `type_hierarchy`, `call_hierarchy`, `hover` | **Text / LSP**: Compiler AST text services, symbol definitions, multi-file workspace search/references, type/call hierarchies, and hover signatures/KDoc. |
 | `kotlin_project_inspect` | `structure`, `kmp_targets`, `dependencies`, `schema_digest`, `diagnose_build`, `layout_inventory`, `vulnerabilities`, `package_api`, `coverage_report` | **Project**: Gradle build scripts, KMP targets, security vulnerability audits (CVEs), public package API surface dumping, API/DB schema digest (SQL DDL, Exposed tables, @Serializable DTOs, OpenAPI), and JaCoCo coverage reports. |
@@ -36,6 +35,7 @@ The server consolidates its surface into **11 tools** (5 read-only, 6 mutating) 
 
 | Tool Name | Actions / Targets / Domains | Description |
 | :--- | :--- | :--- |
+| `kotlin_check_snippet` | `check`, `mutate`, `when_exhaustiveness`, `value_class`, `inline_reified`, `contracts`, `expect_actual`, `experimental_optin`, `deprecated` | **Mixed Diagnostics and Mutation**: Compile Kotlin snippets and report line:col errors; `mutate` runs AST mutation testing in an isolated child JVM. |
 | `kotlin_docs_edit` | `register_symbol`, `register_feature`, `register_namespace` | **Doc Persistence**: Register custom documentation entries dynamically at runtime and disk persistence. |
 | `kotlin_text_lsp_edit` | `rename` | **LSP Refactoring**: AST-based symbol renaming across snippet and workspace files in place. |
 | `kotlin_refactor` | `java_to_kotlin`, `functional`, `suggest_idioms`, `quick_fix`, `rxjava` | **Refactoring**: Code transformations, collection loop modernization, quick-fix diff generation, and RxJava conversion. |
@@ -225,7 +225,7 @@ Add to `~/.config/crush/crush.json` or project-local `crush.json`:
 
 ## System Architecture & Technical Details
 
-- **Action-Multiplexed Tool Suite**: A consolidated suite of 11 tools (5 read-only, 6 mutating) covering documentation, code analysis, project inspection, refactoring, library checks, lint/format, and execution — each action-multiplexed to minimize prompt tokens while returning structured, LLM-consumable results.
+- **Action-Multiplexed Tool Suite**: A consolidated suite of 11 tools (4 read-only, 7 mutating) covering documentation, code analysis, project inspection, refactoring, library checks, lint/format, execution, and mutation testing — each action-multiplexed to minimize prompt tokens while returning structured, LLM-consumable results.
 - **Real Lint & Format Backends**: `kotlin_lint` runs detekt static analysis and ktlint formatting in-process via isolated `ChildFirstClassLoader` instances using dedicated tooling classpaths.
 - **Embedded K2 Compiler (`SnippetCompiler`)**: Uses `kotlin-compiler-embeddable` (`K2JVMCompiler`) for in-process static type checking and diagnostic output without launching external Gradle daemons. Unresolved references are reported as hard errors; pass the owning classpath to resolve project types.
 - **Host JVM Process Runner (`kotlin_run`)**: Executes Kotlin snippets, Gradle tasks, and JUnit test report parsers in host JVM processes with JVM argument filtering and timeout enforcement.

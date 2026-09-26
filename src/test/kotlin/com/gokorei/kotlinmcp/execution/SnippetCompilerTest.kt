@@ -485,4 +485,22 @@ class SnippetCompilerTest {
         assertEquals("Initializer type mismatch: expected 'Int', actual 'String'.", err.message)
         SnippetCompiler.cleanup(result)
     }
+
+    @Test
+    fun `isolated runtime classpath excludes internal build classes when enabled`() {
+        val previous = System.getProperty("kmcp.include_internal_classpath")
+        try {
+            System.setProperty("kmcp.include_internal_classpath", "true")
+            val classpath = resolveIsolatedMutationClasspath(System.getProperty("java.class.path"))
+
+            assertFalse(classpath.any { it.endsWith("build/classes/kotlin/main") })
+            assertFalse(classpath.any { it.endsWith("build/classes/kotlin/test") })
+        } finally {
+            if (previous == null) {
+                System.clearProperty("kmcp.include_internal_classpath")
+            } else {
+                System.setProperty("kmcp.include_internal_classpath", previous)
+            }
+        }
+    }
 }

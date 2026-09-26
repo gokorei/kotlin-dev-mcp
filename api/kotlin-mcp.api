@@ -1482,6 +1482,7 @@ public final class com/gokorei/kotlinmcp/mutation/MutantStatus : java/lang/Enum 
 	public static final field BASELINE_ERROR Lcom/gokorei/kotlinmcp/mutation/MutantStatus;
 	public static final field COMPILATION_ERROR Lcom/gokorei/kotlinmcp/mutation/MutantStatus;
 	public static final field Companion Lcom/gokorei/kotlinmcp/mutation/MutantStatus$Companion;
+	public static final field INFRASTRUCTURE_ERROR Lcom/gokorei/kotlinmcp/mutation/MutantStatus;
 	public static final field KILLED Lcom/gokorei/kotlinmcp/mutation/MutantStatus;
 	public static final field SURVIVED Lcom/gokorei/kotlinmcp/mutation/MutantStatus;
 	public static final field TIMEOUT Lcom/gokorei/kotlinmcp/mutation/MutantStatus;
@@ -1556,12 +1557,15 @@ public final class com/gokorei/kotlinmcp/mutation/MutationReport {
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getCompilationErrorCount ()I
 	public final fun getEffectiveMutants ()I
+	public final fun getInfrastructureErrorCount ()I
 	public final fun getKilledCount ()I
+	public final fun getKilledIncludingTimeoutCount ()I
 	public final fun getOrder ()I
 	public final fun getResults ()Ljava/util/List;
 	public final fun getScore ()D
 	public final fun getSurvivedCount ()I
 	public final fun getTimeoutCount ()I
+	public final fun getTimeoutKilledCount ()I
 	public final fun getTotalMutants ()I
 	public fun hashCode ()I
 	public final fun isStrong ()Z

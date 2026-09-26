@@ -22,7 +22,7 @@ import kotlinx.coroutines.CancellationException
 /**
  * Registers the consolidated Kotlin developer tools on the MCP [Server].
  *
- * Consolidates the tool surface into 11 tools (5 read-only, 6 edit/mutating) using progressive discovery
+ * Consolidates the tool surface into 11 tools (4 read-only, 7 edit/mutating) using progressive discovery
  * action parameters to drastically reduce LLM prompt token consumption.
  */
 object ToolRegistrar {
@@ -194,13 +194,18 @@ object ToolRegistrar {
                 )
             }
         }
+    }
 
-        // 5. kotlin_check_snippet
+    private fun collectEditTools(
+        kotlinServer: KotlinMcpServer,
+        register: (name: String, builder: ToolBuilder.() -> Unit) -> Unit
+    ) {
+        // 1. kotlin_check_snippet
         register("kotlin_check_snippet") {
-            description = "Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column, run in-memory AST mutation testing, or perform compiler-backed semantic verification (when-exhaustiveness, value classes, contracts, expect/actual, inline-reified, opt-in, deprecated)."
-            readOnly = true
+            description = "Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column, run AST mutation testing in an isolated child JVM, or perform compiler-backed semantic verification (when-exhaustiveness, value classes, contracts, expect/actual, inline-reified, opt-in, deprecated)."
+            readOnly = false
             actions("check", "mutate", "when_exhaustiveness", "value_class", "inline_reified", "contracts", "expect_actual", "experimental_optin", "deprecated")
-            param("action", "Operation: 'check' (default, embedded compiler diagnostics), 'mutate' (in-memory AST mutation testing), 'when_exhaustiveness' (sealed/enum branch checking), 'value_class' (@JvmInline constraints), 'inline_reified' (reified generics & inline size), 'contracts' (contract blocks), 'expect_actual' (KMP multiplatform alignment), 'experimental_optin' (@RequiresOptIn/@OptIn), 'deprecated' (@Deprecated ReplaceWith)")
+            param("action", "Operation: 'check' (default, embedded compiler diagnostics), 'mutate' (AST mutation testing in an isolated child JVM), 'when_exhaustiveness' (sealed/enum branch checking), 'value_class' (@JvmInline constraints), 'inline_reified' (reified generics & inline size), 'contracts' (contract blocks), 'expect_actual' (KMP multiplatform alignment), 'experimental_optin' (@RequiresOptIn/@OptIn), 'deprecated' (@Deprecated ReplaceWith)")
             param("code", "Kotlin code snippet to compile-check, mutation-test, or semantically verify")
             param("testCode", "Optional unit test code containing fun main() assertions to evaluate against generated mutants (used when action='mutate')")
             param("preset", "Optional response projection for mutation reports: 'compact', 'full' (default), or 'summary'")
@@ -232,13 +237,7 @@ object ToolRegistrar {
                 )
             }
         }
-    }
-
-    private fun collectEditTools(
-        kotlinServer: KotlinMcpServer,
-        register: (name: String, builder: ToolBuilder.() -> Unit) -> Unit
-    ) {
-        // 1. kotlin_docs_edit
+        // 2. kotlin_docs_edit
         register("kotlin_docs_edit") {
             description = "MUTATING. Register custom documentation entries dynamically at runtime and disk persistence."
             readOnly = false
@@ -263,7 +262,7 @@ object ToolRegistrar {
             }
         }
 
-        // 2. kotlin_text_lsp_edit
+        // 3. kotlin_text_lsp_edit
         register("kotlin_text_lsp_edit") {
             description = "MUTATING. AST-based symbol renaming across snippet and workspace files in place."
             readOnly = false
@@ -289,7 +288,7 @@ object ToolRegistrar {
             }
         }
 
-        // 3. kotlin_refactor
+        // 4. kotlin_refactor
         register("kotlin_refactor") {
             description = "MUTATING. Code refactorings and compiler-diagnostic quick-fixes that produce new code."
             readOnly = false
@@ -315,7 +314,7 @@ object ToolRegistrar {
             }
         }
 
-        // 4. kotlin_library_analyze
+        // 5. kotlin_library_analyze
         register("kotlin_library_analyze") {
             description = "MUTATING. Library anti-pattern checks, modernization suggestions, and code-transforming refactors (e.g. Arrow, Android DI)."
             readOnly = false
@@ -351,7 +350,7 @@ object ToolRegistrar {
             }
         }
 
-        // 5. kotlin_lint
+        // 6. kotlin_lint
         register("kotlin_lint") {
             description = "MUTATING. Detekt, KtLint, and Android Lint static analysis, baseline management, and code formatting."
             readOnly = false
@@ -380,7 +379,7 @@ object ToolRegistrar {
             }
         }
 
-        // 6. kotlin_run
+        // 7. kotlin_run
         register("kotlin_run") {
             description = "MUTATING. Compile and execute standalone Kotlin snippets, Gradle tasks, or test report parsers in an isolated host JVM process."
             readOnly = false

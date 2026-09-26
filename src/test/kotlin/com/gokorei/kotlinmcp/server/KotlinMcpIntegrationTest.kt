@@ -165,7 +165,7 @@ class KotlinMcpIntegrationTest {
             val result = client.listTools(ListToolsRequest())
             val annotationsByTool = result.tools.associate { it.name to it.annotations?.readOnlyHint }
 
-            val mutatingTools = listOf("kotlin_refactor", "kotlin_library_analyze", "kotlin_docs_edit", "kotlin_text_lsp_edit", "kotlin_lint", "kotlin_run")
+            val mutatingTools = listOf("kotlin_check_snippet", "kotlin_refactor", "kotlin_library_analyze", "kotlin_docs_edit", "kotlin_text_lsp_edit", "kotlin_lint", "kotlin_run")
             mutatingTools.forEach { name ->
                 assertFalse(
                     annotationsByTool[name] == true,
@@ -173,7 +173,7 @@ class KotlinMcpIntegrationTest {
                 )
             }
 
-            val readOnlyTools = listOf("kotlin_code_analyze", "kotlin_project_inspect", "kotlin_check_snippet", "kotlin_docs_read", "kotlin_text_lsp_read")
+            val readOnlyTools = listOf("kotlin_code_analyze", "kotlin_project_inspect", "kotlin_docs_read", "kotlin_text_lsp_read")
             readOnlyTools.forEach { name ->
                 assertTrue(
                     annotationsByTool[name] == true,

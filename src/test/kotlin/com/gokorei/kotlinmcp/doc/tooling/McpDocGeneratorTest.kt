@@ -33,7 +33,7 @@ class McpDocGeneratorTest {
 
         val readOnlyNames = docSpecs.filter { it.readOnly }.map { it.name }
         assertEquals(
-            listOf("kotlin_docs_read", "kotlin_code_analyze", "kotlin_text_lsp_read", "kotlin_project_inspect", "kotlin_check_snippet"),
+            listOf("kotlin_docs_read", "kotlin_code_analyze", "kotlin_text_lsp_read", "kotlin_project_inspect"),
             readOnlyNames,
             "Read-only tools must match expected list"
         )
