@@ -194,8 +194,13 @@ object ToolRegistrar {
                 )
             }
         }
+    }
 
-        // 5. kotlin_check_snippet
+    private fun collectEditTools(
+        kotlinServer: KotlinMcpServer,
+        register: (name: String, builder: ToolBuilder.() -> Unit) -> Unit
+    ) {
+        // 1. kotlin_check_snippet
         register("kotlin_check_snippet") {
             description = "Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column, run AST mutation testing in an isolated child JVM, or perform compiler-backed semantic verification (when-exhaustiveness, value classes, contracts, expect/actual, inline-reified, opt-in, deprecated)."
             readOnly = false
@@ -232,13 +237,7 @@ object ToolRegistrar {
                 )
             }
         }
-    }
-
-    private fun collectEditTools(
-        kotlinServer: KotlinMcpServer,
-        register: (name: String, builder: ToolBuilder.() -> Unit) -> Unit
-    ) {
-        // 1. kotlin_docs_edit
+        // 2. kotlin_docs_edit
         register("kotlin_docs_edit") {
             description = "MUTATING. Register custom documentation entries dynamically at runtime and disk persistence."
             readOnly = false
@@ -263,7 +262,7 @@ object ToolRegistrar {
             }
         }
 
-        // 2. kotlin_text_lsp_edit
+        // 3. kotlin_text_lsp_edit
         register("kotlin_text_lsp_edit") {
             description = "MUTATING. AST-based symbol renaming across snippet and workspace files in place."
             readOnly = false
@@ -289,7 +288,7 @@ object ToolRegistrar {
             }
         }
 
-        // 3. kotlin_refactor
+        // 4. kotlin_refactor
         register("kotlin_refactor") {
             description = "MUTATING. Code refactorings and compiler-diagnostic quick-fixes that produce new code."
             readOnly = false
@@ -315,7 +314,7 @@ object ToolRegistrar {
             }
         }
 
-        // 4. kotlin_library_analyze
+        // 5. kotlin_library_analyze
         register("kotlin_library_analyze") {
             description = "MUTATING. Library anti-pattern checks, modernization suggestions, and code-transforming refactors (e.g. Arrow, Android DI)."
             readOnly = false
@@ -351,7 +350,7 @@ object ToolRegistrar {
             }
         }
 
-        // 5. kotlin_lint
+        // 6. kotlin_lint
         register("kotlin_lint") {
             description = "MUTATING. Detekt, KtLint, and Android Lint static analysis, baseline management, and code formatting."
             readOnly = false
@@ -380,7 +379,7 @@ object ToolRegistrar {
             }
         }
 
-        // 6. kotlin_run
+        // 7. kotlin_run
         register("kotlin_run") {
             description = "MUTATING. Compile and execute standalone Kotlin snippets, Gradle tasks, or test report parsers in an isolated host JVM process."
             readOnly = false

@@ -341,11 +341,11 @@ internal const val HOST_EXECUTION_BOOTSTRAP_RESOURCE =
         "HostExecutionBootstrap.class"
 private const val PROCESS_STARTUP_ALLOWANCE_MS = 2_000L
 private const val PROCESS_READY_POLL_INTERVAL_MS = 5L
-private const val PROCESS_START_SIGNAL: Byte = 1
 private const val PROCESS_DRAIN_JOIN_TIMEOUT_MS = 1_000L
 private const val PROCESS_OUTPUT_JOIN_TIMEOUT_MS = 2_000L
 private const val PROCESS_CLEANUP_WAIT_TIMEOUT_MS = 1_000L
 private const val BOOTSTRAP_DIR_PREFIX = "kmcp-bootstrap"
+private const val MARKER_SEPARATOR = ":"
 private const val DESCENDANT_OBSERVATION_INTERVAL_NANOS = 25_000_000L
 private const val NANOS_PER_MILLISECOND = 1_000_000L
 
@@ -375,42 +375,64 @@ private fun runCompiledProcess(
         com.gokorei.kotlinmcp.shared.BoundedStreamDrainer
             .drain(process.inputStream)
     val observedDescendants = LinkedHashSet<ProcessHandle>()
+    val bootstrapSecret = java.util.UUID
+        .randomUUID()
+        .toString()
     return try {
         val startNanos = System.nanoTime()
         val executionError =
-            beginCompiledExecution(process, drainHandle, readinessToken)
+            beginCompiledExecution(process, drainHandle, readinessToken, bootstrapSecret)
                 ?: waitForCompiledExecution(process, timeoutMillis, observedDescendants)
         if (executionError != null) {
             executionError
         } else {
             drainHandle.join(PROCESS_OUTPUT_JOIN_TIMEOUT_MS)
             val durationMs = (System.nanoTime() - startNanos) / NANOS_PER_MILLISECOND
-            val text = LogTruncator.truncate(drainHandle.readUtf8().replace(readinessToken, ""))
-            val exit = process.exitValue()
-            if (exit == 0) {
-                KotlinMcpResult.Success(
-                    content = if (text.isBlank()) "Ran successfully in isolated mutation JVM." else text,
-                    metadata = mapOf("mode" to "host_jvm", "exitCode" to "0", "durationMs" to durationMs.toString()),
-                )
-            } else {
-                val bootstrapFailure = exit == BOOTSTRAP_SETUP_EXIT_CODE || text.contains(BOOTSTRAP_ERROR_MARKER)
-                KotlinMcpResult.Error(
-                    message = "Isolated mutation JVM exited with code $exit:\n$text",
-                    code = if (bootstrapFailure) BOOTSTRAP_ERROR_CODE else "RUNTIME_ERROR",
-                    details =
-                        mapOf(
-                            "mode" to "host_jvm",
-                            "phase" to if (bootstrapFailure) "bootstrap" else "execution",
-                            "exitCode" to exit.toString(),
-                            "durationMs" to durationMs.toString(),
-                        ),
-                    requireAnotherCall = true,
-                )
-            }
+            val rawText = drainHandle.readUtf8()
+            val text = LogTruncator.truncate(rawText.replace(readinessToken, ""))
+            buildExecutionResult(process.exitValue(), text, rawText, durationMs, bootstrapSecret)
         }
     } finally {
         cleanupProcess(process, drainHandle, observedDescendants)
     }
+}
+
+private fun buildExecutionResult(
+    exit: Int,
+    text: String,
+    rawText: String,
+    durationMs: Long,
+    bootstrapSecret: String,
+): KotlinMcpResult {
+    if (exit == 0) {
+        return KotlinMcpResult.Success(
+            content = if (text.isBlank()) "Ran successfully in isolated mutation JVM." else text,
+            metadata = mapOf("mode" to "host_jvm", "exitCode" to "0", "durationMs" to durationMs.toString()),
+        )
+    }
+    val bootstrapFailure = isBootstrapSetupFailure(exit, rawText, bootstrapSecret)
+    return KotlinMcpResult.Error(
+        message = "Isolated mutation JVM exited with code $exit:\n$text",
+        code = if (bootstrapFailure) BOOTSTRAP_ERROR_CODE else "RUNTIME_ERROR",
+        details =
+            mapOf(
+                "mode" to "host_jvm",
+                "phase" to if (bootstrapFailure) "bootstrap" else "execution",
+                "exitCode" to exit.toString(),
+                "durationMs" to durationMs.toString(),
+            ),
+        requireAnotherCall = true,
+    )
+}
+
+private fun isBootstrapSetupFailure(
+    exit: Int,
+    rawText: String,
+    bootstrapSecret: String,
+): Boolean {
+    if (exit != BOOTSTRAP_SETUP_EXIT_CODE) return false
+    val expectedLine = "$bootstrapSecret$MARKER_SEPARATOR$BOOTSTRAP_ERROR_MARKER"
+    return rawText.lineSequence().any { it.trim() == expectedLine }
 }
 
 @Suppress("ReturnCount")
@@ -418,6 +440,7 @@ private fun beginCompiledExecution(
     process: Process,
     drainHandle: com.gokorei.kotlinmcp.shared.BoundedDrainHandle,
     readinessToken: String,
+    bootstrapSecret: String,
 ): KotlinMcpResult? {
     val ready = awaitProcessReadiness(process, drainHandle, readinessToken)
     return when {
@@ -447,7 +470,7 @@ private fun beginCompiledExecution(
         else ->
             try {
                 process.outputStream.use { stream ->
-                    stream.write(PROCESS_START_SIGNAL.toInt())
+                    stream.write("$bootstrapSecret\nstart\n".toByteArray(Charsets.UTF_8))
                     stream.flush()
                 }
                 null

@@ -12,10 +12,10 @@ internal object HostExecutionBootstrap {
     fun main(args: Array<String>) {
         val setupError = executeTarget(args)
         if (setupError == null) return
-        System.err.println(BOOTSTRAP_ERROR_MARKER)
+        System.err.println("$bootstrapSecret$MARKER_SEPARATOR$BOOTSTRAP_ERROR_MARKER")
         System.err.println(setupError)
         System.err.flush()
-        Runtime.getRuntime().halt(BOOTSTRAP_SETUP_EXIT_CODE)
+        System.exit(BOOTSTRAP_SETUP_EXIT_CODE)
     }
 
     @Suppress("ReturnCount")
@@ -41,7 +41,15 @@ internal object HostExecutionBootstrap {
             }
         println(args[1])
         System.out.flush()
-        if (System.`in`.read() != PROCESS_START_SIGNAL) {
+        val handshake = System.`in`.bufferedReader()
+        val secret = handshake.readLine()
+        if (secret == null || secret.isEmpty()) {
+            return "Missing bootstrap secret for '${args[0]}'"
+        }
+        bootstrapSecret = secret
+        val command = handshake.readLine()
+        handshake.close()
+        if (command != PROCESS_START_COMMAND) {
             return "Missing execution start signal for '${args[0]}'"
         }
         return try {
@@ -62,6 +70,8 @@ internal object HostExecutionBootstrap {
             "Target '${args[0]}' could not be invoked: ${e.describe()}"
         }
     }
+
+    private var bootstrapSecret: String = ""
 
     private fun destroyDescendants() {
         val descendants =
@@ -86,8 +96,9 @@ internal object HostExecutionBootstrap {
             else -> false
         }
 
-    private const val PROCESS_START_SIGNAL = 1
+    private const val PROCESS_START_COMMAND = "start"
+    private const val MARKER_SEPARATOR = ":"
 }
 
 internal const val BOOTSTRAP_SETUP_EXIT_CODE = 2
-internal const val BOOTSTRAP_ERROR_MARKER = "[[kmcp-bootstrap-error]]"
+internal const val BOOTSTRAP_ERROR_MARKER = "kmcp-bootstrap-error"

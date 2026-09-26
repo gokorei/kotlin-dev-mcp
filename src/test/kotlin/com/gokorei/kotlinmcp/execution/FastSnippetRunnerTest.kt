@@ -4,6 +4,7 @@ import com.gokorei.kotlinmcp.execution.bootstrap.BOOTSTRAP_ERROR_MARKER
 import com.gokorei.kotlinmcp.execution.bootstrap.BOOTSTRAP_SETUP_EXIT_CODE
 import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -11,6 +12,7 @@ import java.io.File
 import java.nio.file.Files
 import kotlin.system.measureTimeMillis
 
+@Suppress("LargeClass")
 class FastSnippetRunnerTest {
     @Test
     fun `executes compiled snippet in-memory and captures standard output`() {
@@ -438,6 +440,162 @@ class FastSnippetRunnerTest {
     }
 
     @Test
+    fun `bootstrap setup failure still cleans descendants via the shutdown hook`() {
+        val pidFile = Files.createTempFile("host-runner-setup-descendant", ".pid")
+        Files.deleteIfExists(pidFile)
+        val pidPath = pidFile.toString().replace("\\", "\\\\").replace("\"", "\\\"")
+        val code =
+            """
+            fun main() {
+                val child = ProcessBuilder("sleep", "43").start()
+                java.nio.file.Files.writeString(java.nio.file.Path.of("$pidPath"), child.pid().toString())
+                Thread.sleep(400)
+                linkageFailure()
+            }
+
+            private fun linkageFailure(): Nothing = throw NoClassDefFoundError("com/example/Absent")
+            """.trimIndent()
+        val compiled = SnippetCompiler.compile(code)
+        assertTrue(compiled is CompileResult.Compiled)
+        val result = compiled as CompileResult.Compiled
+
+        try {
+            val executionResult =
+                HostJvmCompiledSnippetRunner().use { runner ->
+                    runner.run(result.outDir, timeoutMillis = 10_000L)
+                }
+
+            assertTrue(executionResult.isError, "expected failure, got: ${executionResult.toFormattedText()}")
+            val error = executionResult as KotlinMcpResult.Error
+            assertEquals(BOOTSTRAP_ERROR_CODE, error.code)
+            assertEquals("bootstrap", error.details["phase"])
+            assertEquals("2", error.details["exitCode"])
+            assertTrue(Files.exists(pidFile), "snippet did not record the descendant pid")
+            val pid = Files.readString(pidFile).toLong()
+            val grandchild = ProcessHandle.of(pid).orElse(null)
+            assertTrue(grandchild == null || !grandchild.isAlive, "descendant $pid survived the setup failure")
+        } finally {
+            Files.deleteIfExists(pidFile)
+            SnippetCompiler.cleanup(result)
+        }
+    }
+
+    @Test
+    fun `bootstrap child cleans its own descendants on setup failure`() {
+        val pidFile = Files.createTempFile("host-runner-hook-descendant", ".pid")
+        Files.deleteIfExists(pidFile)
+        val pidPath = pidFile.toString().replace("\\", "\\\\").replace("\"", "\\\"")
+        val code =
+            """
+            fun main() {
+                val child = ProcessBuilder("sleep", "43").start()
+                java.nio.file.Files.writeString(java.nio.file.Path.of("$pidPath"), child.pid().toString())
+                Thread.sleep(300)
+                linkageFailure()
+            }
+
+            private fun linkageFailure(): Nothing = throw NoClassDefFoundError("com/example/Absent")
+            """.trimIndent()
+        val compiled = SnippetCompiler.compile(code)
+        assertTrue(compiled is CompileResult.Compiled)
+        val result = compiled as CompileResult.Compiled
+        val stagingRoot = Files.createTempDirectory("host-runner-hook-staging")
+        val secret =
+            java.util.UUID
+                .randomUUID()
+                .toString()
+
+        try {
+            val javaExecutable = DefaultJavaResolver().resolve(null)
+            assertNotNull(javaExecutable, "no Java executable available for the bootstrap hook check")
+            val bootstrapDir = Files.createTempDirectory(stagingRoot, "kmcp-bootstrap")
+            val resource =
+                HostJvmCompiledSnippetRunner::class.java.classLoader
+                    .getResourceAsStream(HOST_EXECUTION_BOOTSTRAP_RESOURCE)
+            assertNotNull(resource)
+            resource!!.use { stageHostExecutionBootstrap(bootstrapDir, it) }
+            val command =
+                buildCompiledCommand(result.outDir, bootstrapDir, emptyList(), javaExecutable!!, "hook-token")
+            val process = ProcessBuilder(command).redirectErrorStream(true).start()
+            process.outputStream.use { it.write("$secret\nstart\n".toByteArray(Charsets.UTF_8)) }
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+
+            assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS), "bootstrap JVM did not exit")
+            assertEquals(BOOTSTRAP_SETUP_EXIT_CODE, process.exitValue(), "output:\n$output")
+            assertTrue(Files.exists(pidFile), "snippet did not record the descendant pid")
+            val pid = Files.readString(pidFile).toLong()
+            val grandchild = ProcessHandle.of(pid).orElse(null)
+            assertTrue(
+                grandchild == null || !grandchild.isAlive,
+                "descendant $pid survived; the child JVM must clean up via its shutdown hook",
+            )
+        } finally {
+            stagingRoot.toFile().deleteRecursively()
+            Files.deleteIfExists(pidFile)
+            SnippetCompiler.cleanup(result)
+        }
+    }
+
+    @Test
+    fun `target that exits with the bootstrap exit code is not classified as a bootstrap error`() {
+        val code =
+            """
+            fun main() {
+                println("target-controlled-exit")
+                kotlin.system.exitProcess(2)
+            }
+            """.trimIndent()
+        val compiled = SnippetCompiler.compile(code)
+        assertTrue(compiled is CompileResult.Compiled)
+        val result = compiled as CompileResult.Compiled
+
+        try {
+            val executionResult =
+                HostJvmCompiledSnippetRunner().use { runner ->
+                    runner.run(result.outDir, timeoutMillis = 10_000L)
+                }
+
+            assertTrue(executionResult.isError, "expected failure, got: ${executionResult.toFormattedText()}")
+            val error = executionResult as KotlinMcpResult.Error
+            assertEquals("RUNTIME_ERROR", error.code)
+            assertEquals("execution", error.details["phase"])
+            assertEquals("2", error.details["exitCode"])
+        } finally {
+            SnippetCompiler.cleanup(result)
+        }
+    }
+
+    @Test
+    fun `target that prints the bootstrap marker is not classified as a bootstrap error`() {
+        val code =
+            """
+            fun main() {
+                println("kmcp-bootstrap-error")
+                println(":" + "kmcp-bootstrap-error")
+                error("target-assertion-failure")
+            }
+            """.trimIndent()
+        val compiled = SnippetCompiler.compile(code)
+        assertTrue(compiled is CompileResult.Compiled)
+        val result = compiled as CompileResult.Compiled
+
+        try {
+            val executionResult =
+                HostJvmCompiledSnippetRunner().use { runner ->
+                    runner.run(result.outDir, timeoutMillis = 10_000L)
+                }
+
+            assertTrue(executionResult.isError, "expected failure, got: ${executionResult.toFormattedText()}")
+            val error = executionResult as KotlinMcpResult.Error
+            assertEquals("RUNTIME_ERROR", error.code)
+            assertEquals("execution", error.details["phase"])
+            assertTrue(error.message.contains("kmcp-bootstrap-error"), error.message)
+        } finally {
+            SnippetCompiler.cleanup(result)
+        }
+    }
+
+    @Test
     fun `isolated bootstrap staging contains only the bootstrap class file`() {
         val stagingRoot = Files.createTempDirectory("host-runner-bootstrap-staging")
         try {
@@ -497,6 +655,10 @@ class FastSnippetRunnerTest {
             val output = process.inputStream.bufferedReader().use { it.readText() }
             assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS), "bootstrap JVM did not exit")
             val exit = process.exitValue()
+            assertFalse(
+                output.contains("NoClassDefFoundError"),
+                "staged bootstrap needs additional server classes, output:\n$output",
+            )
             assertEquals(BOOTSTRAP_SETUP_EXIT_CODE, exit, "bootstrap exited abnormally, output:\n$output")
             assertTrue(output.contains(BOOTSTRAP_ERROR_MARKER), "expected setup-failure marker, output:\n$output")
         } finally {
