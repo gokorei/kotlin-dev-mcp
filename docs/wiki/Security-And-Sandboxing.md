@@ -27,7 +27,7 @@ It is important to understand the boundary between **Process Isolation** and **C
 | **OS Syscall Restrictions** | ❌ **No**: Can invoke sub-processes (`ProcessBuilder`). | ✅ **Yes**: Restricted via seccomp / Landlock profiles. |
 
 > [!IMPORTANT]
-> Out of the box, `kotlin-mcp` runs code under the privileges of the host OS user running the server. For trusted local pair programming (e.g. Cursor, Claude Code, Antigravity), this is standard. For multi-tenant or untrusted deployments, run `kotlin-mcp` inside a container.
+> Out of the box, `kotlin-mcp` runs code under the privileges of the host OS user running the server. Child-process execution prevents server classloader access and cleans up descendants on normal exit and timeout paths, but does not provide filesystem, network, or parent-process sandboxing. Forced JVM termination such as `Runtime.halt(0)` bypasses shutdown cleanup and requires OS-level containment. For trusted local pair programming (e.g. Cursor, Claude Code, Antigravity), this is standard. For multi-tenant or untrusted deployments, run `kotlin-mcp` inside a container with restricted mounts, disabled network access, and process/PID isolation.
 
 ---
 

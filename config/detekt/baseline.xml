@@ -544,7 +544,9 @@
     <ID>MaxLineLength:KotlinMcpIntegrationTest.kt$KotlinMcpIntegrationTest$mapOf("action" to "register_symbol", "name" to "kotlin.sequences.Sequence", "content" to "# Sequence\nA lazy collection pipeline.")</ID>
     <ID>MaxLineLength:KotlinMcpIntegrationTest.kt$KotlinMcpIntegrationTest$val lookedUp = client.callTool("kotlin_docs_read", mapOf("action" to "lookup", "query" to "kotlin.sequences.Sequence"))</ID>
     <ID>MaxLineLength:KotlinMcpIntegrationTest.kt$KotlinMcpIntegrationTest$val mutatingTools = listOf("kotlin_refactor", "kotlin_library_analyze", "kotlin_docs_edit", "kotlin_text_lsp_edit", "kotlin_lint", "kotlin_run")</ID>
+    <ID>MaxLineLength:KotlinMcpIntegrationTest.kt$KotlinMcpIntegrationTest$val mutatingTools = listOf("kotlin_check_snippet", "kotlin_refactor", "kotlin_library_analyze", "kotlin_docs_edit", "kotlin_text_lsp_edit", "kotlin_lint", "kotlin_run")</ID>
     <ID>MaxLineLength:KotlinMcpIntegrationTest.kt$KotlinMcpIntegrationTest$val readOnlyTools = listOf("kotlin_code_analyze", "kotlin_project_inspect", "kotlin_check_snippet", "kotlin_docs_read", "kotlin_text_lsp_read")</ID>
+    <ID>MaxLineLength:KotlinMcpIntegrationTest.kt$KotlinMcpIntegrationTest$val readOnlyTools = listOf("kotlin_code_analyze", "kotlin_project_inspect", "kotlin_docs_read", "kotlin_text_lsp_read")</ID>
     <ID>MaxLineLength:KotlinMcpIntegrationTest.kt$KotlinMcpIntegrationTest$val result = client.callTool("kotlin_docs_read", mapOf("action" to "lookup", "query" to "totallyUnknownSymbol999"))</ID>
     <ID>MaxLineLength:KotlinMcpIntegrationTest.kt$KotlinMcpIntegrationTest$workspace.resolve("Cart.kt").toFile().writeText("package app\nclass Cart(val n: Int) { fun totalFees() = n }\n")</ID>
     <ID>MaxLineLength:KotlinMcpIntegrationTest.kt$KotlinMcpIntegrationTest$workspace.resolve("UseB.kt").toFile().writeText("package app\nfun b() { val counter = 1; println(counter) }\n")</ID>

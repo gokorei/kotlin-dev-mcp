@@ -444,3 +444,32 @@ object SnippetCompiler {
         return if (major in 8..21) major.toString() else "21"
     }
 }
+
+private val isolatedSnippetLibraryMarkers =
+    listOf(
+        "kotlin-stdlib",
+        "kotlinx-coroutines",
+        "kotlinx-serialization",
+        "kotlinx-datetime",
+        "arrow-core",
+        "mockk",
+        "turbine",
+        "ktor",
+        "kotlin-logging",
+        "slf4j",
+    )
+
+internal fun resolveIsolatedMutationClasspath(javaClassPath: String): List<String> {
+    val fromSystem =
+        javaClassPath
+            .split(File.pathSeparator)
+            .filter { it.isNotBlank() }
+            .filter { entry ->
+                val name = entry.substringAfterLast('/').lowercase()
+                isolatedSnippetLibraryMarkers.any { name.contains(it) }
+            }
+    return if (fromSystem.isNotEmpty()) fromSystem else SnippetCompiler.materializeBundledSnippetClasspath()
+}
+
+internal val isolatedMutationExecutionClasspath: List<String>
+    get() = resolveIsolatedMutationClasspath(System.getProperty("java.class.path").orEmpty())

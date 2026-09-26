@@ -56,7 +56,7 @@ class DefaultMutationService(
             appendLine()
             val badge = when {
                 report.totalMutants == 0 -> "⚪ **NO MUTANTS GENERATED**"
-                report.effectiveMutants == 0 -> "⚠️ **NO EFFECTIVE MUTANTS (All Discarded / Compilation Errors)**"
+                report.effectiveMutants == 0 -> "⚠️ **NO EFFECTIVE MUTANTS (Compilation or Infrastructure Errors)**"
                 report.isStrong -> "🟢 **STRONG (${report.score}%)**"
                 else -> "🔴 **NEEDS IMPROVEMENT (${report.score}%)**"
             }
@@ -70,12 +70,19 @@ class DefaultMutationService(
             if (report.timeoutCount > 0) {
                 appendLine("- **Timeouts (Counted as Killed):** ${report.timeoutCount}")
             }
+            val infrastructureErrorCount = report.results.count { it.status == MutantStatus.INFRASTRUCTURE_ERROR }
+            if (infrastructureErrorCount > 0) {
+                appendLine("- **Infrastructure Errors (Excluded):** $infrastructureErrorCount")
+            }
             appendLine()
 
             val survived = report.results.filter { it.status == MutantStatus.SURVIVED }
             if (survived.isNotEmpty()) {
                 appendLine("## ⚠️ Survived Mutants (${survived.size})")
-                appendLine("The following mutated code variations passed all test assertions without triggering a failure. Add assertions to guard these behaviors:")
+                appendLine(
+                    "The following mutated code variations passed all test assertions without triggering a failure. " +
+                        "Add assertions to guard these behaviors:",
+                )
                 appendLine()
                 survived.forEachIndexed { idx, res ->
                     val m = res.mutant
@@ -89,22 +96,36 @@ class DefaultMutationService(
                     appendLine()
                 }
             } else if (report.effectiveMutants == 0) {
-                appendLine("⚠️ **No executable mutants could be compiled.** Generated mutations failed type checking or compilation against this snippet signature.")
+                appendLine(
+                    "⚠️ **No executable mutants could be compiled or run.** " +
+                        "Generated mutations failed compilation or the isolated execution environment failed.",
+                )
+            } else if (infrastructureErrorCount > 0) {
+                appendLine(
+                    "⚠️ **Some mutants could not be executed because of infrastructure errors.** " +
+                        "The score covers only mutants with valid execution results.",
+                )
             } else {
-                appendLine("✅ **All mutants killed!** Your unit test assertions effectively catch all synthesized boundary, relational, and conditional alterations.")
+                appendLine(
+                    "✅ **All mutants killed!** " +
+                        "Your unit test assertions effectively catch all synthesized boundary, relational, " +
+                        "and conditional alterations.",
+                )
             }
         }.trim()
 
-        val rawResult = KotlinMcpResult.Success(
-            content = content,
-            metadata = mapOf(
-                "score" to report.score.toString(),
-                "totalMutants" to report.totalMutants.toString(),
-                "killedCount" to report.killedCount.toString(),
-                "survivedCount" to report.survivedCount.toString(),
-                "isStrong" to report.isStrong.toString()
+        val rawResult =
+            KotlinMcpResult.Success(
+                content = content,
+                metadata =
+                    mapOf(
+                        "score" to report.score.toString(),
+                        "totalMutants" to report.totalMutants.toString(),
+                        "killedCount" to report.killedCount.toString(),
+                        "survivedCount" to report.survivedCount.toString(),
+                        "isStrong" to report.isStrong.toString(),
+                    ),
             )
-        )
 
         return ProjectionFilter.apply(rawResult, projection)
     }

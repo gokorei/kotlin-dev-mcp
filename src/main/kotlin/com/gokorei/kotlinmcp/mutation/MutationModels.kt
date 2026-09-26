@@ -52,9 +52,10 @@ enum class MutantStatus {
 
     /** Execution of the mutant exceeded the specified timeout limit. */
     TIMEOUT,
+    INFRASTRUCTURE_ERROR,
 
     /** Baseline test suite or snippet compilation failed before mutations were applied. */
-    BASELINE_ERROR
+    BASELINE_ERROR,
 }
 
 /**
@@ -65,7 +66,7 @@ data class MutantResult(
     val mutant: AstMutant,
     val status: MutantStatus,
     val details: String? = null,
-    val durationMs: Long = 0L
+    val durationMs: Long = 0L,
 )
 
 /**
@@ -80,11 +81,11 @@ data class MutationReport(
     val compilationErrorCount: Int,
     val timeoutCount: Int,
     val results: List<MutantResult>,
-    val order: Int = 1
+    val order: Int = 1,
 ) {
     val effectiveMutants: Int
-        get() = totalMutants - compilationErrorCount
+        get() = results.count { it.status in setOf(MutantStatus.KILLED, MutantStatus.SURVIVED, MutantStatus.TIMEOUT) }
 
     val isStrong: Boolean
-        get() = effectiveMutants > 0 && score >= 80.0
+        get() = effectiveMutants > 0 && results.none { it.status == MutantStatus.INFRASTRUCTURE_ERROR } && score >= 80.0
 }

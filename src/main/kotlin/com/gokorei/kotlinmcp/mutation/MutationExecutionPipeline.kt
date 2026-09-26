@@ -139,11 +139,14 @@ class DefaultMutationExecutionPipeline(
 
                 when (runResult) {
                     is KotlinMcpResult.Error -> {
-                        if (runResult.code == "EXECUTION_TIMEOUT") {
+                        if (runResult.code == "EXECUTION_TIMEOUT" && runResult.details["phase"] == "execution") {
                             results.add(MutantResult(mutant, MutantStatus.TIMEOUT, runResult.message, durMs))
-                        } else {
-                            // Test assertion failed or runtime exception caught the mutant -> KILLED
+                        } else if (runResult.code == "RUNTIME_ERROR") {
                             results.add(MutantResult(mutant, MutantStatus.KILLED, runResult.message, durMs))
+                        } else {
+                            results.add(
+                                MutantResult(mutant, MutantStatus.INFRASTRUCTURE_ERROR, runResult.message, durMs),
+                            )
                         }
                     }
                     is KotlinMcpResult.Success -> {
@@ -153,8 +156,8 @@ class DefaultMutationExecutionPipeline(
                                 mutant = mutant,
                                 status = MutantStatus.SURVIVED,
                                 details = "Test passed exit 0 despite mutation at line ${mutant.line}: ${mutant.description}",
-                                durationMs = durMs
-                            )
+                                durationMs = durMs,
+                            ),
                         )
                     }
                 }
@@ -183,14 +186,14 @@ class DefaultMutationExecutionPipeline(
             compilationErrorCount = compilationErrorCount,
             timeoutCount = timeoutCount,
             results = results,
-            order = maxOrder
+            order = maxOrder,
         )
     }
 
     private data class ParsedTestCode(
         val packageDirective: String?,
         val imports: List<String>,
-        val body: String
+        val body: String,
     )
 
     private fun parseTestCode(testCode: String): ParsedTestCode {

@@ -208,4 +208,126 @@ class MutationExecutionPipelineTest {
 
         assertFalse(report.results.any { it.status == MutantStatus.BASELINE_ERROR })
     }
+
+    @Test
+    fun `runtime failures are reported as killed mutants`() {
+        var invocation = 0
+        val runner =
+            object : com.gokorei.kotlinmcp.execution.FastSnippetRunner {
+                override fun run(
+                    outDir: java.nio.file.Path,
+                    timeoutMillis: Long,
+                    extraClasspath: List<String>,
+                ): com.gokorei.kotlinmcp.models.KotlinMcpResult {
+                    invocation++
+                    return if (invocation == 1) {
+                        com.gokorei.kotlinmcp.models.KotlinMcpResult.Success(
+                            "baseline",
+                        )
+                    } else {
+                        com.gokorei.kotlinmcp.models.KotlinMcpResult.Error(
+                            message = "mutant assertion failed",
+                            code = "RUNTIME_ERROR",
+                        )
+                    }
+                }
+
+                override fun close() = Unit
+            }
+        val localPipeline = DefaultMutationExecutionPipeline(runner = runner)
+
+        try {
+            val report =
+                localPipeline.run(
+                    code = "fun calculate(): Int = 1 + 1",
+                    testCode = "fun main() { check(calculate() == 2) }",
+                )
+
+            assertTrue(report.results.isNotEmpty())
+            assertTrue(report.results.all { it.status == MutantStatus.KILLED })
+            assertEquals(report.results.size, report.killedCount)
+            assertEquals(0, report.timeoutCount)
+        } finally {
+            localPipeline.close()
+        }
+    }
+
+    @Test
+    fun `infrastructure failures are not reported as killed mutants`() {
+        var invocation = 0
+        val runner =
+            object : com.gokorei.kotlinmcp.execution.FastSnippetRunner {
+                override fun run(
+                    outDir: java.nio.file.Path,
+                    timeoutMillis: Long,
+                    extraClasspath: List<String>,
+                ): com.gokorei.kotlinmcp.models.KotlinMcpResult {
+                    invocation++
+                    return if (invocation == 1) {
+                        com.gokorei.kotlinmcp.models.KotlinMcpResult.Success(
+                            "baseline",
+                        )
+                    } else {
+                        com.gokorei.kotlinmcp.models.KotlinMcpResult.Error(
+                            message = "isolated JVM failed during startup",
+                            code = "LAUNCH_ERROR",
+                            details = mapOf("phase" to "startup"),
+                        )
+                    }
+                }
+
+                override fun close() = Unit
+            }
+        val localPipeline = DefaultMutationExecutionPipeline(runner = runner)
+
+        try {
+            val report =
+                localPipeline.run(
+                    code = "fun calculate(): Int = 1 + 1",
+                    testCode = "fun main() { check(calculate() == 2) }",
+                )
+
+            assertTrue(report.results.isNotEmpty())
+            assertTrue(report.results.all { it.status == MutantStatus.INFRASTRUCTURE_ERROR })
+            assertEquals(0, report.effectiveMutants)
+            assertEquals(0, report.killedCount)
+            assertEquals(0, report.timeoutCount)
+            assertEquals(0.0, report.score)
+        } finally {
+            localPipeline.close()
+        }
+    }
+
+    @Test
+    fun `default pipeline remains isolated when internal classpath mode is enabled`() {
+        val previous = System.getProperty("kmcp.include_internal_classpath")
+        try {
+            System.setProperty("kmcp.include_internal_classpath", "true")
+            val code =
+                """
+                fun canLoadServerClass(): Boolean = try {
+                    Class.forName("com.gokorei.kotlinmcp.server.KotlinMcpServer")
+                    true
+                } catch (_: ClassNotFoundException) {
+                    false
+                }
+                """.trimIndent()
+            val testCode =
+                """
+                fun main() {
+                    check(!canLoadServerClass())
+                }
+                """.trimIndent()
+
+            val report = pipeline.run(code, testCode)
+
+            assertFalse(report.results.any { it.status == MutantStatus.BASELINE_ERROR })
+        } finally {
+            if (previous == null) {
+                System.clearProperty("kmcp.include_internal_classpath")
+            } else {
+                System.setProperty("kmcp.include_internal_classpath", previous)
+            }
+        }
+    }
 }

@@ -69,6 +69,12 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 | `readTimeoutMs` | `string` | No | Optional read timeout in milliseconds for OSV vulnerability check (default: 6000) |
 | `maxRetries` | `string` | No | Optional max retry attempts for OSV vulnerability query batch (default: 3) |
 
+---
+
+## Mutating / Edit Tools (`readOnly = false`)
+
+Mutating tools generate code diffs, format files, rename symbols across workspaces, or execute child JVM processes.
+
 ### `kotlin_check_snippet`
 
 **Description:** Compile a Kotlin snippet with the embedded K2 compiler and report real syntax/type errors with line:column, run in-memory AST mutation testing, or perform compiler-backed semantic verification (when-exhaustiveness, value classes, contracts, expect/actual, inline-reified, opt-in, deprecated).
@@ -83,12 +89,6 @@ Read-only tools are safe for research, audits, and discovery. They never modify 
 | `preset` | `string` | No | Optional response projection for mutation reports: 'compact', 'full' (default), or 'summary' |
 | `classpath` | `Array<string>` | No | Optional array of jar/dir paths added to compile classpath |
 | `projectPath` | `string` | No | Optional workspace root whose compiled classes (build/classes…), generated sources, and build/libs jars are added automatically to the compile classpath (aliases: workspacePath, path) |
-
----
-
-## Mutating / Edit Tools (`readOnly = false`)
-
-Mutating tools generate code diffs, format files, rename symbols across workspaces, or execute child JVM processes.
 
 ### `kotlin_docs_edit`
 

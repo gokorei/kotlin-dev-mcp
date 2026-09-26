@@ -272,7 +272,7 @@ internal fun buildCompiledCommand(
             .toString(),
 ): List<String> {
     val fullCp =
-        (listOf(outDir.toString()) + extraClasspath + SnippetCompiler.runtimeExecutionClasspath)
+        (listOf(outDir.toString()) + extraClasspath + isolatedMutationExecutionClasspath)
             .filter { it.isNotBlank() }
             .distinct()
             .joinToString(File.pathSeparator)
@@ -340,25 +340,39 @@ private fun runCompiledProcess(
     val drainHandle =
         com.gokorei.kotlinmcp.shared.BoundedStreamDrainer
             .drain(process.inputStream)
-    val startNanos = System.nanoTime()
-    beginCompiledExecution(process, drainHandle, readinessToken)?.let { return it }
-    waitForCompiledExecution(process, drainHandle, timeoutMillis)?.let { return it }
-    drainHandle.join(PROCESS_OUTPUT_JOIN_TIMEOUT_MS)
-    val durationMs = (System.nanoTime() - startNanos) / NANOS_PER_MILLISECOND
-    val text = LogTruncator.truncate(drainHandle.readUtf8().replace(readinessToken, ""))
-    val exit = process.exitValue()
-    return if (exit == 0) {
-        KotlinMcpResult.Success(
-            content = if (text.isBlank()) "Ran successfully in isolated mutation JVM." else text,
-            metadata = mapOf("mode" to "host_jvm", "exitCode" to "0", "durationMs" to durationMs.toString()),
-        )
-    } else {
-        KotlinMcpResult.Error(
-            message = "Isolated mutation JVM exited with code $exit:\n$text",
-            code = "RUNTIME_ERROR",
-            details = mapOf("mode" to "host_jvm", "exitCode" to exit.toString(), "durationMs" to durationMs.toString()),
-            requireAnotherCall = true,
-        )
+    return try {
+        val startNanos = System.nanoTime()
+        val executionError =
+            beginCompiledExecution(process, drainHandle, readinessToken)
+                ?: waitForCompiledExecution(process, timeoutMillis)
+        if (executionError != null) {
+            executionError
+        } else {
+            drainHandle.join(PROCESS_OUTPUT_JOIN_TIMEOUT_MS)
+            val durationMs = (System.nanoTime() - startNanos) / NANOS_PER_MILLISECOND
+            val text = LogTruncator.truncate(drainHandle.readUtf8().replace(readinessToken, ""))
+            val exit = process.exitValue()
+            if (exit == 0) {
+                KotlinMcpResult.Success(
+                    content = if (text.isBlank()) "Ran successfully in isolated mutation JVM." else text,
+                    metadata = mapOf("mode" to "host_jvm", "exitCode" to "0", "durationMs" to durationMs.toString()),
+                )
+            } else {
+                KotlinMcpResult.Error(
+                    message = "Isolated mutation JVM exited with code $exit:\n$text",
+                    code = "RUNTIME_ERROR",
+                    details =
+                        mapOf(
+                            "mode" to "host_jvm",
+                            "exitCode" to exit.toString(),
+                            "durationMs" to durationMs.toString(),
+                        ),
+                    requireAnotherCall = true,
+                )
+            }
+        }
+    } finally {
+        cleanupProcess(process, drainHandle)
     }
 }
 
@@ -371,14 +385,12 @@ private fun beginCompiledExecution(
     val ready = awaitProcessReadiness(process, drainHandle, readinessToken)
     return when {
         Thread.currentThread().isInterrupted -> {
-            terminateAndDrain(process, drainHandle)
             KotlinMcpResult.Error(
                 message = "Waiting for isolated mutation JVM readiness was interrupted.",
                 code = "EXECUTION_ERROR",
             )
         }
         !ready && process.isAlive -> {
-            terminateAndDrain(process, drainHandle)
             KotlinMcpResult.Error(
                 message = "Isolated mutation JVM startup timed out after ${PROCESS_STARTUP_ALLOWANCE_MS}ms.",
                 code = "EXECUTION_TIMEOUT",
@@ -403,7 +415,6 @@ private fun beginCompiledExecution(
                 }
                 null
             } catch (e: java.io.IOException) {
-                terminateAndDrain(process, drainHandle)
                 KotlinMcpResult.Error(
                     message = "Failed to start isolated mutation execution: ${e.message}",
                     code = "LAUNCH_ERROR",
@@ -415,7 +426,6 @@ private fun beginCompiledExecution(
 @Suppress("ReturnCount")
 private fun waitForCompiledExecution(
     process: Process,
-    drainHandle: com.gokorei.kotlinmcp.shared.BoundedDrainHandle,
     timeoutMillis: Long,
 ): KotlinMcpResult? {
     val completed =
@@ -423,14 +433,12 @@ private fun waitForCompiledExecution(
             process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
-            destroyProcessTree(process)
             return KotlinMcpResult.Error(
                 message = "Waiting for isolated mutation JVM was interrupted: ${e.message}",
                 code = "EXECUTION_ERROR",
             )
         }
     if (!completed) {
-        terminateAndDrain(process, drainHandle)
         return KotlinMcpResult.Error(
             message = "Execution timed out after ${timeoutMillis}ms; isolated process destroyed.",
             code = "EXECUTION_TIMEOUT",
@@ -440,12 +448,27 @@ private fun waitForCompiledExecution(
     return null
 }
 
-private fun terminateAndDrain(
+private fun cleanupProcess(
     process: Process,
     drainHandle: com.gokorei.kotlinmcp.shared.BoundedDrainHandle,
 ) {
-    destroyProcessTree(process)
-    drainHandle.join(PROCESS_DRAIN_JOIN_TIMEOUT_MS)
+    val descendants = runCatching { process.descendants().toList() }.getOrDefault(emptyList())
+    descendants.forEach { descendant -> runCatching { descendant.destroyForcibly() } }
+    if (process.isAlive) {
+        runCatching { process.destroyForcibly() }
+    }
+    preserveInterruptDuringCleanup {
+        process.waitFor(PROCESS_CLEANUP_WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+    }
+    descendants.forEach { descendant ->
+        preserveInterruptDuringCleanup {
+            descendant.onExit().get(PROCESS_CLEANUP_WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        }
+    }
+    runCatching { process.outputStream.close() }
+    runCatching { process.inputStream.close() }
+    runCatching { process.errorStream.close() }
+    preserveInterruptDuringCleanup { drainHandle.join(PROCESS_DRAIN_JOIN_TIMEOUT_MS) }
 }
 
 private fun awaitProcessReadiness(
@@ -466,7 +489,18 @@ private fun awaitProcessReadiness(
     return ready
 }
 
-private fun destroyProcessTree(process: Process) {
-    runCatching { process.descendants().forEach { it.destroyForcibly() } }
-    process.destroyForcibly()
+private inline fun preserveInterruptDuringCleanup(block: () -> Unit) {
+    var interrupted = Thread.interrupted()
+    try {
+        block()
+    } catch (_: InterruptedException) {
+        interrupted = true
+    } catch (_: Throwable) {
+    } finally {
+        if (interrupted || Thread.currentThread().isInterrupted) {
+            Thread.currentThread().interrupt()
+        }
+    }
 }
+
+private const val PROCESS_CLEANUP_WAIT_TIMEOUT_MS = 1_000L

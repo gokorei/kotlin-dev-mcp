@@ -107,4 +107,62 @@ class MutationServiceTest {
         val success = result as KotlinMcpResult.Success
         assertNotNull(success.content)
     }
+
+    @Test
+    fun `mixed infrastructure errors are not presented as strong or all killed`() {
+        val mutant =
+            AstMutant(
+                id = "mutant",
+                operator = MutationOperator.RETURN_VALUE,
+                line = 1,
+                column = 1,
+                originalSnippet = "1",
+                mutatedSnippet = "0",
+                mutatedSource = "fun value(): Int = 0",
+                description = "return value mutation",
+            )
+        val report =
+            MutationReport(
+                score = 100.0,
+                totalMutants = 2,
+                killedCount = 1,
+                survivedCount = 0,
+                compilationErrorCount = 0,
+                timeoutCount = 0,
+                results =
+                    listOf(
+                        MutantResult(mutant, MutantStatus.KILLED),
+                        MutantResult(mutant.copy(id = "infrastructure"), MutantStatus.INFRASTRUCTURE_ERROR),
+                    ),
+            )
+        val localService =
+            DefaultMutationService(
+                object : MutationExecutionPipeline {
+                    override fun run(
+                        code: String,
+                        testCode: String?,
+                        timeoutPerMutantMs: Long,
+                        includeExtremeOperators: Boolean,
+                        maxOrder: Int,
+                    ): MutationReport = report
+
+                    override fun close() = Unit
+                },
+            )
+
+        try {
+            val result = localService.mutateAndTest("fun value(): Int = 1", "fun main() {}")
+            assertTrue(result.isSuccess)
+            val success = result as KotlinMcpResult.Success
+            assertEquals("false", success.metadata["isStrong"])
+            assertFalse(success.content.contains("STRONG"))
+            assertFalse(success.content.contains("All mutants killed"))
+            assertTrue(
+                success.content.contains("Infrastructure Errors (Excluded):"),
+                success.content,
+            )
+        } finally {
+            localService.close()
+        }
+    }
 }
