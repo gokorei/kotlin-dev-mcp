@@ -1,5 +1,6 @@
 package com.gokorei.kotlinmcp.mutation
 
+import com.gokorei.kotlinmcp.execution.BOOTSTRAP_ERROR_CODE
 import com.gokorei.kotlinmcp.execution.CompileResult
 import com.gokorei.kotlinmcp.execution.FastSnippetRunner
 import com.gokorei.kotlinmcp.execution.HostJvmCompiledSnippetRunner
@@ -8,10 +9,6 @@ import com.gokorei.kotlinmcp.lsp.K2SnippetFrontend
 import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import org.jetbrains.kotlin.psi.KtFile
 
-/**
- * Pipeline for executing AST mutation testing in-memory.
- * Compiles and runs baseline code and mutant variations in-process via [FastSnippetRunner].
- */
 interface MutationExecutionPipeline : AutoCloseable {
     fun run(
         code: String,
@@ -79,7 +76,14 @@ class DefaultMutationExecutionPipeline(
                 survivedCount = 0,
                 compilationErrorCount = 0,
                 timeoutCount = 0,
-                results = listOf(MutantResult(dummyMutant, MutantStatus.BASELINE_ERROR, "Baseline test failed before mutation: ${err.message}"))
+                results =
+                    listOf(
+                        MutantResult(
+                            dummyMutant,
+                            MutantStatus.BASELINE_ERROR,
+                            "Baseline test failed before mutation [${err.code}]: ${err.message}",
+                        ),
+                    ),
             )
         }
 
@@ -139,14 +143,19 @@ class DefaultMutationExecutionPipeline(
 
                 when (runResult) {
                     is KotlinMcpResult.Error -> {
-                        if (runResult.code == "EXECUTION_TIMEOUT" && runResult.details["phase"] == "execution") {
-                            results.add(MutantResult(mutant, MutantStatus.TIMEOUT, runResult.message, durMs))
-                        } else if (runResult.code == "RUNTIME_ERROR") {
-                            results.add(MutantResult(mutant, MutantStatus.KILLED, runResult.message, durMs))
-                        } else {
-                            results.add(
-                                MutantResult(mutant, MutantStatus.INFRASTRUCTURE_ERROR, runResult.message, durMs),
-                            )
+                        when {
+                            runResult.code == "EXECUTION_TIMEOUT" && runResult.details["phase"] == "execution" ->
+                                results.add(MutantResult(mutant, MutantStatus.TIMEOUT, runResult.message, durMs))
+                            runResult.code == BOOTSTRAP_ERROR_CODE ->
+                                results.add(
+                                    MutantResult(mutant, MutantStatus.INFRASTRUCTURE_ERROR, runResult.message, durMs),
+                                )
+                            runResult.code == "RUNTIME_ERROR" ->
+                                results.add(MutantResult(mutant, MutantStatus.KILLED, runResult.message, durMs))
+                            else ->
+                                results.add(
+                                    MutantResult(mutant, MutantStatus.INFRASTRUCTURE_ERROR, runResult.message, durMs),
+                                )
                         }
                     }
                     is KotlinMcpResult.Success -> {

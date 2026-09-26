@@ -146,27 +146,17 @@ object SnippetCompiler {
         return if (fromSystem.isNotEmpty()) fromSystem else materializeBundledSnippetClasspath()
     }
 
+    @Suppress("ReturnCount")
     private fun isSnippetLibraryEntry(entry: String): Boolean {
-        val name = entry.substringAfterLast('/').lowercase()
-        val allowInternals = java.lang.Boolean.getBoolean("kmcp.include_internal_classpath")
-        return name.contains("kotlin-stdlib") ||
-            name.contains("kotlinx-coroutines") ||
-            name.contains("kotlinx-serialization") ||
-            name.contains("kotlinx-datetime") ||
-            name.contains("arrow-core") ||
-            name.contains("mockk") ||
-            name.contains("turbine") ||
-            name.contains("ktor") ||
-            name.contains("kotlin-logging") ||
-            name.contains("slf4j") ||
-            (allowInternals && (
-                name.contains("kotlin-compiler") ||
-                name.contains("kotlin-sdk") ||
-                name.contains("modelcontextprotocol") ||
-                name.contains("kotlin-build-tools") ||
-                entry.contains("build/classes/kotlin/main") ||
-                entry.contains("build/classes/kotlin/test")
-            ))
+        if (matchesSnippetLibraryMarker(entry)) return true
+        if (!java.lang.Boolean.getBoolean("kmcp.include_internal_classpath")) return false
+        val name = File(entry).name.lowercase()
+        return name.contains("kotlin-compiler") ||
+            name.contains("kotlin-sdk") ||
+            name.contains("modelcontextprotocol") ||
+            name.contains("kotlin-build-tools") ||
+            entry.contains("build/classes/kotlin/main") ||
+            entry.contains("build/classes/kotlin/test")
     }
 
     @Volatile
@@ -459,15 +449,17 @@ private val isolatedSnippetLibraryMarkers =
         "slf4j",
     )
 
+internal fun matchesSnippetLibraryMarker(entry: String): Boolean {
+    val name = File(entry).name.lowercase()
+    return isolatedSnippetLibraryMarkers.any { name.contains(it) }
+}
+
 internal fun resolveIsolatedMutationClasspath(javaClassPath: String): List<String> {
     val fromSystem =
         javaClassPath
             .split(File.pathSeparator)
             .filter { it.isNotBlank() }
-            .filter { entry ->
-                val name = entry.substringAfterLast('/').lowercase()
-                isolatedSnippetLibraryMarkers.any { name.contains(it) }
-            }
+            .filter { matchesSnippetLibraryMarker(it) }
     return if (fromSystem.isNotEmpty()) fromSystem else SnippetCompiler.materializeBundledSnippetClasspath()
 }
 

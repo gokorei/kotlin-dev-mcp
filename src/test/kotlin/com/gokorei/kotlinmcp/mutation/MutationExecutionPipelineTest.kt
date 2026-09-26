@@ -330,4 +330,67 @@ class MutationExecutionPipelineTest {
             }
         }
     }
+
+    @Test
+    fun `bootstrap setup failures are reported as infrastructure errors, not kills`() {
+        var invocation = 0
+        val runner =
+            object : com.gokorei.kotlinmcp.execution.FastSnippetRunner {
+                override fun run(
+                    outDir: java.nio.file.Path,
+                    timeoutMillis: Long,
+                    extraClasspath: List<String>,
+                ): com.gokorei.kotlinmcp.models.KotlinMcpResult {
+                    invocation++
+                    return if (invocation == 1) {
+                        com.gokorei.kotlinmcp.models.KotlinMcpResult.Success(
+                            "baseline",
+                        )
+                    } else {
+                        com.gokorei.kotlinmcp.models.KotlinMcpResult.Error(
+                            message = "Target could not be executed in the isolated JVM: NoClassDefFoundError",
+                            code = com.gokorei.kotlinmcp.execution.BOOTSTRAP_ERROR_CODE,
+                            details = mapOf("phase" to "bootstrap", "exitCode" to "2"),
+                        )
+                    }
+                }
+
+                override fun close() = Unit
+            }
+        val localPipeline = DefaultMutationExecutionPipeline(runner = runner)
+
+        try {
+            val report =
+                localPipeline.run(
+                    code = "fun calculate(): Int = 1 + 1",
+                    testCode = "fun main() { check(calculate() == 2) }",
+                )
+
+            assertTrue(report.results.isNotEmpty())
+            assertTrue(
+                report.results.all { it.status == MutantStatus.INFRASTRUCTURE_ERROR },
+                "${report.results.map { it.status }}",
+            )
+            assertEquals(0, report.killedCount)
+            assertEquals(report.infrastructureErrorCount, report.results.size)
+            assertEquals(0, report.effectiveMutants)
+            assertFalse(report.isStrong)
+        } finally {
+            localPipeline.close()
+        }
+    }
+
+    @Test
+    fun `packaged snippets are executed in the isolated child JVM`() {
+        val report =
+            pipeline.run(
+                code = "package app\n\nfun discounted(price: Int): Int = price - 10",
+                testCode = "fun main() { check(discounted(100) == 90) }",
+            )
+
+        assertFalse(report.results.any { it.status == MutantStatus.BASELINE_ERROR }, "${report.results}")
+        assertTrue(report.results.isNotEmpty())
+        assertEquals(0, report.infrastructureErrorCount, "${report.results.map { it.status to it.details }}")
+        assertTrue(report.killedCount > 0, "expected strong assertions to kill mutants, got ${report.score}")
+    }
 }

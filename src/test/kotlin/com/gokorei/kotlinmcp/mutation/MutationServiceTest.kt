@@ -158,11 +158,124 @@ class MutationServiceTest {
             assertFalse(success.content.contains("STRONG"))
             assertFalse(success.content.contains("All mutants killed"))
             assertTrue(
-                success.content.contains("Infrastructure Errors (Excluded):"),
+                success.content.contains("Infrastructure Errors (Excluded from Score):"),
                 success.content,
             )
+            assertEquals("1", success.metadata["infrastructureErrorCount"])
+            assertEquals("1", success.metadata["effectiveMutants"])
         } finally {
             localService.close()
         }
     }
+
+    @Test
+    fun `timeouts are counted as killed in both the report line and the metadata`() {
+        val mutant = mutant("mutant")
+        val report =
+            MutationReport(
+                score = 100.0,
+                totalMutants = 3,
+                killedCount = 0,
+                survivedCount = 0,
+                compilationErrorCount = 0,
+                timeoutCount = 3,
+                results =
+                    listOf(
+                        MutantResult(mutant.copy(id = "t1"), MutantStatus.TIMEOUT),
+                        MutantResult(mutant.copy(id = "t2"), MutantStatus.TIMEOUT),
+                        MutantResult(mutant.copy(id = "t3"), MutantStatus.TIMEOUT),
+                    ),
+            )
+        val localService = serviceReturning(report)
+
+        try {
+            val result = localService.mutateAndTest("fun value(): Int = 1", "fun main() {}")
+            assertTrue(result.isSuccess)
+            val success = result as KotlinMcpResult.Success
+            assertTrue(
+                success.content.contains("**Mutants Killed:** 3 / 3"),
+                success.content,
+            )
+            assertTrue(success.content.contains("**Timeouts (Counted as Killed):** 3"), success.content)
+            assertEquals("3", success.metadata["timeoutCount"])
+            assertEquals("0", success.metadata["killedCount"])
+            assertEquals("3", success.metadata["effectiveMutants"])
+        } finally {
+            localService.close()
+        }
+    }
+
+    @Test
+    fun `report counts infrastructure errors separately from compilation errors`() {
+        val report = mutantReport()
+        assertEquals(2, report.infrastructureErrorCount)
+        assertEquals(1, report.compilationErrorCount)
+        assertEquals(3, report.effectiveMutants)
+        assertEquals(3, report.killedIncludingTimeoutCount)
+        assertEquals(2, report.timeoutKilledCount)
+        assertFalse(report.isStrong)
+    }
+
+    @Test
+    fun `report header names the isolated child JVM rather than in-memory execution`() {
+        val localService = serviceReturning(mutantReport())
+
+        try {
+            val result = localService.mutateAndTest("fun value(): Int = 1", "fun main() {}")
+            assertTrue(result.isSuccess)
+            val success = result as KotlinMcpResult.Success
+            assertTrue(success.content.startsWith("# 🧬 Mutation Testing Report (Isolated Child JVM)"), success.content)
+            assertFalse(success.content.contains("In-Memory"), success.content)
+        } finally {
+            localService.close()
+        }
+    }
+
+    private fun mutant(id: String = "mutant") =
+        AstMutant(
+            id = id,
+            operator = MutationOperator.RETURN_VALUE,
+            line = 1,
+            column = 1,
+            originalSnippet = "1",
+            mutatedSnippet = "0",
+            mutatedSource = "fun value(): Int = 0",
+            description = "return value mutation",
+        )
+
+    private fun mutantReport(): MutationReport {
+        val base = mutant()
+        return MutationReport(
+            score = 100.0,
+            totalMutants = 6,
+            killedCount = 1,
+            survivedCount = 0,
+            compilationErrorCount = 1,
+            timeoutCount = 2,
+            results =
+                listOf(
+                    MutantResult(base.copy(id = "k"), MutantStatus.KILLED),
+                    MutantResult(base.copy(id = "t1"), MutantStatus.TIMEOUT),
+                    MutantResult(base.copy(id = "t2"), MutantStatus.TIMEOUT),
+                    MutantResult(base.copy(id = "c"), MutantStatus.COMPILATION_ERROR),
+                    MutantResult(base.copy(id = "i1"), MutantStatus.INFRASTRUCTURE_ERROR),
+                    MutantResult(base.copy(id = "i2"), MutantStatus.INFRASTRUCTURE_ERROR),
+                ),
+        )
+    }
+
+    private fun serviceReturning(report: MutationReport): DefaultMutationService =
+        DefaultMutationService(
+            object : MutationExecutionPipeline {
+                override fun run(
+                    code: String,
+                    testCode: String?,
+                    timeoutPerMutantMs: Long,
+                    includeExtremeOperators: Boolean,
+                    maxOrder: Int,
+                ): MutationReport = report
+
+                override fun close() = Unit
+            },
+        )
 }

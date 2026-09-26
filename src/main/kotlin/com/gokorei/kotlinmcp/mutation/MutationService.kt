@@ -4,9 +4,6 @@ import com.gokorei.kotlinmcp.models.KotlinMcpResult
 import com.gokorei.kotlinmcp.models.ProjectionFilter
 import com.gokorei.kotlinmcp.models.ResponseProjection
 
-/**
- * Service providing in-memory mutation testing analysis for Kotlin code and test suites.
- */
 interface MutationService : AutoCloseable {
     fun mutateAndTest(
         code: String,
@@ -47,12 +44,12 @@ class DefaultMutationService(
             return KotlinMcpResult.Error(
                 message = first.details ?: "Baseline test failed before mutation testing.",
                 code = "BASELINE_FAILURE",
-                details = mapOf("stage" to "baseline_verification")
+                details = mapOf("stage" to "baseline_verification"),
             )
         }
 
         val content = buildString {
-            appendLine("# 🧬 In-Memory Mutation Testing Report")
+            appendLine("# 🧬 Mutation Testing Report (Isolated Child JVM)")
             appendLine()
             val badge = when {
                 report.totalMutants == 0 -> "⚪ **NO MUTANTS GENERATED**"
@@ -62,7 +59,7 @@ class DefaultMutationService(
             }
             appendLine("- **Mutation Score:** $badge")
             appendLine("- **Total Mutants Generated:** ${report.totalMutants}")
-            appendLine("- **Mutants Killed:** ${report.killedCount} / ${report.effectiveMutants}")
+            appendLine("- **Mutants Killed:** ${report.killedIncludingTimeoutCount} / ${report.effectiveMutants}")
             appendLine("- **Mutants Survived (Weak Tests):** ${report.survivedCount}")
             if (report.compilationErrorCount > 0) {
                 appendLine("- **Compilation Errors (Discarded):** ${report.compilationErrorCount}")
@@ -70,9 +67,8 @@ class DefaultMutationService(
             if (report.timeoutCount > 0) {
                 appendLine("- **Timeouts (Counted as Killed):** ${report.timeoutCount}")
             }
-            val infrastructureErrorCount = report.results.count { it.status == MutantStatus.INFRASTRUCTURE_ERROR }
-            if (infrastructureErrorCount > 0) {
-                appendLine("- **Infrastructure Errors (Excluded):** $infrastructureErrorCount")
+            if (report.infrastructureErrorCount > 0) {
+                appendLine("- **Infrastructure Errors (Excluded from Score):** ${report.infrastructureErrorCount}")
             }
             appendLine()
 
@@ -100,7 +96,7 @@ class DefaultMutationService(
                     "⚠️ **No executable mutants could be compiled or run.** " +
                         "Generated mutations failed compilation or the isolated execution environment failed.",
                 )
-            } else if (infrastructureErrorCount > 0) {
+            } else if (report.infrastructureErrorCount > 0) {
                 appendLine(
                     "⚠️ **Some mutants could not be executed because of infrastructure errors.** " +
                         "The score covers only mutants with valid execution results.",
@@ -123,6 +119,10 @@ class DefaultMutationService(
                         "totalMutants" to report.totalMutants.toString(),
                         "killedCount" to report.killedCount.toString(),
                         "survivedCount" to report.survivedCount.toString(),
+                        "effectiveMutants" to report.effectiveMutants.toString(),
+                        "compilationErrorCount" to report.compilationErrorCount.toString(),
+                        "timeoutCount" to report.timeoutCount.toString(),
+                        "infrastructureErrorCount" to report.infrastructureErrorCount.toString(),
                         "isStrong" to report.isStrong.toString(),
                     ),
             )

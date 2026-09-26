@@ -1557,12 +1557,15 @@ public final class com/gokorei/kotlinmcp/mutation/MutationReport {
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getCompilationErrorCount ()I
 	public final fun getEffectiveMutants ()I
+	public final fun getInfrastructureErrorCount ()I
 	public final fun getKilledCount ()I
+	public final fun getKilledIncludingTimeoutCount ()I
 	public final fun getOrder ()I
 	public final fun getResults ()Ljava/util/List;
 	public final fun getScore ()D
 	public final fun getSurvivedCount ()I
 	public final fun getTimeoutCount ()I
+	public final fun getTimeoutKilledCount ()I
 	public final fun getTotalMutants ()I
 	public fun hashCode ()I
 	public final fun isStrong ()Z
